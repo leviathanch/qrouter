@@ -124,4 +124,4 @@ veryclean:
 	$(RM) qrouter.sh
 
 .c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(DEFS) $(INC_SPECS) -c $< -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) $(INC_SPECS) -c $< -o $@

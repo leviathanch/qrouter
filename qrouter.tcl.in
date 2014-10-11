@@ -146,7 +146,7 @@ bind ${appframe} <Configure> redraw
 
 wm withdraw .
 
-proc lowerconsole {} {
+proc qrouter::lowerconsole {} {
     consoledown
 }
 

@@ -2430,7 +2430,7 @@ void cleanup_net(NET net)
 {
    SEG segf, segl, seg;
    ROUTE rt, rt2;
-   int ls, lf, ll, layer;
+   int ls, lf, ll, layer, lastrlayer, lastlayer;
    u_char fcheck, lcheck, fixed;
    u_char xcheck, ycheck; 
 
@@ -2447,7 +2447,9 @@ void cleanup_net(NET net)
 	    // segl is the last segment of the route.
 
 	    segf = rt->segments;
-	    for (segl = segf->next; segl && segl->next; segl = segl->next);
+	    lastlayer = -1;
+	    for (segl = segf->next; segl && segl->next; segl = segl->next)
+		if (segl->segtype != ST_VIA) lastlayer = segl->layer;
 
 	    // Set flag fcheck if segf needs checking, and set flag
 	    // lcheck if segl needs checking.
@@ -2474,6 +2476,7 @@ void cleanup_net(NET net)
 	    for (rt2 = net->routes; rt2; rt2 = rt2->next) {
 	       if (rt2 == rt) continue;
 
+	       lastrlayer = -1;
 	       for (seg = rt2->segments; seg; seg = seg->next) {
 		  if (seg->segtype & ST_VIA) {
 		     ls = seg->layer;
@@ -2507,19 +2510,34 @@ void cleanup_net(NET net)
 			}
 			if ((ABSDIFF(seg->x1, segl->x1) == 1) &&
 				(seg->y1 == segl->y1) && xcheck) {
-			   segl->segtype = ST_WIRE;
-			   segl->x2 = seg->x2;
+			   if (lastrlayer < lastlayer) {
+			      seg->segtype = ST_WIRE;
+			      seg->x2 = segl->x2;
+			   }
+			   else {
+			      segl->segtype = ST_WIRE;
+			      segl->x2 = seg->x2;
+			   }
 			   fixed = TRUE;
 			   break;
 			}
 			else if ((ABSDIFF(seg->y1, segl->y1) == 1) &&
 				(seg->x1 == segl->x1) && ycheck) {
-			   segl->segtype = ST_WIRE;
-			   segl->y2 = seg->y2;
+			   if (lastrlayer < lastlayer) {
+			      seg->segtype = ST_WIRE;
+			      seg->y2 = segl->y2;
+			   }
+			   else {
+			      segl->segtype = ST_WIRE;
+			      segl->y2 = seg->y2;
+			   }
 			   fixed = TRUE;
 			   break;
 			}
 		     }
+		  }
+		  else {
+		     lastrlayer = seg->layer;
 		  }
 	       }
 	       if (fixed) break;

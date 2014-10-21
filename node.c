@@ -183,15 +183,19 @@ void find_bounding_box(NET net)
 
       n1 = (NODE)net->netnodes;
       n2 = (NODE)net->netnodes->next;
-      mindist = MAXRT;
 
       // Simple 2-pass---pick up first tap on n1, find closest tap on n2,
       // then find closest tap on n1.
+
       d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
       if (d1tap == NULL) return;
       d2tap = (n2->taps == NULL) ? n2->extend : n2->taps;
       if (d2tap == NULL) return;
-      for (; d2tap != NULL; d2tap = d2tap->next) {
+      dx = d2tap->gridx - d1tap->gridx;
+      dy = d2tap->gridy - d1tap->gridy;
+      mindist = dx * dx + dy * dy;
+      mintap = d2tap;
+      for (d2tap = d2tap->next; d2tap != NULL; d2tap = d2tap->next) {
          dx = d2tap->gridx - d1tap->gridx;
          dy = d2tap->gridy - d1tap->gridy;
          dist = dx * dx + dy * dy;
@@ -201,9 +205,12 @@ void find_bounding_box(NET net)
          }
       }
       d2tap = mintap;
-      mindist = MAXRT;
-      for (d1tap = (n1->taps == NULL) ? n1->extend : n1->taps; d1tap != NULL;
-                d1tap = d1tap->next) {
+      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      dx = d2tap->gridx - d1tap->gridx;
+      dy = d2tap->gridy - d1tap->gridy;
+      mindist = dx * dx + dy * dy;
+      mintap = d1tap;
+      for (d1tap = d1tap->next; d1tap != NULL; d1tap = d1tap->next) {
          dx = d2tap->gridx - d1tap->gridx;
          dy = d2tap->gridy - d1tap->gridy;
          dist = dx * dx + dy * dy;

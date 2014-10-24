@@ -60,6 +60,7 @@ NODE find_unrouted_node(NET net)
 
     for (rt = net->routes; rt; rt = rt->next) {
 	seg1 = rt->segments;
+	if (seg1 == NULL) continue;
 	seg2 = seg1;
 	while (seg2->next) seg2 = seg2->next;
 

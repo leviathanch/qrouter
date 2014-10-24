@@ -286,7 +286,7 @@ void defineRouteTree(NET net)
 	net->trunkx = xmin;
 	net->trunky = ymin;
     }
-    else {
+    else if (net->numnodes > 0) {
 
 	// Use the first tap point for each node to get a rough
 	// centroid of all taps
@@ -508,12 +508,12 @@ void create_obstructions_from_variable_pitch()
 void
 disable_gridpos(int x, int y, int lay)
 {
-   int apos = OGRID(x, y, lay);
+    int apos = OGRID(x, y, lay);
 
-   Obs[lay][apos] = (u_int)(NO_NET | OBSTRUCT_MASK);
-   Nodeloc[lay][apos] = NULL;
-   Nodesav[lay][apos] = NULL;
-   Stub[lay][apos] = 0.0;
+    Obs[lay][apos] = (u_int)(NO_NET | OBSTRUCT_MASK);
+    Nodeloc[lay][apos] = NULL;
+    Nodesav[lay][apos] = NULL;
+    Stub[lay][apos] = 0.0;
 }
 
 /*--------------------------------------------------------------*/

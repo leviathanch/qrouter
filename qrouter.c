@@ -290,18 +290,25 @@ void reinitialize()
 
     // Free up all of the matrices
 
-    for (i = 0; i < Num_layers; i++) {
+    for (i = 0; i < Pinlayers; i++) {
 	free(Stub[i]);
 	free(Nodeloc[i]);
 	free(Nodesav[i]);
-	free(Obs2[i]);
-	free(Obs[i]);
 
 	Stub[i] = NULL;
 	Nodeloc[i] = NULL;
 	Nodesav[i] = NULL;
+    }
+    for (i = 0; i < Num_layers; i++) {
+	free(Obs2[i]);
+	free(Obs[i]);
+
 	Obs2[i] = NULL;
 	Obs[i] = NULL;
+    }
+    if (RMask != NULL) {
+	free(RMask);
+	RMask = NULL;
     }
 
     // Free the netlist of failed nets (if there is one)
@@ -2449,6 +2456,7 @@ void cleanup_net(NET net)
 	    // segl is the last segment of the route.
 
 	    segf = rt->segments;
+	    if (segf == NULL) continue;
 	    lastlayer = -1;
 	    for (segl = segf->next; segl && segl->next; segl = segl->next)
 		if (segl->segtype != ST_VIA) lastlayer = segl->layer;

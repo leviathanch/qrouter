@@ -46,6 +46,7 @@ char *vddnet = NULL;
 char *gndnet = NULL;
 
 int    Numnets = 0;
+int    Pinlayers = 0;
 u_char Verbose = 3;	// Default verbose level
 u_char keepTrying = FALSE;
 u_char forceRoutable = FALSE;
@@ -467,6 +468,7 @@ int post_def_setup()
    create_obstructions_from_variable_pitch();
    adjust_stub_lengths();
    find_route_blocks();
+   count_pinlayers();
    
    // If any nets are pre-routed, place those routes.
 
@@ -1825,7 +1827,7 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
      // Remove nodes of the net from Nodeloc so that they will not be
      // used for crossover costing of future routes.
 
-     for (i = 0; i < Num_layers; i++) {
+     for (i = 0; i < Pinlayers; i++) {
         for (x = 0; x < NumChannelsX[i]; x++) {
 	   for (y = 0; y < NumChannelsY[i]; y++) {
 	      node = Nodeloc[i][OGRID(x, y, i)];
@@ -2004,7 +2006,7 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
      // Remove nodes of the net from Nodeloc so that they will not be
      // used for crossover costing of future routes.
 
-     for (i = 0; i < Num_layers; i++) {
+     for (i = 0; i < Pinlayers; i++) {
         for (x = 0; x < NumChannelsX[i]; x++) {
 	   for (y = 0; y < NumChannelsY[i]; y++) {
 	      iroute->nsrc = Nodeloc[i][OGRID(x, y, i)];

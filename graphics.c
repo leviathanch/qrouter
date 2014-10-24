@@ -231,7 +231,7 @@ map_obstruction()
 
     // Draw pins as gray squares
     XSetForeground(dpy, gc, graypix);
-    for (i = 0; i < Num_layers; i++) {
+    for (i = 0; i < Pinlayers; i++) {
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    xspc = (x + 1) * spacing - hspc;
 	    for (y = 0; y < NumChannelsY[i]; y++) {

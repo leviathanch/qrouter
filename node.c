@@ -517,6 +517,44 @@ disable_gridpos(int x, int y, int lay)
 }
 
 /*--------------------------------------------------------------*/
+/* count_pinlayers()---						*/
+/*	Check which layers have non-NULL Nodeloc, Nodesav, and	*/
+/* 	Stub entries.  Then set "Pinlayers" and free all the	*/
+/*	unused layers.  This saves a lot of memory, especially	*/
+/*	when the number of routing layers becomes large.	*/ 
+/*--------------------------------------------------------------*/
+
+void
+count_pinlayers()
+{
+   int x, y, l, haspin;
+
+   Pinlayers = 0;
+   for (l = 0; l < Num_layers; l++) {
+      haspin = 0;
+      for (x = 0; x < NumChannelsX[l]; x++) {
+	 for (y = 0; y < NumChannelsY[l]; y++) {
+	    if (Nodesav[l][OGRID(x, y, l)] != NULL) {
+	       haspin = 1;
+	       Pinlayers = l + 1;
+	       break;
+	    }
+	 }
+	 if (haspin) break;
+      }
+   }
+
+   for (l = Pinlayers; l < Num_layers; l++) {
+      free(Stub[l]);
+      free(Nodeloc[l]);
+      free(Nodesav[l]);
+      Stub[l] = NULL;
+      Nodeloc[l] = NULL;
+      Nodesav[l] = NULL;
+   }
+}
+
+/*--------------------------------------------------------------*/
 /* check_obstruct()---						*/
 /*	Called from create_obstructions_from_gates(), this	*/
 /* 	routine takes a grid point at (gridx, gridy) (physical	*/

@@ -244,7 +244,7 @@ int clear_target_node(NODE node)
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       if (Nodeloc[lay][OGRID(x, y, lay)] == (NODE)NULL)
+       if ((lay < Pinlayers) && (Nodeloc[lay][OGRID(x, y, lay)] == (NODE)NULL))
 	  continue;
        Pr = &Obs2[lay][OGRID(x, y, lay)];
        Pr->flags = 0;
@@ -256,8 +256,8 @@ int clear_target_node(NODE node)
        x = ntap->gridx;
        y = ntap->gridy;
 
-       if (Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL ||
-       	   Nodesav[lay][OGRID(x, y, lay)] != node)
+       if ((lay < Pinlayers) && Nodesav[lay][OGRID(x, y, lay)] ==
+		(NODE)NULL || Nodesav[lay][OGRID(x, y, lay)] != node)
        continue;
 	
        Pr = &Obs2[lay][OGRID(x, y, lay)];
@@ -431,12 +431,8 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
        // Don't process extended areas if they coincide with other nodes.
 
-       // if (Nodeloc[lay][OGRID(x, y, lay)] != (NODE)NULL &&
-       //	Nodeloc[lay][OGRID(x, y, lay)] != node)
-       //    continue;
-
-       if (Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL ||
-			Nodesav[lay][OGRID(x, y, lay)] != node)
+       if ((lay < Pinlayers) && (Nodesav[lay][OGRID(x, y, lay)] ==
+			(NODE)NULL || Nodesav[lay][OGRID(x, y, lay)] != node))
 	  continue;
 
        Pr = &Obs2[lay][OGRID(x, y, lay)];
@@ -593,7 +589,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// If we found another node connected to the route,
 		// then process it, too.
 
-		n2 = Nodeloc[lay][OGRID(x, y, lay)];
+		n2 = (lay >= Pinlayers) ? NULL : Nodeloc[lay][OGRID(x, y, lay)];
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
@@ -754,7 +750,8 @@ u_char ripup_net(NET net, u_char restore)
 		  // were routed over obstructions to reach off-grid
 		  // taps are returned to obstructions.
 
-	          if (Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL) {
+	          if ((lay >= Pinlayers) ||
+				Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL) {
 		     dir = Obs[lay][OGRID(x, y, lay)] & PINOBSTRUCTMASK;
 		     if (dir == 0)
 		        Obs[lay][OGRID(x, y, lay)] = 0;
@@ -810,7 +807,8 @@ u_char ripup_net(NET net, u_char restore)
 	    lay = ntap->layer;
 	    x = ntap->gridx;
 	    y = ntap->gridy;
-	    Nodeloc[lay][OGRID(x, y, lay)] = Nodesav[lay][OGRID(x, y, lay)];
+	    if (lay < Pinlayers)
+	        Nodeloc[lay][OGRID(x, y, lay)] = Nodesav[lay][OGRID(x, y, lay)];
 	 }
       }
    }
@@ -888,8 +886,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
        if (stage && (Pr->prdata.net < MAXNETNUM)) {
-	  // if (Nodeloc[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
-	  if (Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
+	  if ((newpt.lay < Pinlayers) &&
+		Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
 	     return 0;			// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
@@ -916,7 +914,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     // "BlockCost" is used if the node has only one point to connect to,
     // so that routing over it could block it entirely.
 
-    if (newpt.lay > 0) {
+    if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
 	if ((node = Nodeloc[newpt.lay - 1][OGRID(newpt.x, newpt.y, newpt.lay - 1)])
 			!= (NODE)NULL) {
 	    Pt = &Obs2[newpt.lay - 1][OGRID(newpt.x, newpt.y, newpt.lay - 1)];
@@ -941,7 +939,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	    }
 	}
     }
-    if (newpt.lay < Num_layers - 1) {
+    if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
 	if ((node = Nodeloc[newpt.lay + 1][OGRID(newpt.x, newpt.y, newpt.lay + 1)])
 			!= (NODE)NULL) {
 	    Pt = &Obs2[newpt.lay + 1][OGRID(newpt.x, newpt.y, newpt.lay + 1)];

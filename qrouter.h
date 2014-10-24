@@ -379,6 +379,7 @@ extern DSEG  UserObs;			// user-defined obstruction layers
 extern u_char needblock[MAX_LAYERS];
 
 extern int    Numnets;
+extern int    Pinlayers;		// Number of layers containing pin info.
 
 extern u_char Verbose;
 extern u_char keepTrying;

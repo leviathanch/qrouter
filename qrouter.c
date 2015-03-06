@@ -2468,14 +2468,16 @@ void cleanup_net(NET net)
 	       lf = segf->layer;
 	       fcheck = (lf != layer && lf != layer - 1) ? FALSE : TRUE;
 	       // We're going to remove the contact so it can't be a tap
-	       if (Nodesav[lf][OGRID(segf->x1, segf->y1, lf)] != NULL)
+	       if ((lf < Pinlayers) &&
+			(Nodesav[lf][OGRID(segf->x1, segf->y1, lf)] != NULL))
 		  fcheck = FALSE;
 	    }
 	    if (segl && (segl->segtype & ST_VIA)) {
 	       ll = segl->layer;
 	       lcheck = (ll != layer && ll != layer - 1) ? FALSE : TRUE;
 	       // We're going to remove the contact so it can't be a tap
-	       if (Nodesav[ll][OGRID(segl->x1, segl->y1, ll)] != NULL)
+	       if ((ll < Pinlayers) &&
+			(Nodesav[ll][OGRID(segl->x1, segl->y1, ll)] != NULL))
 		  lcheck = FALSE;
 	    }
 	    if (fcheck == FALSE && lcheck == FALSE) continue;

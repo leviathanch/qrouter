@@ -4184,6 +4184,8 @@ proc ::tkcon::Bindings {} {
     foreach ev [bind Text] { bind TkConsole $ev [bind Text $ev] }	
     ## We really didn't want the newline insertion
     bind TkConsole <Control-Key-o> {}
+    bind TkConsole <<NextLine>> {}
+    bind TkConsole <<PrevLine>> {}
 
     ## Now make all our virtual event bindings
     foreach {ev key} [subst -nocommand -noback {

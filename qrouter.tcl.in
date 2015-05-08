@@ -89,13 +89,16 @@ proc qrouter::write_congested {filename} {
 # Upon first success, write the DEF file output and quit.
 # If "stage2 mask none" leaves failing routes, then write
 # the routes done so far to the DEF file output and remain
-# in the interpreter.
+# in the interpreter.  If "stage2 mask none" leaves fewer
+# than five routes (a very ad hoc number), give it a
+# second try.
 #---------------------------------------------------------
 
 proc qrouter::standard_route {} {
    if {![stage1]} {write_def; quit}
    if {![stage2]} {write_def; quit}
    set result [stage2 mask none]
+   if {$result < 5} {set result [stage2 mask none]}
    write_def
    if {$result == 0} {quit}
 }

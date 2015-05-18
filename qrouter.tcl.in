@@ -116,7 +116,8 @@ proc qrouter::standard_route {} {
 
 proc qrouter::congestion_route {filename} {
    if {![stage1]} {write_def; quit}
-   set result [stage2]
+   set result [stage2 mask none]
+   if {$result < 5} {set result [stage2 mask none]}
    if {$result != 0} {
       qrouter::write_congested $filename
    }

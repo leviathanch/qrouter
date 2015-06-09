@@ -2029,7 +2029,9 @@ LefReadLayerSection(f, lname, mode, lefl)
 			lefl->info.route.width = 0.0;
 			lefl->info.route.spacing = NULL;
 			lefl->info.route.pitch = 0.0;
-			lefl->info.route.offset = 0.0;
+			// Use -1.0 as an indication that offset has not
+			// been specified and needs to be set to default.
+			lefl->info.route.offset = -1.0;
 			lefl->info.route.hdirection = (u_char)0;
 
 			/* A routing type has been declared.  Assume	*/
@@ -2173,6 +2175,12 @@ LefReadLayerSection(f, lname, mode, lefl)
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
 		lefl->info.route.pitch = dvalue / (double)oscale;
+
+		/* Offset default is 1/2 the pitch.  Offset is		*/
+		/* intialized to -1 to tell whether or not the value	*/
+		/* has been set by an OFFSET statement.			*/
+		if (lefl->info.route.offset < 0.0)
+		    lefl->info.route.offset = lefl->info.route.pitch / 2.0;
 		LefEndStatement(f);
 		break;
 	    case LEF_LAYER_DIRECTION:

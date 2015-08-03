@@ -1306,6 +1306,10 @@ void create_obstructions_from_nodes()
 	     // and one rectangle's halo may be inside another tap.
 
              for (ds = g->taps[i]; ds; ds = ds->next) {
+
+		// Note:  Should be handling get_route_clear as a less
+		// restrictive case, as was done above.
+ 
 		deltax = get_via_clear(ds->layer, 1, ds);
 		gridx = (int)((ds->x1 - Xlowerbound - deltax)
 			/ PitchX[ds->layer]) - 1;
@@ -1584,15 +1588,19 @@ void create_obstructions_from_nodes()
 				  else if (Nodesav[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] != NULL) {
 
+				     u_char no_offsets = TRUE;
+				     int offset_net;
+
 				     // By how much would a tap need to be moved
 				     // to clear the obstructing geometry?
 
-				     if (dx > ds->x2 && dy > ds->y1 && dy < ds->y2) {
+				     // Check tap to right
 
-					// Check tap to right
-					if ((gridx < NumChannelsX[ds->layer] - 1) &&
-						Obs[ds->layer][OGRID(gridx + 1, gridy,
-						ds->layer)] == 0) {
+				     if ((dx > ds->x2) && (gridx <
+						NumChannelsX[ds->layer] - 1)) {
+					offset_net = Obs[ds->layer][OGRID(gridx + 1,
+						gridy, ds->layer)];
+					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 0);
 					   dist = ds->x2 - dx + xdist +
@@ -1602,16 +1610,16 @@ void create_obstructions_from_nodes()
 							ds->layer)] = dist;
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
+					   no_offsets = FALSE;
 					}
-					else
-				           disable_gridpos(gridx, gridy, ds->layer);
 				     }
-				     else if (dx < ds->x1 && dy > ds->y1 && dy < ds->y2) {
 
-					// Check tap to left
-					if ((gridx > 0) &&
-						Obs[ds->layer][OGRID(gridx - 1, gridy,
-						ds->layer)] == 0) {
+				     // Check tap to left
+
+				     if ((dx < ds->x1) && (gridx > 0)) {
+					offset_net = Obs[ds->layer][OGRID(gridx - 1,
+						gridy, ds->layer)];
+					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 0);
 					   dist = ds->x1 - dx - xdist -
@@ -1621,16 +1629,17 @@ void create_obstructions_from_nodes()
 							ds->layer)] = dist;
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
+					   no_offsets = FALSE;
 					}
-					else
-				           disable_gridpos(gridx, gridy, ds->layer);
 				     }
-				     else if (dy > ds->y2 && dx > ds->x1 && dx < ds->x2) {
 
-					// Check tap up
-					if ((gridy < NumChannelsY[ds->layer] - 1) &&
-						Obs[ds->layer][OGRID(gridx, gridy + 1,
-						ds->layer)] == 0) {
+				     // Check tap up
+
+				     if ((dy > ds->y2) && (gridy <
+						NumChannelsY[ds->layer] - 1)) {
+					offset_net = Obs[ds->layer][OGRID(gridx,
+						gridy + 1, ds->layer)];
+					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 1);
 					   dist = ds->y2 - dy + xdist +
@@ -1640,15 +1649,16 @@ void create_obstructions_from_nodes()
 							ds->layer)] = dist;
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
+					   no_offsets = FALSE;
 					}
-					else
-				           disable_gridpos(gridx, gridy, ds->layer);
 				     }
-				     else if (dy < ds->y1 && dx > ds->x1 && dx < ds->x2) {
-					// Check tap to left
-					if ((gridy > 0) &&
-						Obs[ds->layer][OGRID(gridx, gridy - 1,
-						ds->layer)] == 0) {
+
+				     // Check tap to left
+
+				     if ((dy < ds->y1) && (gridy > 0)) {
+					offset_net = Obs[ds->layer][OGRID(gridx,
+						gridy - 1, ds->layer)];
+					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 1);
 					   dist = ds->y1 - dy - xdist -
@@ -1658,11 +1668,14 @@ void create_obstructions_from_nodes()
 							ds->layer)] = dist;
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
+					   no_offsets = FALSE;
 					}
-					else
-				           disable_gridpos(gridx, gridy, ds->layer);
 				     }
-				     else
+
+				     // No offsets were possible, so disable the
+				     // position
+
+				     if (no_offsets == TRUE)
 				        disable_gridpos(gridx, gridy, ds->layer);
 				  }
 				  else

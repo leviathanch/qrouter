@@ -627,7 +627,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 /* via placed at the position is or is not symmetric in X and Y	*/
 /*--------------------------------------------------------------*/
 
-double get_clear(int lay, int horiz, DSEG rect) {
+double get_via_clear(int lay, int horiz, DSEG rect) {
    double vdelta, v2delta, mdelta, mwidth;
 
    vdelta = LefGetViaWidth(lay, lay, 1 - horiz);
@@ -645,6 +645,28 @@ double get_clear(int lay, int horiz, DSEG rect) {
    mdelta = LefGetRouteWideSpacing(lay, mwidth);
 
    return vdelta + mdelta;
+}
+
+/*--------------------------------------------------------------*/
+/* Find the distance from an obstruction to a grid point, 	*/
+/* considering only routes which are placed at the position,	*/
+/* not vias.							*/
+/*--------------------------------------------------------------*/
+
+double get_route_clear(int lay, DSEG rect) {
+   double rdelta, mdelta, mwidth;
+
+   rdelta = LefGetRouteWidth(lay);
+   rdelta = rdelta / 2.0;
+
+   // Spacing rule is determined by the minimum metal width,
+   // either in X or Y, regardless of the position of the
+   // metal being checked.
+
+   mwidth = MIN(rect->x2 - rect->x1, rect->y2 - rect->y1);
+   mdelta = LefGetRouteWideSpacing(lay, mwidth);
+
+   return rdelta + mdelta;
 }
 
 /*--------------------------------------------------------------*/
@@ -731,7 +753,8 @@ void create_obstructions_from_gates()
     GATE g;
     DSEG ds;
     int i, gridx, gridy, *obsptr;
-    double dx, dy, deltax, deltay, delta[MAX_LAYERS];
+    double deltax, deltay, delta[MAX_LAYERS];
+    double dx, dy, deltaxy;
     float dist;
 
     // Give a single net number to all obstructions, over the range of the
@@ -747,7 +770,7 @@ void create_obstructions_from_gates()
     for (g = Nlgates; g; g = g->next) {
        for (ds = g->obs; ds; ds = ds->next) {
 
-	  deltax = get_clear(ds->layer, 1, ds);
+	  deltax = get_via_clear(ds->layer, 1, ds);
 	  gridx = (int)((ds->x1 - Xlowerbound - deltax)
 			/ PitchX[ds->layer]) - 1;
 	  while (1) {
@@ -755,16 +778,27 @@ void create_obstructions_from_gates()
 	     if ((dx + EPS) > (ds->x2 + deltax)
 			|| gridx >= NumChannelsX[ds->layer]) break;
 	     else if ((dx - EPS) > (ds->x1 - deltax) && gridx >= 0) {
-		deltay = get_clear(ds->layer, 0, ds);
+		deltay = get_via_clear(ds->layer, 0, ds);
 	        gridy = (int)((ds->y1 - Ylowerbound - deltay)
 			/ PitchY[ds->layer]) - 1;
 	        while (1) {
 		   dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
 	           if ((dy + EPS) > (ds->y2 + deltay)
 				|| gridy >= NumChannelsY[ds->layer]) break;
-		   if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0)
-		      check_obstruct(gridx, gridy, ds, dx, dy);
-
+		   if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0) {
+		      // If it clears distance for a route layer but not
+		      // vias, then block vias only.
+		      deltaxy = get_route_clear(ds->layer, ds);
+		      if (((dx - EPS) <= (ds->x1 - deltaxy)) ||
+				((dx + EPS) >= (ds->x2 + deltaxy)) ||
+				((dy - EPS) <= (ds->y1 - deltaxy)) ||
+				((dy + EPS) >= (ds->y2 + deltaxy))) {
+			 block_route(gridx, gridy, ds->layer, UP);
+			 block_route(gridx, gridy, ds->layer, DOWN);
+		      }
+		      else
+			 check_obstruct(gridx, gridy, ds, dx, dy);
+		   }
 		   gridy++;
 		}
 	     }
@@ -789,7 +823,7 @@ void create_obstructions_from_gates()
 	     }
              for (ds = g->taps[i]; ds; ds = ds->next) {
 
-		deltax = get_clear(ds->layer, 1, ds);
+		deltax = get_via_clear(ds->layer, 1, ds);
 		gridx = (int)((ds->x1 - Xlowerbound - deltax)
 			/ PitchX[ds->layer]) - 1;
 		while (1) {
@@ -797,16 +831,27 @@ void create_obstructions_from_gates()
 		   if (dx > (ds->x2 + deltax)
 				|| gridx >= NumChannelsX[ds->layer]) break;
 		   else if (dx >= (ds->x1 - deltax) && gridx >= 0) {
-		      deltay = get_clear(ds->layer, 0, ds);
+		      deltay = get_via_clear(ds->layer, 0, ds);
 		      gridy = (int)((ds->y1 - Ylowerbound - deltay)
 				/ PitchY[ds->layer]) - 1;
 		      while (1) {
 		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
 		         if (dy > (ds->y2 + deltay)
 					|| gridy >= NumChannelsY[ds->layer]) break;
-		         if (dy >= (ds->y1 - deltay) && gridy >= 0)
-			    check_obstruct(gridx, gridy, ds, dx, dy);
-
+		         if (dy >= (ds->y1 - deltay) && gridy >= 0) {
+		            // If it clears distance for a route layer but not
+		            // vias, then block vias only.
+		            deltaxy = get_route_clear(ds->layer, ds);
+		            if ((dx < (ds->x1 - deltaxy)) ||
+					(dx > (ds->x2 + deltaxy)) ||
+					(dy < (ds->y1 - deltaxy)) ||
+					(dy > (ds->y2 + deltaxy))) {
+			       block_route(gridx, gridy, ds->layer, UP);
+			       block_route(gridx, gridy, ds->layer, DOWN);
+		            }
+		            else
+			       check_obstruct(gridx, gridy, ds, dx, dy);
+			 }
 		         gridy++;
 		      }
 		   }
@@ -841,9 +886,9 @@ void create_obstructions_from_gates()
 		    dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
 		    if (dy > (ds->y2 + delta[ds->layer])
 				|| gridy >= NumChannelsY[ds->layer]) break;
-		    if (dy >= (ds->y1 - delta[ds->layer]) && gridy >= 0) {
-		        check_obstruct(gridx, gridy, ds, dx, dy);
-		    }
+		    if (dy >= (ds->y1 - delta[ds->layer]) && gridy >= 0)
+		       check_obstruct(gridx, gridy, ds, dx, dy);
+
 		    gridy++;
 		}
 	    }
@@ -1014,7 +1059,7 @@ void create_obstructions_from_nodes()
 			     int orignet = Obs[ds->layer][OGRID(gridx,
 					gridy, ds->layer)];
 
-			     if ((orignet & ~PINOBSTRUCTMASK) == (u_int)node->netnum) {
+			     if ((orignet & ROUTED_NET_MASK) == (u_int)node->netnum) {
 
 				// Duplicate tap point.   Don't re-process it. (?)
 				gridy++;
@@ -1022,7 +1067,7 @@ void create_obstructions_from_nodes()
 			     }
 
 			     if (!(orignet & NO_NET) &&
-					((orignet & ~PINOBSTRUCTMASK) != (u_int)0)) {
+					((orignet & ROUTED_NET_MASK) != (u_int)0)) {
 
 				// Net was assigned to other net, but is inside
 				// this pin's geometry.  Declare point to be
@@ -1235,7 +1280,7 @@ void create_obstructions_from_nodes()
 			        k = Obs[ds->layer + 1][OGRID(gridx, gridy,
 					ds->layer + 1)];
 			        if (k & PINOBSTRUCTMASK) {
-			           if ((k & ~PINOBSTRUCTMASK) != (u_int)node->netnum) {
+			           if ((k & ROUTED_NET_MASK) != (u_int)node->netnum) {
 				       Obs[ds->layer + 1][OGRID(gridx, gridy,
 						ds->layer + 1)] = NO_NET;
 				       Nodeloc[ds->layer + 1][OGRID(gridx, gridy,
@@ -1261,7 +1306,7 @@ void create_obstructions_from_nodes()
 	     // and one rectangle's halo may be inside another tap.
 
              for (ds = g->taps[i]; ds; ds = ds->next) {
-		deltax = get_clear(ds->layer, 1, ds);
+		deltax = get_via_clear(ds->layer, 1, ds);
 		gridx = (int)((ds->x1 - Xlowerbound - deltax)
 			/ PitchX[ds->layer]) - 1;
 
@@ -1273,7 +1318,7 @@ void create_obstructions_from_nodes()
 		      break;
 
 		   else if ((dx - EPS) > (ds->x1 - deltax) && gridx >= 0) {
-		      deltay = get_clear(ds->layer, 0, ds);
+		      deltay = get_via_clear(ds->layer, 0, ds);
 		      gridy = (int)((ds->y1 - Ylowerbound - deltay)
 				/ PitchY[ds->layer]) - 1;
 
@@ -1324,7 +1369,7 @@ void create_obstructions_from_nodes()
 			    dir = STUBROUTE_X;
 			    dist = 0.0;
 
-			    if (((k & ~PINOBSTRUCTMASK) != (u_int)node->netnum)
+			    if (((k & ROUTED_NET_MASK) != (u_int)node->netnum)
 					&& (n2 == NULL)) {
 
 				if ((k & OBSTRUCT_MASK) != 0) {
@@ -1505,7 +1550,7 @@ void create_obstructions_from_nodes()
 					= dist;
 			    }
 			    else {
-			       int othernet = (k & ~PINOBSTRUCTMASK);
+			       int othernet = (k & ROUTED_NET_MASK);
 
 			       if (othernet != 0 && othernet != (u_int)node->netnum) {
 
@@ -1784,7 +1829,7 @@ void tap_to_tap_interactions()
 		      orignet = Obs[ds->layer][OGRID(gridx, gridy, ds->layer)];
 		      if (orignet & OFFSET_TAP) {
 			 offset = orignet & PINOBSTRUCTMASK;
-			 orignet &= ~PINOBSTRUCTMASK;
+			 orignet &= ROUTED_NET_MASK;
 			 if (orignet != net) {
 
 		            dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
@@ -1971,7 +2016,7 @@ void adjust_stub_lengths()
 			     // Ignore this location if it is assigned to another
 			     // net, or is assigned to NO_NET.
 
-			     if ((orignet & ~PINOBSTRUCTMASK) != node->netnum) {
+			     if ((orignet & ROUTED_NET_MASK) != node->netnum) {
 				gridy++;
 				continue;
 			     }
@@ -2307,10 +2352,11 @@ void adjust_stub_lengths()
 void
 block_route(int x, int y, int lay, u_char dir)
 {
-   int bx, by, ob;
+   int bx, by, bl, ob;
 
    bx = x;
    by = y;
+   bl = lay;
 
    switch (dir) {
       case NORTH:
@@ -2329,28 +2375,44 @@ block_route(int x, int y, int lay, u_char dir)
 	 if (x == 0) return;
 	 bx = x - 1;
 	 break;
+      case UP:
+	 if (lay == Num_layers - 1) return;
+	 bl = lay + 1;
+	 break;
+      case DOWN:
+	 if (lay == 0) return;
+	 bl = lay - 1;
+	 break;
    }
    
-   ob = Obs[lay][OGRID(bx, by, lay)];
+   ob = Obs[bl][OGRID(bx, by, bl)];
 
    if ((ob & NO_NET) != 0) return;
 
    switch (dir) {
       case NORTH:
-	 Obs[lay][OGRID(bx, by, lay)] |= BLOCKED_S;
+	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_S;
 	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_N;
 	 break;
       case SOUTH:
-	 Obs[lay][OGRID(bx, by, lay)] |= BLOCKED_N;
+	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_N;
 	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_S;
 	 break;
       case EAST:
-	 Obs[lay][OGRID(bx, by, lay)] |= BLOCKED_W;
+	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_W;
 	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_E;
 	 break;
       case WEST:
-	 Obs[lay][OGRID(bx, by, lay)] |= BLOCKED_E;
+	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_E;
 	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_W;
+	 break;
+      case UP:
+	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_D;
+	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_U;
+	 break;
+      case DOWN:
+	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_U;
+	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_D;
 	 break;
    }
 }

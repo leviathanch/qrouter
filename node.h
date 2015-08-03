@@ -19,6 +19,7 @@ void tap_to_tap_interactions();
 void make_routable(NODE node);
 void adjust_stub_lengths();
 void expand_tap_geometry();
+void block_route(int x, int y, int lay, u_char dir);
 
 void print_nodes(char *filename);
 void print_nlnets(char *filename);

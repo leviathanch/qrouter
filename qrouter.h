@@ -294,7 +294,7 @@ struct routeinfo_ {
 // The Stub[] vector indicates the distance needed to avoid the obstruction.
 //
 // The maximum number of nets must not overrun the area used by flags, so
-// the maximum number of nets is 0x7fffff, or 8,388,607 nets
+// the maximum number of nets is 0x1fffff, or 2,097,151 nets
 
 #define PINOBSTRUCTMASK	((u_int)0xe0000000)  // takes values from below
 #define STUBROUTE_NS	((u_int)0x20000000)  // route north or south to reach terminal
@@ -306,13 +306,17 @@ struct routeinfo_ {
 #define BLOCKED_S	((u_int)0x04000000)  // grid point cannot be routed from the S
 #define BLOCKED_E	((u_int)0x02000000)  // grid point cannot be routed from the E
 #define BLOCKED_W	((u_int)0x01000000)  // grid point cannot be routed from the W
-#define BLOCKED_MASK	((u_int)0x0f000000)
-#define ROUTED_NET	((u_int)0x00800000)  // indicates position occupied by a routed
+#define BLOCKED_U	((u_int)0x00800000)  // grid point cannot be routed from top
+#define BLOCKED_D	((u_int)0x00400000)  // grid point cannot be routed from bottom
+#define BLOCKED_MASK	((u_int)0x0fc00000)
+#define ROUTED_NET	((u_int)0x00200000)  // indicates position occupied by a routed
 					     // net
-#define NETNUM_MASK	((u_int)0x107fffff)  // Mask for the net number field
-					     // (includes NO_NET)
+#define MAX_NETNUMS	((u_int)0x001fffff)  // Maximum net number
 
-#define MAX_NETNUMS	((u_int)0x007fffff)  // Maximum net number
+#define NETNUM_MASK	((u_int)0x101fffff)  // Mask for the net number field
+					     // (includes NO_NET)
+#define ROUTED_NET_MASK ((u_int)0x103fffff)  // Mask for the net number field
+					     // (includes NO_NET and ROUTED_NET)
 
 // Definitions used along with the NO_NET bit.
 #define OBSTRUCT_MASK	((u_int)0x0000000f)  // Tells where obstruction is

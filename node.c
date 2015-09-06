@@ -836,16 +836,16 @@ void create_obstructions_from_gates()
 				/ PitchY[ds->layer]) - 1;
 		      while (1) {
 		         dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
-		         if (dy > (ds->y2 + deltay)
+		         if ((dy + EPS) > (ds->y2 + deltay)
 					|| gridy >= NumChannelsY[ds->layer]) break;
-		         if (dy >= (ds->y1 - deltay) && gridy >= 0) {
+		         if ((dy - EPS) >= (ds->y1 - deltay) && gridy >= 0) {
 		            // If it clears distance for a route layer but not
 		            // vias, then block vias only.
 		            deltaxy = get_route_clear(ds->layer, ds);
-		            if ((dx < (ds->x1 - deltaxy)) ||
-					(dx > (ds->x2 + deltaxy)) ||
-					(dy < (ds->y1 - deltaxy)) ||
-					(dy > (ds->y2 + deltaxy))) {
+		            if (((dx - EPS) < (ds->x1 - deltaxy)) ||
+					((dx + EPS) > (ds->x2 + deltaxy)) ||
+					((dy - EPS) < (ds->y1 - deltaxy)) ||
+					((dy + EPS) > (ds->y2 + deltaxy))) {
 			       block_route(gridx, gridy, ds->layer, UP);
 			       block_route(gridx, gridy, ds->layer, DOWN);
 		            }

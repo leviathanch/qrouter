@@ -1155,7 +1155,8 @@ void create_obstructions_from_nodes()
 				}
 
 			        Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= (u_int)node->netnum | dir;
+			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					   & BLOCKED_MASK) | (u_int)node->netnum | dir;
 			        Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= node;
 			        Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
@@ -1194,7 +1195,8 @@ void create_obstructions_from_nodes()
 			        Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= node;
 			        Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= (u_int)node->netnum;
+			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					   & BLOCKED_MASK) | (u_int)node->netnum;
 
 				if (orignet & OBSTRUCT_N) {
 			           offd = -(sdisty - Obsinfo[ds->layer]
@@ -1266,7 +1268,8 @@ void create_obstructions_from_nodes()
 					((dy - ds->y1 + EPS) > deltay) &&
 					((ds->y2 - dy + EPS) > deltay)) {
 			           Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= (u_int)node->netnum;
+			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					   & BLOCKED_MASK) | (u_int)node->netnum;
 			           Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= node;
 			           Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
@@ -1538,7 +1541,8 @@ void create_obstructions_from_nodes()
 
 				if ((k < Numnets) && (dir != STUBROUTE_X)) {
 				   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= (u_int)g->netnum[i] | dir; 
+				   	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					  & BLOCKED_MASK) | (u_int)g->netnum[i] | dir; 
 				   Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= node;
 				   Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
@@ -1709,7 +1713,9 @@ void create_obstructions_from_nodes()
 					Stub[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = ds->y1 - dy;
 					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= node->netnum | STUBROUTE_NS;
+				   		= (Obs[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] & BLOCKED_MASK) |
+						node->netnum | STUBROUTE_NS;
 					Nodeloc[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = node;
 					Nodesav[ds->layer][OGRID(gridx, gridy,
@@ -1725,7 +1731,9 @@ void create_obstructions_from_nodes()
 					Stub[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = ds->y2 - dy;
 					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= node->netnum | STUBROUTE_NS;
+				   		= (Obs[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] & BLOCKED_MASK) |
+						node->netnum | STUBROUTE_NS;
 					Nodeloc[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = node;
 					Nodesav[ds->layer][OGRID(gridx, gridy,
@@ -1743,7 +1751,9 @@ void create_obstructions_from_nodes()
 					Stub[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = ds->x1 - dx;
 					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= node->netnum | STUBROUTE_EW;
+				   		= (Obs[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] & BLOCKED_MASK) |
+						node->netnum | STUBROUTE_EW;
 					Nodeloc[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = node;
 					Nodesav[ds->layer][OGRID(gridx, gridy,
@@ -1759,7 +1769,9 @@ void create_obstructions_from_nodes()
 					Stub[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = ds->x2 - dx;
 					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= node->netnum | STUBROUTE_EW;
+				   		= (Obs[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] & BLOCKED_MASK) |
+						node->netnum | STUBROUTE_EW;
 					Nodeloc[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] = node;
 					Nodesav[ds->layer][OGRID(gridx, gridy,

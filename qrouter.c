@@ -512,28 +512,35 @@ int post_def_setup()
       needblock[i] = (u_char)0;
       sreq1 = LefGetRouteSpacing(i);
 
-      if (i == 0)
-	 sreq2 = LefGetViaWidth(i, i, 0) + sreq1;
-      else
-	 sreq2 = LefGetViaWidth(i - 1, i, 0) + sreq1;
+      sreq2 = LefGetViaWidth(i, i, 0) + sreq1;
       if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
-      if (i == 0)
-	 sreq2 = LefGetViaWidth(i, i, 1) + sreq1;
-      else
-	 sreq2 = LefGetViaWidth(i - 1, i, 1) + sreq1;
+      if (i != 0) {
+	 sreq2 = LefGetViaWidth(i - 1, i, 0) + sreq1;
+         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= VIABLOCKX;
+      }
+
+      sreq2 = LefGetViaWidth(i, i, 1) + sreq1;
       if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= VIABLOCKY;
+      if (i != 0) {
+	 sreq2 = LefGetViaWidth(i - 1, i, 1) + sreq1;
+         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= VIABLOCKY;
+      }
 
       sreq1 += 0.5 * LefGetRouteWidth(i);
-      if (i == 0)
-	 sreq2 = sreq1 + 0.5 * LefGetViaWidth(i, i, 0);
-      else
-	 sreq2 = sreq1 + 0.5 * LefGetViaWidth(i - 1, i, 0);
+
+      sreq2 = sreq1 + 0.5 * LefGetViaWidth(i, i, 0);
       if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
-      if (i == 0)
-	 sreq2 = sreq1 + 0.5 * LefGetViaWidth(i, i, 1);
-      else
-	 sreq2 = sreq1 + 0.5 * LefGetViaWidth(i - 1, i, 1);
+      if (i != 0) {
+	 sreq2 = sreq1 + 0.5 * LefGetViaWidth(i - 1, i, 0);
+         if ((sreq2 - EPS) > PitchX[i]) needblock[i] |= ROUTEBLOCKX;
+      }
+
+      sreq2 = sreq1 + 0.5 * LefGetViaWidth(i, i, 1);
       if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= ROUTEBLOCKY;
+      if (i != 0) {
+	 sreq2 = sreq1 + 0.5 * LefGetViaWidth(i - 1, i, 1);
+         if ((sreq2 - EPS) > PitchY[i]) needblock[i] |= ROUTEBLOCKY;
+      }
    }
 
    // Now we have netlist data, and can use it to get a list of nets.
@@ -2446,6 +2453,7 @@ void cleanup_net(NET net)
    for (layer = 0; layer < Num_layers; layer++) {
       xcheck = needblock[layer] & VIABLOCKX;
       ycheck = needblock[layer] & VIABLOCKY;
+
       if (xcheck || ycheck) {
 	 for (rt = net->routes; rt; rt = rt->next) {
 	    fixed = FALSE;

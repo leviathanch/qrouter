@@ -1544,11 +1544,16 @@ void create_obstructions_from_nodes()
 				   Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= node;
 				}
-				else {
+				else if ((Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					& NO_NET) != 0) {
 				   // Keep showing an obstruction, but add the
 				   // direction info and log the stub distance.
 				   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					|= dir;
+				}
+				else {
+				   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					|= (dir | (g->netnum[i] & ROUTED_NET_MASK));
 				}
 				Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= dist;

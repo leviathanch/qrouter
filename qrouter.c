@@ -704,10 +704,12 @@ void pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale
       if (special) {
 	 double wvia;
 
-	 if (layer == 0)
-	    wvia = LefGetViaWidth(layer, layer, horizontal);
-	 else
-	    wvia = LefGetViaWidth(layer - 1, layer, horizontal);
+	 wvia = LefGetViaWidth(layer, layer, horizontal);
+	 if (layer > 0) { 
+	    double wvia2;
+	    wvia2 = LefGetViaWidth(layer - 1, layer, horizontal);
+	    if (wvia2 > wvia) wvia = wvia2;
+         }
 
          fprintf(cmd, "%s %g ( %g %g ) ", CIFLayer[layer],
 			invscale * (int)(oscale * wvia + 0.5),

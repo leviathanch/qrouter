@@ -2504,13 +2504,25 @@ void cleanup_net(NET net)
 		     ls = seg->layer;
 		     if (ls != layer && ls != layer - 1) continue;
 		     if (fcheck) {
-			if (ls != lf) {
-			   // NOTE:  This is still an error, and we should
-			   // deal with it by creating a special net.
-			   continue;
-			}
 			if ((ABSDIFF(seg->x1, segf->x1) == 1) &&
 				(seg->y1 == segf->y1) && xcheck) {
+			   if (ls != lf) {
+			      // NOTE:  This is still an error, and we should
+			      // deal with it by creating a special net.
+			      SEG newseg;
+			      newseg = (SEG)malloc(sizeof(struct seg_));
+			      rt->segments = newseg;
+			      newseg->next = segf;
+			      newseg->layer = ll;
+			      newseg->segtype = ST_WIRE;
+			      newseg->x1 = segf->x1;
+			      newseg->y1 = segf->y1;
+			      newseg->x2 = seg->x1; 
+			      newseg->y2 = seg->y1;
+			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
+					segf->x1, segf->y1, seg->x1, seg->y1);
+			      continue;
+			   }
 			   segf->segtype = ST_WIRE;
 			   segf->x1 = seg->x1;
 			   fixed = TRUE;
@@ -2518,6 +2530,23 @@ void cleanup_net(NET net)
 			}
 			else if ((ABSDIFF(seg->y1, segf->y1) == 1) &&
 				(seg->x1 == segf->x1) && ycheck) {
+			   if (ls != lf) {
+			      // NOTE:  This is still an error, and we should
+			      // deal with it by creating a special net.
+			      SEG newseg;
+			      newseg = (SEG)malloc(sizeof(struct seg_));
+			      rt->segments = newseg;
+			      newseg->next = segf;
+			      newseg->layer = ll;
+			      newseg->segtype = ST_WIRE;
+			      newseg->x1 = segf->x1;
+			      newseg->y1 = segf->y1;
+			      newseg->x2 = seg->x1; 
+			      newseg->y2 = seg->y1;
+			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
+					segf->x1, segf->y1, seg->x1, seg->y1);
+			      continue;
+			   }
 			   segf->segtype = ST_WIRE;
 			   segf->y1 = seg->y1;
 			   fixed = TRUE;
@@ -2525,14 +2554,26 @@ void cleanup_net(NET net)
 			}
 		     }
 		     if (lcheck) {
-			if (ls != ll) {
-			   // NOTE:  This is still an error, and we should
-			   // deal with it by creating a special net.
-			   continue;
-			}
 			if ((ABSDIFF(seg->x1, segl->x1) == 1) &&
 				(seg->y1 == segl->y1) && xcheck) {
-			   if (lastrlayer < lastlayer) {
+			   if (ls != ll) {
+			      // NOTE:  This is still an error, and we should
+			      // deal with it by creating a special net.
+			      SEG newseg;
+			      newseg = (SEG)malloc(sizeof(struct seg_));
+			      segl->next = newseg;
+			      newseg->next = NULL;
+			      newseg->layer = ll;
+			      newseg->segtype = ST_WIRE;
+			      newseg->x1 = segl->x1;
+			      newseg->y1 = segl->y1;
+			      newseg->x2 = seg->x1; 
+			      newseg->y2 = seg->y1;
+			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
+					segl->x1, segl->y1, seg->x1, seg->y1);
+			      continue;
+			   }
+			   else if (lastrlayer < lastlayer) {
 			      seg->segtype = ST_WIRE;
 			      seg->x2 = segl->x2;
 			   }
@@ -2545,7 +2586,24 @@ void cleanup_net(NET net)
 			}
 			else if ((ABSDIFF(seg->y1, segl->y1) == 1) &&
 				(seg->x1 == segl->x1) && ycheck) {
-			   if (lastrlayer < lastlayer) {
+			   if (ls != ll) {
+			      // NOTE:  This is still an error, and we should
+			      // deal with it by creating a special net.
+			      SEG newseg;
+			      newseg = (SEG)malloc(sizeof(struct seg_));
+			      segl->next = newseg;
+			      newseg->next = NULL;
+			      newseg->layer = ll;
+			      newseg->segtype = ST_WIRE;
+			      newseg->x1 = segl->x1;
+			      newseg->y1 = segl->y1;
+			      newseg->x2 = seg->x1; 
+			      newseg->y2 = seg->y1;
+			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
+					segl->x1, segl->y1, seg->x1, seg->y1);
+			      continue;
+			   }
+			   else if (lastrlayer < lastlayer) {
 			      seg->segtype = ST_WIRE;
 			      seg->y2 = segl->y2;
 			   }
@@ -2598,7 +2656,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
    int horizontal;
    DPOINT dp1, dp2;
    float offset1, offset2;
-   u_char cancel;
+   u_char cancel, segtype;
    double invscale = (double)(1.0 / (double)iscale); 
 
    /* If the STUB flag is set, then we need to write out the net name	*/
@@ -2916,7 +2974,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
 	    if (dir2 == (STUBROUTE_NS | OFFSET_TAP)) dc += offset2;
 	    y2 = (int)((REPS(dc)) * oscale);
-	    switch (seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END)) {
+	    segtype = seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END);
+	    switch (segtype) {
 	       case ST_WIRE:
 		  if (Pathon != 1) {	// 1st point of route seg
 		     if (x == x2) {
@@ -2936,7 +2995,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				" at (%d %d) to (%d %d)\n", x, y, x2, y2);
 		     }
 		     if (special == (u_char)0) {
-			pathstart(Cmd, seg->layer, x, y, (u_char)0, oscale, invscale,
+			pathstart(Cmd, seg->layer, x, y, special, oscale, invscale,
 				horizontal);
 			lastx = x;
 			lasty = y;

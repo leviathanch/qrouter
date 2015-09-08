@@ -135,6 +135,7 @@ struct string_ {
 #define	 ST_VIA			0x02
 #define	 ST_OFFSET_START	0x04	/* (x1, y1) is offset from grid */
 #define	 ST_OFFSET_END		0x08	/* (x2, y2) is offset from grid */
+#define  ST_SPECIAL		0x10	/* wide metal (special net)	*/
 
 typedef struct seg_ *SEG;
 

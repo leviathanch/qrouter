@@ -2519,8 +2519,6 @@ void cleanup_net(NET net)
 			      newseg->y1 = segf->y1;
 			      newseg->x2 = seg->x1; 
 			      newseg->y2 = seg->y1;
-			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
-					segf->x1, segf->y1, seg->x1, seg->y1);
 			      continue;
 			   }
 			   segf->segtype = ST_WIRE;
@@ -2543,8 +2541,6 @@ void cleanup_net(NET net)
 			      newseg->y1 = segf->y1;
 			      newseg->x2 = seg->x1; 
 			      newseg->y2 = seg->y1;
-			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
-					segf->x1, segf->y1, seg->x1, seg->y1);
 			      continue;
 			   }
 			   segf->segtype = ST_WIRE;
@@ -2569,8 +2565,6 @@ void cleanup_net(NET net)
 			      newseg->y1 = segl->y1;
 			      newseg->x2 = seg->x1; 
 			      newseg->y2 = seg->y1;
-			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
-					segl->x1, segl->y1, seg->x1, seg->y1);
 			      continue;
 			   }
 			   else if (lastrlayer < lastlayer) {
@@ -2599,8 +2593,6 @@ void cleanup_net(NET net)
 			      newseg->y1 = segl->y1;
 			      newseg->x2 = seg->x1; 
 			      newseg->y2 = seg->y1;
-			      fprintf(stderr, "Special net at (%d, %d) to (%d, %d)\n",
-					segl->x1, segl->y1, seg->x1, seg->y1);
 			      continue;
 			   }
 			   else if (lastrlayer < lastlayer) {

@@ -1000,9 +1000,6 @@ int ripup_colliding(NET net)
 	nl->next = (NETLIST)NULL;
 	nl = nl2;
      }
-
-     // Now we copy the net we routed above into Obs
-     writeback_all_routes(net);
      return ripped;
 }
 

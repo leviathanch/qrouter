@@ -1302,7 +1302,7 @@ done:
 	*rectListPtr = rex;
     else
     {
-	for (rtail = *rectListPtr; rtail->next; rtail = rtail->next)
+	for (rtail = *rectListPtr; rtail->next; rtail = rtail->next);
 	rtail->next = rex;
     }
 }

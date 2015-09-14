@@ -759,6 +759,10 @@ u_char ripup_net(NET net, u_char restore)
 		     else
 		        Obs[lay][OGRID(x, y, lay)] = NO_NET | dir;
 		  }
+	          else {
+		     // Clear routed mask bit
+		     Obs[lay][OGRID(x, y, lay)] &= ~ROUTED_NET;
+		  }
 
 		  // Routes which had blockages added on the sides due
 		  // to spacing constraints have (NO_NET | ROUTED_NET)
@@ -1737,13 +1741,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
       netnum |= ROUTED_NET;
 
+      writeback_segment(seg, netnum);
+
       // If Obs shows this position as an obstruction, then this was a port with
       // no taps in reach of a grid point.  This will be dealt with by moving
       // the via off-grid and onto the port position in emit_routes().
 
       if (stage == (u_char)0) {
-	 writeback_segment(seg, netnum);
-
          if (first && dir1) {
 	    first = (u_char)0;
          }

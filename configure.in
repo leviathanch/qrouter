@@ -199,15 +199,19 @@ AC_ARG_WITH(tcl,
 case $target in
    *-hpux*)
       SHDLIB_EXT=".sl"
+      SHDLIB_EXT_ALT=".sl"
       ;;
    *cygwin*)
       SHDLIB_EXT=".dll"
+      SHDLIB_EXT_ALT=".dll.a"
       ;;
    *darwin*)
       SHDLIB_EXT=".dylib"
+      SHDLIB_EXT_ALT=".dylib"
       ;;
    *)
       SHDLIB_EXT=".so"
+      SHDLIB_EXT_ALT=".so"
       ;;
 esac
 
@@ -533,7 +537,8 @@ if test $usingTcl ; then
 
   if test "x${qrouter_with_tcl_libraries}" != "x" ; then
     for libname in \
-     "${qrouter_with_tcl_libraries}/lib${TCL_LIB_NAME}${SHDLIB_EXT}"
+     "${qrouter_with_tcl_libraries}/lib${TCL_LIB_NAME}${SHDLIB_EXT}" \
+     "${qrouter_with_tcl_libraries}/lib${TCL_LIB_NAME}${SHDLIB_EXT_ALT}"
     do
       if test -r "$libname" ; then
         TCL_LIB_DIR="${qrouter_with_tcl_libraries}"
@@ -549,8 +554,9 @@ if test $usingTcl ; then
   else
     for libpfix in "lib64" "lib"
     do
-      libname="${TCL_EXEC_PREFIX}/${libpfix}/${DEB_HOST_MULTIARCH}/lib${TCL_LIB_NAME}${SHDLIB_EXT}"
-      if test -r "$libname" ; then
+      libname1="${TCL_EXEC_PREFIX}/${libpfix}/${DEB_HOST_MULTIARCH}/lib${TCL_LIB_NAME}${SHDLIB_EXT}"
+      libname2="${TCL_EXEC_PREFIX}/${libpfix}/${DEB_HOST_MULTIARCH}/lib${TCL_LIB_NAME}${SHDLIB_EXT_ALT}"
+      if test -r "$libname1" -o -r "$libname2" ; then
         TCL_LIB_DIR="${TCL_EXEC_PREFIX}/${libpfix}"
         break
       fi
@@ -566,7 +572,8 @@ fi
 if test $usingTcl ; then
   if test "x${qrouter_with_tk_libraries}" != "x" ; then
     for libname in \
-     "${qrouter_with_tk_libraries}/lib${TK_LIB_NAME}${SHDLIB_EXT}"
+     "${qrouter_with_tk_libraries}/lib${TK_LIB_NAME}${SHDLIB_EXT}" \
+     "${qrouter_with_tk_libraries}/lib${TK_LIB_NAME}${SHDLIB_EXT_ALT}"
     do
       if test -r "$libname" ; then
         TK_LIB_DIR="${qrouter_with_tk_libraries}"
@@ -581,8 +588,9 @@ if test $usingTcl ; then
   else
     for libpfix in "lib64" "lib"
     do
-      libname="${TK_EXEC_PREFIX}/${libpfix}/${DEB_HOST_MULTIARCH}/lib${TK_LIB_NAME}${SHDLIB_EXT}"
-      if test -r "$libname" ; then
+      libname1="${TK_EXEC_PREFIX}/${libpfix}/${DEB_HOST_MULTIARCH}/lib${TK_LIB_NAME}${SHDLIB_EXT}"
+      libname2="${TK_EXEC_PREFIX}/${libpfix}/${DEB_HOST_MULTIARCH}/lib${TK_LIB_NAME}${SHDLIB_EXT_ALT}"
+      if test -r "$libname1" -o -r "$libname2" ; then
         TK_LIB_DIR="${TK_EXEC_PREFIX}/${libpfix}"
         break
       fi
@@ -671,7 +679,6 @@ case $target in
   *cygwin*)
     AC_DEFINE(CYGWIN)
     AC_DEFINE(i386)
-    AC_DEFINE(WIN32)
     ;; 
   *darwin*)
     if test "$CPP" = "cc -E" ; then

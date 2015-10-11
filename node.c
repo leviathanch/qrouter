@@ -491,7 +491,22 @@ void create_obstructions_from_variable_pitch()
 	    if (x % hnum == 0) continue;
 	    for (y = 0; y < NumChannelsY[l]; y++) {
 	       if (y % vnum == 0) continue;
-	       Obs[l][OGRID(x, y, l)] = NO_NET;
+
+	       // If there is a node in an adjacent grid
+	       // then allow routing from that direction.
+
+	       if ((x > 0) && Nodeloc[l][OGRID(x - 1, y, l)] != NULL)
+		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_W;
+	       else if ((y > 0) && Nodeloc[l][OGRID(x , y - 1, l)] != NULL)
+		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_S;
+	       else if ((x < NumChannelsX[l] - 1)
+			&& Nodeloc[l][OGRID(x + 1, y, l)] != NULL)
+		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_E;
+	       else if ((y < NumChannelsY[l] - 1)
+			&& Nodeloc[l][OGRID(x, y + 1, l)] != NULL)
+		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_N;
+	       else
+		  Obs[l][OGRID(x, y, l)] = NO_NET;
 	    }
 	 }
       }

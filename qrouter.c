@@ -1082,7 +1082,7 @@ dosecondstage(u_char graphdebug)
    else
       maxtries = 0;
 
-   fillMask(0);
+   fillMask((u_char)0);
    Abandoned = NULL;
 
    while (FailedNets != NULL) {
@@ -1622,10 +1622,8 @@ void createMask(NET net, u_char slack, u_char halo)
 /* bad guess about the optimal route positions.			*/
 /*--------------------------------------------------------------*/
 
-void fillMask(int value) {
-   int i;
-
-   memset((void *)RMask, value,
+void fillMask(u_char value) {
+   memset((void *)RMask, (int)value,
 		(size_t)(NumChannelsX[0] * NumChannelsY[0]
 		* sizeof(u_char)));
 }

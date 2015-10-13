@@ -435,7 +435,7 @@ int    set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 
 void   initMask();
 void   createMask(NET net, u_char slack, u_char halo);
-void   fillMask();
+void   fillMask(u_char value);
 
 void   pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale,
 			double invscale, u_char horizontal);

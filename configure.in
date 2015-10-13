@@ -162,7 +162,7 @@ fi
 # Options
 # =========================================
 
-QROUTER_LIB_DIR=${ac_default_prefix}/share/qrouter
+QROUTER_LIB_DIR=${prefix}/share/qrouter
 AC_ARG_WITH(libdir,
 [  --with-libdir=DIR           path to qrouter default config files], [
    QROUTER_LIB_DIR=$withval

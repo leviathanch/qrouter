@@ -48,7 +48,7 @@ char *gndnet = NULL;
 int    Numnets = 0;
 int    Pinlayers = 0;
 u_char Verbose = 3;	// Default verbose level
-u_char keepTrying = FALSE;
+u_char keepTrying = (u_char)0;
 u_char forceRoutable = FALSE;
 u_char maskMode = MASK_AUTO;
 u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
@@ -165,7 +165,7 @@ runqrouter(int argc, char *argv[])
    Filename[0] = 0;
    DEFfilename[0] = 0;
 
-   while ((i = getopt(argc, argv, "c:i:hkfv:p:g:r:")) != -1) {
+   while ((i = getopt(argc, argv, "c:i:hk:fv:p:g:r:")) != -1) {
       switch (i) {
 	 case 'c':
 	    configfile = strdup(optarg);
@@ -197,7 +197,7 @@ runqrouter(int argc, char *argv[])
 	    forceRoutable = 1;
 	    break;
 	 case 'k':
-	    keepTrying = 1;
+	    keepTrying = (u_char)atoi(optarg);
 	    break;
 	 default:
 	    Fprintf(stderr, "bad switch %d\n", i);
@@ -1163,6 +1163,12 @@ dosecondstage(u_char graphdebug)
 	 else if (keepTrying == 0) {
 	    Fprintf(stderr, "\nQrouter is stuck, abandoning remaining routes.\n");
 	    break;
+	 }
+	 else {
+	    keepTrying--;
+	    Fprintf(stderr, "\nQrouter is stuck, but I was told to keep trying.\n");
+	    maxtries = TotalRoutes + failcount * 8;
+	    origcount = failcount;
 	 }
       }
    }

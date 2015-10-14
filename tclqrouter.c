@@ -840,6 +840,7 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage2 force	Force a terminal to be routable	*/
+/*  stage2 tries <n>	Keep trying n additional times	*/
 /*------------------------------------------------------*/
 
 int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
@@ -850,10 +851,10 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", NULL
+	"debug", "mask", "route", "force", "tries", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, TriesIdx
     };
    
     static char *maskSubCmds[] = {
@@ -879,6 +880,17 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	
 		case ForceIdx:
 		    forceRoutable = TRUE;
+		    break;
+
+		case TriesIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "tries ?num?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
+		    if (result != TCL_OK) return result;
+		    keepTrying = (u_char)val;
 		    break;
 	
 		case RouteIdx:

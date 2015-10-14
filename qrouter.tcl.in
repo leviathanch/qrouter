@@ -137,18 +137,19 @@ set appname .qrouter
 set appframe ${appname}.dframe
 set drawwindow ${appframe}.drawing
 
-toplevel ${appname}
-frame ${appframe}
+if {![catch toplevel ${appname}]} {
+   frame ${appframe}
 
-pack ${appframe} -side left -expand true -fill both
-simple ${drawwindow} -width 1000 -height 800
-pack ${drawwindow} -expand true -fill both
+   pack ${appframe} -side left -expand true -fill both
+   simple ${drawwindow} -width 1000 -height 800
+   pack ${drawwindow} -expand true -fill both
 
-bind ${appframe} <Expose> redraw
-bind ${appframe} <Visibility> redraw
-bind ${appframe} <Configure> redraw
+   bind ${appframe} <Expose> redraw
+   bind ${appframe} <Visibility> redraw
+   bind ${appframe} <Configure> redraw
 
-wm withdraw .
+   wm withdraw .
+}
 
 proc qrouter::lowerconsole {} {
     consoledown

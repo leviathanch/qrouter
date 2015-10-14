@@ -498,7 +498,7 @@ int GUI_init(Tcl_Interp *interp)
    tkwind = Tk_NameToWindow(interp, qrouterdrawwin, tktop);
    
    if (tkwind == NULL) {
-      tcl_printf(stderr, "The Tk window hierarchy must be rooted at"
+      tcl_printf(stderr, "The Tk window hierarchy must be rooted at "
 		".qrouter or $drawwindow must point to the drawing window\n");		
       return TCL_ERROR;
    }

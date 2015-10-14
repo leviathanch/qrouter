@@ -137,7 +137,7 @@ set appname .qrouter
 set appframe ${appname}.dframe
 set drawwindow ${appframe}.drawing
 
-if {![catch toplevel ${appname}]} {
+if {![catch {toplevel ${appname}}]} {
    frame ${appframe}
 
    pack ${appframe} -side left -expand true -fill both

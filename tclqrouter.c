@@ -1341,7 +1341,7 @@ int qrouter_priority(ClientData clientData, Tcl_Interp *interp,
 	Tcl_SetObjResult(interp, lobj);
     }
     else {
-	for (i = objc - 1; i > 0; i++) {
+	for (i = objc - 1; i > 0; i--) {
 	    netname = Tcl_GetString(objv[i]);
 	    net = LookupNet(netname);
 	    if (net == NULL) {

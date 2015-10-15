@@ -4059,7 +4059,7 @@ fi
 # Options
 # =========================================
 
-QROUTER_LIB_DIR=${prefix}/share/qrouter
+QROUTER_LIB_DIR=${ac_default_prefix}/share/qrouter
 
 # Check whether --with-libdir was given.
 if test "${with_libdir+set}" = set; then :

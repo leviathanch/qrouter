@@ -22,7 +22,7 @@ EXEEXT = @EXEEXT@
 X_LIBS = @X_LIBS@
 X_EXTRA_LIBS = @X_EXTRA_LIBS@
 X_PRE_LIBS = @X_PRE_LIBS@
-LIBINSTALL = @QROUTER_LIB_DIR@
+QROUTER_LIB_DIR = @QROUTER_LIB_DIR@
 WISH_EXE = @WISH_EXE@
 VERSION = @VERSION@
 REVISION = @REVISION@
@@ -44,6 +44,8 @@ SOURCES4 = main.c
 OBJECTS4 := $(patsubst %.c,%.o,$(SOURCES4))
 
 BININSTALL = ${prefix}/bin
+LIBINSTALL = ${prefix}/${QROUTER_LIB_DIR}
+EXTRA_DEFS = -DQROUTER_PATH=\"${LIBINSTALL}\"
 
 all: $(ALL_TARGET)
 
@@ -77,7 +79,7 @@ qrouter$(SHDLIB_EXT): $(OBJECTS) $(OBJECTS2)
 
 qrouterexec$(EXEEXT): $(OBJECTS3)
 	$(RM) qrouterexec$(EXEEXT)
-	$(CC) ${CFLAGS} ${CPPFLAGS} ${DEFS} \
+	$(CC) ${CFLAGS} ${CPPFLAGS} ${DEFS} ${EXTRA_DEFS} \
 		${SOURCES3} ${INC_SPECS} -o $@  ${LIB_SPECS} \
 		${LD_RUN_PATH} ${LDFLAGS} ${X_PRE_LIBS} -lX11 ${X_LIBS} \
 		${X_EXTRA_LIBS} ${LIBS} ${EXTRA_LIB_SPECS} -lm
@@ -124,4 +126,5 @@ veryclean:
 	$(RM) qrouter.sh
 
 .c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) $(INC_SPECS) -c $< -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(SHLIB_CFLAGS) $(DEFS) \
+		$(EXTRA_DEFS) $(INC_SPECS) -c $< -o $@

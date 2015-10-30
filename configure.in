@@ -162,12 +162,11 @@ fi
 # Options
 # =========================================
 
-QROUTER_LIB_DIR=${ac_default_prefix}/share/qrouter
+QROUTER_LIB_DIR="share/qrouter"
 AC_ARG_WITH(libdir,
 [  --with-libdir=DIR           path to qrouter default config files], [
    QROUTER_LIB_DIR=$withval
 ], [])
-AC_DEFINE_UNQUOTED(QROUTER_PATH, "$QROUTER_LIB_DIR")
 
 # Interpreter Options
 # =========================================
@@ -274,7 +273,7 @@ if test $usingTcl ; then
     #  1. Search previously named locations.
 
     for dir in \
-     $prefix \
+     $ac_default_prefix \
      $exec_prefix
     do
       if test -r "$dir/tclConfig.sh" ; then
@@ -361,7 +360,7 @@ if test $usingTcl ; then
     #  1. Search previously named locations.
     #
     for dir in \
-     $prefix \
+     $ac_default_prefix \
      $exec_prefix
     do
       if test -r "$dir/tkConfig.sh" ; then

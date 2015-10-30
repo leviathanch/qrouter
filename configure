@@ -4059,7 +4059,7 @@ fi
 # Options
 # =========================================
 
-QROUTER_LIB_DIR=${ac_default_prefix}/share/qrouter
+QROUTER_LIB_DIR="share/qrouter"
 
 # Check whether --with-libdir was given.
 if test "${with_libdir+set}" = set; then :
@@ -4067,10 +4067,6 @@ if test "${with_libdir+set}" = set; then :
    QROUTER_LIB_DIR=$withval
 
 fi
-
-cat >>confdefs.h <<_ACEOF
-#define QROUTER_PATH "$QROUTER_LIB_DIR"
-_ACEOF
 
 
 # Interpreter Options
@@ -4196,7 +4192,7 @@ $as_echo_n "checking for tclConfig.sh... " >&6; }
     #  1. Search previously named locations.
 
     for dir in \
-     $prefix \
+     $ac_default_prefix \
      $exec_prefix
     do
       if test -r "$dir/tclConfig.sh" ; then
@@ -4285,7 +4281,7 @@ $as_echo_n "checking for tkConfig.sh... " >&6; }
     #  1. Search previously named locations.
     #
     for dir in \
-     $prefix \
+     $ac_default_prefix \
      $exec_prefix
     do
       if test -r "$dir/tkConfig.sh" ; then

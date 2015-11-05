@@ -492,8 +492,12 @@ void create_obstructions_from_variable_pitch()
 	    for (y = 0; y < NumChannelsY[l]; y++) {
 	       if (y % vnum == 0) continue;
 
-	       // If there is a node in an adjacent grid
-	       // then allow routing from that direction.
+	       // If the grid position itself is a node, don't restrict
+	       // routing based on variable pitch.
+	       if (Nodeloc[l][OGRID(x, y, l)] != NULL) continue;
+
+	       // If there is a node in an adjacent grid then allow
+	       // routing from that direction.
 
 	       if ((x > 0) && Nodeloc[l][OGRID(x - 1, y, l)] != NULL)
 		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_W;

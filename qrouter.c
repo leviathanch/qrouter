@@ -150,7 +150,7 @@ runqrouter(int argc, char *argv[])
 {
    int	i, j, result;
    int length, width;
-   FILE *l, *configFILEptr, *fptr;
+   FILE *l, *configFILEptr, *fptr, *infoFILEptr;
    u_int u;
    static char configdefault[] = CONFIGFILENAME;
    char *configfile = configdefault;
@@ -204,10 +204,15 @@ runqrouter(int argc, char *argv[])
       }
    }
 
+   if (infofile != NULL)
+      infoFILEptr = fopen(infofile, "w" );
+   else
+      infoFILEptr = NULL;
+
    configFILEptr = fopen(configfile, "r");
 
    if (configFILEptr) {
-       read_config(configFILEptr);
+       read_config(configFILEptr, (infoFILEptr == NULL) ? FALSE : TRUE);
        readconfig = TRUE;
    }
    else {
@@ -218,31 +223,67 @@ runqrouter(int argc, char *argv[])
    }
    if (configfile != configdefault) free(configfile);
 
-   if (infofile != NULL) {
-      FILE *infoFILEptr;
+   if (infoFILEptr != NULL) {
 
-      infoFILEptr = fopen(infofile, "w" );
-      if (infoFILEptr != NULL) {
-
-	 /* Print qrouter name and version number at the top */
+      /* Print qrouter name and version number at the top */
 #ifdef TCL_QROUTER
-	 fprintf(infoFILEptr, "qrouter %s.%s.T\n", VERSION, REVISION);
+      fprintf(infoFILEptr, "qrouter %s.%s.T\n", VERSION, REVISION);
 #else
-	 fprintf(infoFILEptr, "qrouter %s.%s\n", VERSION, REVISION);
+      fprintf(infoFILEptr, "qrouter %s.%s\n", VERSION, REVISION);
 #endif
 
-         /* Print information about route layers, and exit */
-         for (i = 0; i < Num_layers; i++) {
-	    char *layername = LefGetRouteName(i);
-	    if (layername != NULL)
-	       fprintf(infoFILEptr, "%s %g %g %g %s\n",
-			layername, LefGetRoutePitch(i),
-			LefGetRouteOffset(i), LefGetRouteWidth(i),
-			(LefGetRouteOrientation(i) == 1) ? "horizontal"
-			: "vertical");
-	 }
-	 fclose(infoFILEptr);
+      /* Resolve pitches.  This is normally done after reading	*/
+      /* the DEF file, but the info file is usually generated	*/
+      /* from LEF layer information only, in order to get the	*/
+      /* values needed to write the DEF file tracks.		*/
+
+      for (i = 0; i < Num_layers; i++) {
+	 int o = LefGetRouteOrientation(i);
+
+	 /* Set PitchX and PitchY from route info as	*/
+	 /* check_variable_pitch needs the values	*/
+
+	 if (o == 1)
+	    PitchY[i] = LefGetRoutePitch(i);
+	 else
+	    PitchX[i] = LefGetRoutePitch(i);
       }
+
+      /* Resolve pitch information similarly to post_config() */
+
+      for (i = 1; i < Num_layers; i++) {
+	 int o = LefGetRouteOrientation(i);
+
+	 if ((o == 1) && (PitchY[i - 1] == 0))
+	    PitchY[i - 1] = PitchY[i];
+	 else if ((o == 0) && (PitchX[i - 1] == 0))
+	    PitchX[i - 1] = PitchX[i];
+      }
+
+      /* Print information about route layers, and exit */
+      for (i = 0; i < Num_layers; i++) {
+	 int vnum, hnum;
+	 int o = LefGetRouteOrientation(i);
+	 char *layername = LefGetRouteName(i);
+
+	 check_variable_pitch(i, &hnum, &vnum);
+	 if (vnum > 1 && hnum == 1) hnum++;	// see note in node.c
+	 if (hnum > 1 && vnum == 1) vnum++;
+		
+	 if (layername != NULL) {
+	    fprintf(infoFILEptr, "%s %g %g %g %s",
+		layername,
+		(o == 1) ? PitchY[i] : PitchX[i],
+		LefGetRouteOffset(i), LefGetRouteWidth(i),
+		(o == 1) ? "horizontal" : "vertical");
+	    if (o == 1 && vnum > 1)
+	       fprintf(infoFILEptr, " %d", vnum);
+	    else if (o == 0 && hnum > 1)
+	       fprintf(infoFILEptr, " %d", hnum);
+	    fprintf(infoFILEptr, "\n");
+	 }
+      }
+      fclose(infoFILEptr);
       return 1;
    }
 

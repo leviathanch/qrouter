@@ -1186,7 +1186,7 @@ int qrouter_readconfig(ClientData clientData, Tcl_Interp *interp,
 		NULL);
 	return TCL_ERROR;
     }
-    read_config(configFILE);
+    read_config(configFILE, FALSE);
     return QrouterTagCallback(interp, objc, objv);
 }
 

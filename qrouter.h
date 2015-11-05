@@ -412,6 +412,8 @@ extern char *gndnet;
 extern int    set_num_channels();
 extern int    allocate_obs_array();
 
+void   check_variable_pitch(int, int *, int *);
+
 NET    getnettoroute();
 int    dofirststage(u_char graphdebug);
 int    dosecondstage(u_char graphdebug);

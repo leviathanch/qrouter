@@ -40,7 +40,7 @@ extern int     ConflictCost;
 extern char    *ViaX[MAX_LAYERS];
 extern char    *ViaY[MAX_LAYERS];
 
-int  read_config(FILE *configfileptr);
+int  read_config(FILE *configfileptr, int is_info);
 void post_config();
 
 #define QCONFIG_H

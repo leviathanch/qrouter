@@ -415,6 +415,68 @@ void print_nlnets( char *filename )
 } /* void print_nlnets() */
 
 /*--------------------------------------------------------------*/
+/* check_variable_pitch()					*/
+/*								*/
+/*  This routine is used by the routine below it to generate	*/
+/*  obstructions that force routes to be placed in 1-of-N	*/
+/*  tracks.  However, it is also used to determine the same	*/
+/*  information for the .info file, so that the effective	*/
+/*  pitch is output, not the pitch copied from the LEF file.	*/
+/*  Output is the vertical and horizontal pitch multipliers,	*/
+/*  passed back through pointers.				*/
+/*--------------------------------------------------------------*/
+
+void check_variable_pitch(int l, int *hptr, int *vptr)
+{
+   int o, hnum, vnum;
+   double vpitch, hpitch, wvia;
+
+   o = LefGetRouteOrientation(l);
+
+   // Pick the best via size for the layer.  Usually this means the
+   // via whose base is at layer - 1, because the top metal layer
+   // will either have the same width or a larger width.  
+
+   // Note that when "horizontal" (o = 1) is passed to LefGetViaWidth,
+   // it returns the via width side-to-side; but for horizontal routing
+   // the dimension of interest is the height of the via.  Therefore
+   // the direction argument passed to LefGetViaWidth is (1 - o).
+
+   if (l == 0)
+	 wvia = LefGetViaWidth(l, l, (1 - o));
+   else
+	 wvia = LefGetViaWidth(l - 1, l, (1 - o));
+
+   if (o == 1) {	// Horizontal route
+      vpitch = LefGetRoutePitch(l);
+      // Changed:  routes must be able to accomodate the placement
+      // of a via in the track next to it.
+
+      // hpitch = LefGetRouteWidth(l) + LefGetRouteSpacing(l);
+      hpitch = 0.5 * (LefGetRouteWidth(l) + wvia) + LefGetRouteSpacing(l);
+   }
+   else {		// Vertical route
+      hpitch = LefGetRoutePitch(l);
+      // vpitch = LefGetRouteWidth(l) + LefGetRouteSpacing(l);
+      vpitch = 0.5 * (LefGetRouteWidth(l) + wvia) + LefGetRouteSpacing(l);
+   }
+
+   vnum = 1;
+   while (vpitch > PitchY[l] + EPS) {
+      vpitch /= 2.0;
+      vnum++;
+   }
+   hnum = 1;
+   while (hpitch > PitchX[l] + EPS) {
+      hpitch /= 2.0;
+      hnum++;
+   }
+
+   *vptr = vnum;
+   *hptr = hnum;
+}
+
+/*--------------------------------------------------------------*/
 /* create_obstructions_from_variable_pitch()			*/
 /*								*/
 /*  Although it would be nice to have an algorithm that would	*/
@@ -430,50 +492,11 @@ void print_nlnets( char *filename )
 
 void create_obstructions_from_variable_pitch()
 {
-   int l, o, vnum, hnum, x, y;
-   double vpitch, hpitch, wvia;
+   int l, vnum, hnum, x, y;
 
    for (l = 0; l < Num_layers; l++) {
-      o = LefGetRouteOrientation(l);
 
-      // Pick the best via size for the layer.  Usually this means the
-      // via whose base is at layer - 1, because the top metal layer
-      // will either have the same width or a larger width.  
-
-      // Note that when "horizontal" (o = 1) is passed to LefGetViaWidth,
-      // it returns the via width side-to-side; but for horizontal routing
-      // the dimension of interest is the height of the via.  Therefore
-      // the direction argument passed to LefGetViaWidth is (1 - o).
-
-      if (l == 0)
-	 wvia = LefGetViaWidth(l, l, (1 - o));
-      else
-	 wvia = LefGetViaWidth(l - 1, l, (1 - o));
-
-      if (o == 1) {	// Horizontal route
-	 vpitch = LefGetRoutePitch(l);
-	 // Changed:  routes must be able to accomodate the placement
-	 // of a via in the track next to it.
-
-	 // hpitch = LefGetRouteWidth(l) + LefGetRouteSpacing(l);
-	 hpitch = 0.5 * (LefGetRouteWidth(l) + wvia) + LefGetRouteSpacing(l);
-      }
-      else {		// Vertical route
-	 hpitch = LefGetRoutePitch(l);
-	 // vpitch = LefGetRouteWidth(l) + LefGetRouteSpacing(l);
-	 vpitch = 0.5 * (LefGetRouteWidth(l) + wvia) + LefGetRouteSpacing(l);
-      }
-
-      vnum = 1;
-      while (vpitch > PitchY[l] + EPS) {
-	 vpitch /= 2.0;
-	 vnum++;
-      }
-      hnum = 1;
-      while (hpitch > PitchX[l] + EPS) {
-	 hpitch /= 2.0;
-	 hnum++;
-      }
+      check_variable_pitch(l, &hnum, &vnum);
 
       // This could be better handled by restricting
       // access from specific directions rather than

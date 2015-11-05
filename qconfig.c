@@ -119,9 +119,13 @@ post_config()
 /*         ARGS: the filename (normally route.cfg)		*/
 /*      RETURNS: number of lines successfully read		*/
 /* SIDE EFFECTS: loads Global configuration variables		*/
+/*								*/
+/* "is_info" indicates if qrouter was called with the -i option	*/
+/* in which case the config file read should stop before any	*/
+/* def file is read.						*/
 /*--------------------------------------------------------------*/
 
-int read_config(FILE *fconfig)
+int read_config(FILE *fconfig, int is_info)
 {
     int count, lines, i, OK;
     int iarg, iarg2;
@@ -437,7 +441,8 @@ int read_config(FILE *fconfig)
 
 	if (OK == 0) {
 	    if (!(lineptr[0] == '\n' || lineptr[0] == '#' || lineptr[0] == 0)) {
-		Fprintf(stderr, "line not understood: %s\n", line);
+		if (!is_info)	// Don't report errors on info file generation
+		    Fprintf(stderr, "line not understood: %s\n", line);
 	    }
 	}
 	OK = 0;

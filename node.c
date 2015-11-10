@@ -1015,7 +1015,7 @@ void expand_tap_geometry()
 }
 
 /*--------------------------------------------------------------*/
-/* create_obstructions_from_nodes()				*/
+/* create_obstructions_inside_nodes()				*/
 /*								*/
 /*  Fills in the Obs[][] grid from the position of each node	*/
 /*  (net terminal), which may have multiple unconnected		*/
@@ -1027,6 +1027,9 @@ void expand_tap_geometry()
 /*  discourage boxing in a pin position and making it 		*/
 /*  unroutable.							*/
 /*								*/
+/*  This routine is split into two passes.  This pass adds	*/
+/*  information for points inside node regions.			*/
+/*								*/
 /*  ARGS: none.							*/
 /*  RETURNS: nothing						*/
 /*  SIDE EFFECTS: none						*/
@@ -1034,7 +1037,7 @@ void expand_tap_geometry()
 /*	Beccue.							*/
 /*--------------------------------------------------------------*/
 
-void create_obstructions_from_nodes()
+void create_obstructions_inside_nodes()
 {
     NODE node, n2;
     GATE g;
@@ -1209,90 +1212,8 @@ void create_obstructions_from_nodes()
 			     }
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
 					!= OBSTRUCT_MASK)) {
-				double sdistx = LefGetViaWidth(ds->layer, ds->layer, 0)
-					/ 2.0 + LefGetRouteSpacing(ds->layer);
-				double sdisty = LefGetViaWidth(ds->layer, ds->layer, 1)
-					/ 2.0 + LefGetRouteSpacing(ds->layer);
-				double offd;
-
-				// Define a maximum offset we can have in X or
-				// Y above which the placement of a via will
-				// cause a DRC violation with a wire in the
-				// adjacent route track in the direction of the
-				// offset.
-
-				int maxerr = 0;
-
-				// If a cell is positioned off-grid, then a grid
-				// point may be inside a pin and still be unroutable.
-				// The Obsinfo[] array tells where an obstruction is,
-				// if there was only one obstruction in one direction
-				// blocking the grid point.  If so, then we set the
-				// Stub[] distance to move the tap away from the
-				// obstruction to resolve the DRC error.
-
-				// Make sure we have marked this as a node.
-			        Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			        Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			        Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					   & BLOCKED_MASK) | (u_int)node->netnum;
-
-				if (orignet & OBSTRUCT_N) {
-			           offd = -(sdisty - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)]);
-				   if (offd >= -offmaxy[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_NS | OFFSET_TAP);
-				   }
-				   else maxerr = 1;
-				}
-				else if (orignet & OBSTRUCT_S) {
-				   offd = sdisty - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)];
-				   if (offd <= offmaxy[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_NS | OFFSET_TAP);
-				   }
-				   else maxerr = 1;
-				}
-				else if (orignet & OBSTRUCT_E) {
-				   offd = -(sdistx - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)]);
-				   if (offd >= -offmaxx[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_EW | OFFSET_TAP);
-				   }
-				   else maxerr = 1;
-				}
-				else if (orignet & OBSTRUCT_W) {
-				   offd = sdistx - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)];
-				   if (offd <= offmaxx[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_EW | OFFSET_TAP);
-				   }
-				   else maxerr = 1;
-				}
-
-			        if (maxerr == 1)
-				   disable_gridpos(gridx, gridy, ds->layer);
-
-				// Diagnostic
-				else if (Verbose > 3)
-				   Fprintf(stderr, "Port overlaps obstruction"
-					" at grid %d %d, position %g %g\n",
-					gridx, gridy, dx, dy);
+// WIP
+				/* Handled on next pass */
 			     }
 			     else if (orignet & NO_NET) {
 				// The code in create_obstructions_from_gates
@@ -1344,6 +1265,84 @@ void create_obstructions_from_nodes()
 		   gridx++;
 		}
 	     }
+	  }
+       }
+    }
+
+} /* void create_obstructions_inside_nodes( void ) */
+
+/*--------------------------------------------------------------*/
+/* create_obstructions_outside_nodes()				*/
+/*								*/
+/*  Fills in the Obs[][] grid from the position of each node	*/
+/*  (net terminal), which may have multiple unconnected		*/
+/*  positions.							*/
+/*								*/
+/*  Also fills in the Nodeloc[] grid with the node number,	*/
+/*  which causes the router to put a premium on			*/
+/*  routing other nets over or under this position, to		*/
+/*  discourage boxing in a pin position and making it 		*/
+/*  unroutable.							*/
+/*								*/
+/*  This routine is split into two passes.  This pass adds	*/
+/*  information for points outside node regions but close	*/
+/*  enough to interact with the node.				*/
+/*								*/
+/*  ARGS: none.							*/
+/*  RETURNS: nothing						*/
+/*  SIDE EFFECTS: none						*/
+/*  AUTHOR:  Tim Edwards, June 2011, based on code by Steve	*/
+/*	Beccue.							*/
+/*--------------------------------------------------------------*/
+
+
+void create_obstructions_outside_nodes()
+{
+    NODE node, n2;
+    GATE g;
+    DPOINT dp;
+    DSEG ds;
+    u_int dir, k;
+    int i, gx, gy, gridx, gridy, net;
+    double dx, dy, deltax, deltay;
+    float dist, xdist;
+    double offmaxx[MAX_LAYERS], offmaxy[MAX_LAYERS];
+
+    // Use a more conservative definition of keepout, to include via
+    // widths, which may be bigger than route widths.
+
+    for (i = 0; i < Num_layers; i++) {
+	offmaxx[i] = PitchX[i] - LefGetRouteSpacing(i)
+		- 0.5 * (LefGetRouteWidth(i) + LefGetViaWidth(i, i, 0));
+	offmaxy[i] = PitchY[i] - LefGetRouteSpacing(i)
+		- 0.5 * (LefGetRouteWidth(i) + LefGetViaWidth(i, i, 1));
+    }
+
+    // When we place vias at an offset, they have to satisfy the spacing
+    // requirements for the via's top layer, as well.  So take the least
+    // maximum offset of each layer and the layer above it.
+
+    for (i = 0; i < Num_layers - 1; i++) {
+       offmaxx[i] = MIN(offmaxx[i], offmaxx[i + 1]);
+       offmaxy[i] = MIN(offmaxy[i], offmaxy[i + 1]);
+    }
+
+    // For each node terminal (gate pin), mark each grid position with the
+    // net number.  This overrides any obstruction that may be placed at that
+    // point.
+
+    // For each pin position, we also find the "keepout" area around the
+    // pin where we may not place an unrelated route.  For this, we use a
+    // flag bit, so that the position can be ignored when routing the net
+    // associated with the pin.  Normal obstructions take precedence.
+
+    for (g = Nlgates; g; g = g->next) {
+       for (i = 0; i < g->nodes; i++) {
+	  if (g->netnum[i] != 0) {
+
+	     // Get the node record associated with this pin.
+	     node = g->noderec[i];
+	     if (node == NULL) continue;
 
 	     // Repeat this whole exercise for areas in the halo outside
 	     // the node geometry.  We have to do this after enumerating
@@ -1376,6 +1375,159 @@ void create_obstructions_from_nodes()
 		         if ((dy + EPS) > (ds->y2 + deltay) ||
 				gridy >= NumChannelsY[ds->layer])
 			    break;
+
+			 // 2nd pass on area inside defined pin geometry,
+			 // allowing terminal connections to be made using
+			 // an offset tap, where possible.
+
+			 if (dy > ds->y1 && gridy >= 0) {
+			     int orignet = Obs[ds->layer][OGRID(gridx,
+					gridy, ds->layer)];
+
+			     if ((orignet & ROUTED_NET_MASK) == (u_int)node->netnum) {
+
+				// Duplicate tap point.   Don't re-process it.
+				gridy++;
+				continue;
+			     }
+
+			     if (!(orignet & NO_NET) &&
+					((orignet & ROUTED_NET_MASK) != (u_int)0)) {
+// WIP
+				/* Do nothing;  previously handled */
+			     }
+
+			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
+					!= OBSTRUCT_MASK)) {
+				double sdistx = LefGetViaWidth(ds->layer, ds->layer, 0)
+					/ 2.0 + LefGetRouteSpacing(ds->layer);
+				double sdisty = LefGetViaWidth(ds->layer, ds->layer, 1)
+					/ 2.0 + LefGetRouteSpacing(ds->layer);
+				double offd;
+
+				// Define a maximum offset we can have in X or
+				// Y above which the placement of a via will
+				// cause a DRC violation with a wire in the
+				// adjacent route track in the direction of the
+				// offset.
+
+				int maxerr = 0;
+
+				// If a cell is positioned off-grid, then a grid
+				// point may be inside a pin and still be unroutable.
+				// The Obsinfo[] array tells where an obstruction is,
+				// if there was only one obstruction in one direction
+				// blocking the grid point.  If so, then we set the
+				// Stub[] distance to move the tap away from the
+				// obstruction to resolve the DRC error.
+
+				// Make sure we have marked this as a node.
+			        Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					= node;
+			        Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					= node;
+			        Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+					   & BLOCKED_MASK) | (u_int)node->netnum;
+
+				if (orignet & OBSTRUCT_N) {
+			           offd = -(sdisty - Obsinfo[ds->layer]
+					[OGRID(gridx, gridy, ds->layer)]);
+				   if (offd >= -offmaxy[ds->layer]) {
+			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						= offd;
+			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						|= (STUBROUTE_NS | OFFSET_TAP);
+
+				      /* If position above has obstruction, then */
+				      /* add up/down block to prevent vias.	 */
+
+				      if ((ds->layer < Num_layers - 1) &&
+						(gridy > 0) &&
+						(Obs[ds->layer + 1][OGRID(gridx,
+						gridy - 1, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					block_route(gridx, gridy, ds->layer, UP);
+				   }
+				   else maxerr = 1;
+				}
+				else if (orignet & OBSTRUCT_S) {
+				   offd = sdisty - Obsinfo[ds->layer]
+					[OGRID(gridx, gridy, ds->layer)];
+				   if (offd <= offmaxy[ds->layer]) {
+			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						= offd;
+			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						|= (STUBROUTE_NS | OFFSET_TAP);
+
+				      /* If position above has obstruction, then */
+				      /* add up/down block to prevent vias.	 */
+
+				      if ((ds->layer < Num_layers - 1) &&
+						(gridy < NumChannelsY[ds->layer + 1]
+						- 1) &&
+						(Obs[ds->layer + 1][OGRID(gridx,
+						gridy + 1, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					block_route(gridx, gridy, ds->layer, UP);
+				   }
+				   else maxerr = 1;
+				}
+				else if (orignet & OBSTRUCT_E) {
+				   offd = -(sdistx - Obsinfo[ds->layer]
+					[OGRID(gridx, gridy, ds->layer)]);
+				   if (offd >= -offmaxx[ds->layer]) {
+			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						= offd;
+			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						|= (STUBROUTE_EW | OFFSET_TAP);
+
+				      /* If position above has obstruction, then */
+				      /* add up/down block to prevent vias.	 */
+
+				      if ((ds->layer < Num_layers - 1) &&
+						(gridx > 0) &&
+						(Obs[ds->layer + 1][OGRID(gridx - 1,
+						gridy, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					block_route(gridx, gridy, ds->layer, UP);
+				   }
+				   else maxerr = 1;
+				}
+				else if (orignet & OBSTRUCT_W) {
+				   offd = sdistx - Obsinfo[ds->layer]
+					[OGRID(gridx, gridy, ds->layer)];
+				   if (offd <= offmaxx[ds->layer]) {
+			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						= offd;
+			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+						|= (STUBROUTE_EW | OFFSET_TAP);
+
+				      /* If position above has obstruction, then */
+				      /* add up/down block to prevent vias.	 */
+
+				      if ((ds->layer < Num_layers - 1) &&
+						(gridx < NumChannelsX[ds->layer]
+						- 1) &&
+						(Obs[ds->layer + 1][OGRID(gridx + 1,
+						gridy, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					block_route(gridx, gridy, ds->layer, UP);
+				   }
+				   else maxerr = 1;
+				}
+
+			        if (maxerr == 1)
+				   disable_gridpos(gridx, gridy, ds->layer);
+
+				// Diagnostic
+				else if (Verbose > 3)
+				   Fprintf(stderr, "Port overlaps obstruction"
+					" at grid %d %d, position %g %g\n",
+					gridx, gridy, dx, dy);
+			     }
+			 }
+// WIP
 
 		         if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0) {
 			    xdist = 0.5 * LefGetRouteWidth(ds->layer);
@@ -1439,14 +1591,33 @@ void create_obstructions_from_nodes()
 				      if ((dx >= ds->x2) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_E)) {
 				         dist = sdist - LefGetRouteKeepout(ds->layer);
-					 if ((dx - ds->x2 + dist) < xdist)
+					 if ((dx - ds->x2 + dist) < xdist) {
 				 	    dir = STUBROUTE_EW | OFFSET_TAP;
+
+				            if ((ds->layer < Num_layers - 1) &&
+							(gridx > 0) &&
+							(Obs[ds->layer + 1][OGRID(
+							gridx - 1, gridy,
+							ds->layer + 1)]
+							& OBSTRUCT_MASK))
+					       block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				      else if ((dx <= ds->x1) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_W)) {
 				         dist = LefGetRouteKeepout(ds->layer) - sdist;
-					 if ((ds->x1 - dx - dist) < xdist)
+					 if ((ds->x1 - dx - dist) < xdist) {
 				            dir = STUBROUTE_EW | OFFSET_TAP;
+
+				            if ((ds->layer < Num_layers - 1) &&
+							gridx <
+							(NumChannelsX[ds->layer] - 1)
+							&& (Obs[ds->layer + 1][OGRID(
+							gridx + 1, gridy,
+							ds->layer + 1)]
+							& OBSTRUCT_MASK))
+					       block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 			 	   }	
 				   if (dx >= (ds->x1 - xdist) &&
@@ -1454,14 +1625,33 @@ void create_obstructions_from_nodes()
 				      if ((dy >= ds->y2) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_N)) {
 				         dist = sdist - LefGetRouteKeepout(ds->layer);
-					 if ((dy - ds->y2 + dist) < xdist)
+					 if ((dy - ds->y2 + dist) < xdist) {
 				            dir = STUBROUTE_NS | OFFSET_TAP;
+
+				            if ((ds->layer < Num_layers - 1) &&
+							gridy < 
+							(NumChannelsY[ds->layer] - 1)
+							&& (Obs[ds->layer + 1][OGRID(
+							gridx, gridy - 1,
+							ds->layer + 1)]
+							& OBSTRUCT_MASK))
+					       block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				      else if ((dy <= ds->y1) &&
 						((k & OBSTRUCT_MASK) == OBSTRUCT_S)) {
 				         dist = LefGetRouteKeepout(ds->layer) - sdist;
-					 if ((ds->y1 - dy - dist) < xdist)
+					 if ((ds->y1 - dy - dist) < xdist) {
 				            dir = STUBROUTE_NS | OFFSET_TAP;
+
+				            if ((ds->layer < Num_layers - 1) &&
+							(gridy > 0) &&
+							(Obs[ds->layer + 1][OGRID(
+							gridx, gridy + 1,
+							ds->layer + 1)]
+							& OBSTRUCT_MASK))
+					       block_route(gridx, gridy, ds->layer, UP);
+					 }
 				      }
 				   }
 				   // Otherwise, dir is left as STUBROUTE_X
@@ -1662,6 +1852,13 @@ void create_obstructions_from_nodes()
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
 					   no_offsets = FALSE;
+
+				           if ((ds->layer < Num_layers - 1) &&
+						(gridx > 0) &&
+						(Obs[ds->layer + 1][OGRID(
+						gridx - 1, gridy, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					      block_route(gridx, gridy, ds->layer, UP);
 					}
 				     }
 
@@ -1681,6 +1878,13 @@ void create_obstructions_from_nodes()
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
 					   no_offsets = FALSE;
+
+				           if ((ds->layer < Num_layers - 1) &&
+						gridx < (NumChannelsX[ds->layer] - 1)
+						&& (Obs[ds->layer + 1][OGRID(
+						gridx + 1, gridy, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					      block_route(gridx, gridy, ds->layer, UP);
 					}
 				     }
 
@@ -1701,10 +1905,17 @@ void create_obstructions_from_nodes()
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
 					   no_offsets = FALSE;
+
+				           if ((ds->layer < Num_layers - 1) &&
+						(gridy > 0) &&
+						(Obs[ds->layer + 1][OGRID(
+						gridx, gridy + 1, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					      block_route(gridx, gridy, ds->layer, UP);
 					}
 				     }
 
-				     // Check tap to left
+				     // Check tap down
 
 				     if ((dy < ds->y1) && (gridy > 0)) {
 					offset_net = Obs[ds->layer][OGRID(gridx,
@@ -1720,6 +1931,13 @@ void create_obstructions_from_nodes()
 					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
 							|= dir;
 					   no_offsets = FALSE;
+
+				           if ((ds->layer < Num_layers - 1) &&
+						gridx < (NumChannelsX[ds->layer] - 1)
+						&& (Obs[ds->layer + 1][OGRID(
+						gridx, gridy - 1, ds->layer + 1)]
+						& OBSTRUCT_MASK))
+					      block_route(gridx, gridy, ds->layer, UP);
 					}
 				     }
 
@@ -1833,7 +2051,7 @@ void create_obstructions_from_nodes()
        }
     }
 
-} /* void create_obstructions_from_nodes( void ) */
+} /* void create_obstructions_outside_nodes( void ) */
 
 /*--------------------------------------------------------------*/
 /* tap_to_tap_interactions()					*/

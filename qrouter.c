@@ -511,7 +511,8 @@ int post_def_setup()
 
    expand_tap_geometry();
    create_obstructions_from_gates();
-   create_obstructions_from_nodes();
+   create_obstructions_inside_nodes();
+   create_obstructions_outside_nodes();
    tap_to_tap_interactions();
    create_obstructions_from_variable_pitch();
    adjust_stub_lengths();

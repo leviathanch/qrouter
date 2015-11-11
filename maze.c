@@ -1046,68 +1046,12 @@ void writeback_segment(SEG seg, int netnum)
 			(NO_NET | ROUTED_NET);
       }
 
-      // Check position on each side for an offset tap on a different net, and
-      // mark the position unroutable.
-      //
-      // NOTE:  This is a bit conservative, as it will block positions next to
-      // an offset tap without checking if the offset distance is enough to
-      // cause a DRC error.  Could be refined. . .
-
-      layer = (seg->layer == 0) ? 0 : seg->layer - 1;
-      if (seg->x1 < (NumChannelsX[layer] - 1)) {
-	 sobs = Obs[layer][OGRID(seg->x1 + 1, seg->y1, layer)];
-	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_EW) {
-	       dist = Stub[layer][OGRID(seg->x1 + 1, seg->y1, layer)];
-	       if (dist > 0) {
-		  Obs[layer][OGRID(seg->x1 + 1, seg->y1, layer)] |=
-			(NO_NET | ROUTED_NET);
-	       }
-	    }
-	 }
-      }
-      if (seg->x1 > 0) {
-	 sobs = Obs[layer][OGRID(seg->x1 - 1, seg->y1, layer)];
-	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_EW) {
-	       dist = Stub[layer][OGRID(seg->x1 - 1, seg->y1, layer)];
-	       if (dist < 0) {
-		  Obs[layer][OGRID(seg->x1 - 1, seg->y1, layer)] |=
-			(NO_NET | ROUTED_NET);
-	       }
-	    }
-	 }
-      }
-      if (seg->y1 < (NumChannelsY[layer] - 1)) {
-	 sobs = Obs[layer][OGRID(seg->x1, seg->y1 + 1, layer)];
-	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_NS) {
-	       dist = Stub[layer][OGRID(seg->x1, seg->y1 + 1, layer)];
-	       if (dist > 0) {
-		  Obs[layer][OGRID(seg->x1, seg->y1 + 1, layer)] |=
-			(NO_NET | ROUTED_NET);
-	       }
-	    }
-	 }
-      }
-      if (seg->y1 > 0) {
-	 sobs = Obs[layer][OGRID(seg->x1, seg->y1 - 1, layer)];
-	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_NS) {
-	       dist = Stub[layer][OGRID(seg->x1, seg->y1 - 1, layer)];
-	       if (dist < 0) {
-		  Obs[layer][OGRID(seg->x1, seg->y1 - 1, layer)] |=
-			(NO_NET | ROUTED_NET);
-	       }
-	    }
-	 }
-      }
-
       // If position itself is an offset route, then make the route position
       // on the forward side of the offset unroutable, on both via layers.
       // (Like the above code, there is no check for whether the offset
       // distance is enough to cause a DRC violation.)
 
+      layer = (seg->layer == 0) ? 0 : seg->layer - 1;
       sobs = Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)];
       if (sobs & OFFSET_TAP) {
 	 dist = Stub[layer][OGRID(seg->x1, seg->y1, seg->layer)];
@@ -1156,6 +1100,39 @@ void writeback_segment(SEG seg, int netnum)
 	    Obs[seg->layer][OGRID(i, seg->y1 - 1, seg->layer)] =
 			(NO_NET | ROUTED_NET);
       }
+
+      // Check position on each side for an offset tap on a different net, and
+      // mark the position unroutable.
+      //
+      // NOTE:  This is a bit conservative, as it will block positions next to
+      // an offset tap without checking if the offset distance is enough to
+      // cause a DRC error.  Could be refined. . .
+
+      layer = (seg->layer == 0) ? 0 : seg->layer - 1;
+      if (seg->y1 < (NumChannelsY[layer] - 1)) {
+	 sobs = Obs[layer][OGRID(i, seg->y1 + 1, layer)];
+	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
+	    if (sobs & STUBROUTE_NS) {
+	       dist = Stub[layer][OGRID(i, seg->y1 + 1, layer)];
+	       if (dist < 0) {
+		  Obs[layer][OGRID(i, seg->y1 + 1, layer)] |=
+			(NO_NET | ROUTED_NET);
+	       }
+	    }
+	 }
+      }
+      if (seg->y1 > 0) {
+	 sobs = Obs[layer][OGRID(i, seg->y1 - 1, layer)];
+	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
+	    if (sobs & STUBROUTE_NS) {
+	       dist = Stub[layer][OGRID(i, seg->y1 - 1, layer)];
+	       if (dist > 0) {
+		  Obs[layer][OGRID(i, seg->y1 - 1, layer)] |=
+			(NO_NET | ROUTED_NET);
+	       }
+	    }
+	 }
+      }
       if (i == seg->x2) break;
    }
    for (i = seg->y1; ; i += (seg->y2 > seg->y1) ? 1 : -1) {
@@ -1171,6 +1148,35 @@ void writeback_segment(SEG seg, int netnum)
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer][OGRID(seg->x1 - 1, i, seg->layer)] =
 			(NO_NET | ROUTED_NET);
+      }
+
+      // Check position on each side for an offset tap on a different net, and
+      // mark the position unroutable (see above).
+
+      layer = (seg->layer == 0) ? 0 : seg->layer - 1;
+      if (seg->x1 < (NumChannelsX[layer] - 1)) {
+	 sobs = Obs[layer][OGRID(seg->x1 + 1, i, layer)];
+	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
+	    if (sobs & STUBROUTE_EW) {
+	       dist = Stub[layer][OGRID(seg->x1 + 1, i, layer)];
+	       if (dist < 0) {
+		  Obs[layer][OGRID(seg->x1 + 1, i, layer)] |=
+			(NO_NET | ROUTED_NET);
+	       }
+	    }
+	 }
+      }
+      if (seg->x1 > 0) {
+	 sobs = Obs[layer][OGRID(seg->x1 - 1, i, layer)];
+	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
+	    if (sobs & STUBROUTE_EW) {
+	       dist = Stub[layer][OGRID(seg->x1 - 1, i, layer)];
+	       if (dist > 0) {
+		  Obs[layer][OGRID(seg->x1 - 1, i, layer)] |=
+			(NO_NET | ROUTED_NET);
+	       }
+	    }
+	 }
       }
       if (i == seg->y2) break;
    }

@@ -2687,7 +2687,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
    int i, layer;
    int x, y, x2, y2;
    double dc;
-   int lastx, lasty;
+   int lastx, lasty, lastlay;
    int horizontal;
    DPOINT dp1, dp2;
    float offset1, offset2;
@@ -2901,6 +2901,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	       }
 	       lastx = x;
 	       lasty = y;
+	       lastlay = layer;
 	    }
 	 }
 
@@ -3012,6 +3013,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    segtype = seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END);
 	    switch (segtype) {
 	       case ST_WIRE:
+
+		  // Normally layers change only at a via.  However, if
+		  // a via has been removed and replaced by a 1-track
+		  // segment to a neighboring via to avoid DRC errors
+		  // (see cleanup_net()), then a layer change may happen
+		  // between two ST_WIRE segments, and a new path should
+		  // be started.
+
+		  if ((lastlay != -1) && (lastlay != seg->layer)) Pathon = 0;
+
 		  if (Pathon != 1) {	// 1st point of route seg
 		     if (x == x2) {
 			horizontal = FALSE;
@@ -3034,6 +3045,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				horizontal);
 			lastx = x;
 			lasty = y;
+			lastlay = seg->layer;
 		     }
 		  }
 		  rt->flags |= RT_OUTPUT;
@@ -3069,6 +3081,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			      pathstart(Cmd, layer, x, y, special, oscale,
 						invscale, horizontal);
 			      pathto(Cmd, x2, y2, horizontal, x, y, invscale);
+			      lastlay = layer;
 			   }
 			}
 		     }
@@ -3086,6 +3099,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			      pathstart(Cmd, layer, x, y, special, oscale,
 						invscale, horizontal);
 			      pathto(Cmd, x2, y2, horizontal, x, y, invscale);
+			      lastlay = layer;
 			   }
 			}
 		     }
@@ -3188,6 +3202,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
 		     lastx = x;
 		     lasty = y;
+		     lastlay = -1;
 		  }
 		  break;
 	       default:

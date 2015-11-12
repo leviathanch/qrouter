@@ -2726,6 +2726,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
    }
 
    Pathon = -1;
+   lastlay = -1;
 
    /* Insert routed net here */
    for (rt = net->routes; rt; rt = rt->next) {
@@ -3021,7 +3022,8 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  // between two ST_WIRE segments, and a new path should
 		  // be started.
 
-		  if ((lastlay != -1) && (lastlay != seg->layer)) Pathon = 0;
+		  if ((Pathon != -1) && (lastlay != -1) && (lastlay != seg->layer))
+		     Pathon = 0;
 
 		  if (Pathon != 1) {	// 1st point of route seg
 		     if (x == x2) {

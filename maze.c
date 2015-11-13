@@ -1747,7 +1747,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
       netnum |= ROUTED_NET;
 
-      writeback_segment(seg, netnum);
+      // Write back segment, but not on stage 2 or else the
+      // collision information will be lost.  Stage 2 uses
+      // writeback_route to call writeback_segment after the
+      // colliding nets have been ripped up.
+
+      if (stage == (u_char)0)
+	 writeback_segment(seg, netnum);
 
       // If Obs shows this position as an obstruction, then this was a port with
       // no taps in reach of a grid point.  This will be dealt with by moving

@@ -28,6 +28,8 @@ Tcl_HashTable QrouterTagTable;
 Tcl_Interp *qrouterinterp;
 Tcl_Interp *consoleinterp;
 
+int stepnet = -1;
+
 /* This hash table speeds up DEF file reading */
 
 Tcl_HashTable InstanceTable;
@@ -704,6 +706,7 @@ NET LookupNet(char *netname)
 /*			real-time.  This slows down the	*/
 /*			algorithm and is intended only	*/
 /*			for diagnostic use.		*/
+/*  stage1 step		Single-step stage one.		*/
 /*  stage1 mask none	Don't limit the search area	*/
 /*  stage1 mask auto	Select the mask automatically	*/
 /*  stage1 mask bbox	Use the net bbox as a mask	*/
@@ -718,14 +721,15 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	int objc, Tcl_Obj *CONST objv[])
 {
     u_char dodebug = FALSE;
+    u_char dostep = FALSE;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", NULL
+	"debug", "mask", "route", "force", "step", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx
     };
    
     static char *maskSubCmds[] = {
@@ -747,6 +751,10 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	    switch (idx) {
 		case DebugIdx:
 		    dodebug = TRUE;
+		    break;
+
+		case StepIdx:
+		    dostep = TRUE;
 		    break;
 
 		case ForceIdx:
@@ -802,8 +810,11 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	}
     }
 
+    if (dostep == FALSE) stepnet = -1;
+    else stepnet++;
+
     if (net == NULL)
-	failcount = dofirststage(dodebug);
+	failcount = dofirststage(dodebug, stepnet);
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
 	    result = doroute(net, (u_char)0, dodebug);
@@ -811,6 +822,8 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	}
     }
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
+
+    if (stepnet >= (Numnets - 1)) stepnet = -1;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -832,6 +845,7 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*			real-time.  This slows down the	*/
 /*			algorithm and is intended only	*/
 /*			for diagnostic use.		*/
+/*  stage2 step		Single-step stage two		*/
 /*  stage2 mask none	Don't limit the search area	*/
 /*  stage2 mask auto	Select the mask automatically	*/
 /*  stage2 mask bbox	Use the net bbox as a mask	*/
@@ -847,14 +861,15 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	int objc, Tcl_Obj *CONST objv[])
 {
     u_char dodebug = FALSE;
+    u_char dostep = FALSE;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "tries", NULL
+	"debug", "mask", "route", "force", "tries", "step", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, TriesIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx
     };
    
     static char *maskSubCmds[] = {
@@ -876,6 +891,10 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	    switch (idx) {
 		case DebugIdx:
 		    dodebug = TRUE;
+		    break;
+
+		case StepIdx:
+		    dostep = TRUE;
 		    break;
 	
 		case ForceIdx:
@@ -943,7 +962,7 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     }
 
     if (net == NULL)
-	failcount = dosecondstage(dodebug);
+	failcount = dosecondstage(dodebug, dostep);
     else
 	failcount = route_net_ripup(net, dodebug);
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));

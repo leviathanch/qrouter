@@ -620,7 +620,7 @@ void read_def(char *filename)
 /*--------------------------------------------------------------*/
 /*--------------------------------------------------------------*/
 
-int dofirststage(u_char graphdebug)
+int dofirststage(u_char graphdebug, int debug_netnum)
 {
    int i, failcount, remaining, result;
    NET net;
@@ -629,17 +629,20 @@ int dofirststage(u_char graphdebug)
    // Clear the lists of failed routes, in case first
    // stage is being called more than once.
 
-   while (FailedNets) {
-      nl = FailedNets->next;
-      free(FailedNets);
-      FailedNets = nl;
+   if (debug_netnum <= 0) {
+      while (FailedNets) {
+         nl = FailedNets->next;
+         free(FailedNets);
+         FailedNets = nl;
+      }
    }
 
    // Now find and route all the nets
 
    remaining = Numnets;
  
-   for (i = 0; i < Numnets; i++) {
+   for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
+
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
 	 result = doroute(net, (u_char)0, graphdebug);
@@ -660,8 +663,10 @@ int dofirststage(u_char graphdebug)
 	 }
 	 remaining--;
       }
+      if (debug_netnum >= 0) break;
    }
    failcount = countlist(FailedNets);
+   if (debug_netnum >= 0) return failcount;
 
    if (Verbose > 0) {
       Flush(stdout);
@@ -1111,7 +1116,7 @@ int route_net_ripup(NET net, u_char graphdebug)
 /*--------------------------------------------------------------*/
 
 int
-dosecondstage(u_char graphdebug)
+dosecondstage(u_char graphdebug, u_char singlestep)
 {
    int failcount, origcount, result, maxtries, lasttries;
    NET net;
@@ -1190,6 +1195,9 @@ dosecondstage(u_char graphdebug)
       // to the end of the FailedNets list.
       ripup_colliding(net);
 
+      // Write back the original route to the grid array
+      writeback_all_routes(net);
+
       // Failsafe---if we have been looping enough times to exceed
       // maxtries (which is set to 8 route attempts per original failed
       // net), then we check progress.  If we have reduced the number
@@ -1213,6 +1221,7 @@ dosecondstage(u_char graphdebug)
 	    origcount = failcount;
 	 }
       }
+      if (singlestep && (FailedNets != NULL)) return countlist(FailedNets);
    }
 
    // If the list of abandoned nets is non-null, attach it to the

@@ -415,8 +415,8 @@ extern int    allocate_obs_array();
 void   check_variable_pitch(int, int *, int *);
 
 NET    getnettoroute();
-int    dofirststage(u_char graphdebug);
-int    dosecondstage(u_char graphdebug);
+int    dofirststage(u_char graphdebug, int debug_netnum);
+int    dosecondstage(u_char graphdebug, u_char singlestep);
 int    route_net_ripup(NET net, u_char graphdebug);
 
 void   read_lef(char *filename);

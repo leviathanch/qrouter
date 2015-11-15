@@ -21,8 +21,8 @@ main(int argc, char *argv[])
     if (result != 0) return result;
 
     read_def(NULL);
-    dofirststage(0);
-    dosecondstage(0);
+    dofirststage(0, -1);
+    dosecondstage(0, FALSE);
     write_def(NULL);
     return 0;
 }

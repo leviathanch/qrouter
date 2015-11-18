@@ -2719,19 +2719,19 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 
       dc = LefGetRouteSpacing(layer) + LefGetViaWidth(layer, layer, 1)
 		- PitchY[layer] - EPS;
-      viaOffsetY[layer][0] = (dc > 0.0) ? (int)(oscale * dc * 0.5) : 0;
+      viaOffsetY[layer][0] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
 
       dc = LefGetRouteSpacing(layer) + LefGetViaWidth(layer, layer, 0)
 		- PitchX[layer] - EPS;
-      viaOffsetX[layer][0] = (dc > 0.0) ? (int)(oscale * dc * 0.5) : 0;
+      viaOffsetX[layer][0] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
 
       dc = LefGetRouteSpacing(layer + 1) + LefGetViaWidth(layer, layer + 1, 1)
 		- PitchY[layer + 1] - EPS;
-      viaOffsetY[layer][1] = (dc > 0.0) ? (int)(oscale * dc * 0.5) : 0;
+      viaOffsetY[layer][1] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
 
       dc = LefGetRouteSpacing(layer + 1) + LefGetViaWidth(layer, layer + 1, 0)
 		- PitchX[layer + 1] - EPS;
-      viaOffsetX[layer][1] = (dc > 0.0) ? (int)(oscale * dc * 0.5) : 0;
+      viaOffsetX[layer][1] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
    }
 
    Pathon = -1;

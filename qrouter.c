@@ -860,6 +860,39 @@ void pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
 } /* pathvia() */
 
 /*--------------------------------------------------------------*/
+/* Nodes aren't saved in a way that makes it easy to recall	*/
+/* the name of the cell and pin to which they belong.  But	*/
+/* that information doesn't need to be looked up except as a	*/
+/* diagnostic output.  This routine does that lookup.		*/
+/*--------------------------------------------------------------*/
+
+char *print_node_name(NODE node)
+{
+    GATE g;
+    int i;
+    static char *nodestr = NULL;
+
+    for (g = Nlgates; g; g = g->next) {
+	for (i = 0; i < g->nodes; i++) {
+	    if (g->noderec[i] == node) {
+		if (nodestr != NULL)
+		   free(nodestr);
+
+		nodestr = (char *)malloc(strlen(g->gatename)
+			+ strlen(g->node[i]) + 2);
+		sprintf(nodestr, "%s/%s",
+			g->gatename, g->node[i]);
+		return nodestr;
+	    }
+	}
+    }
+    if (nodestr != NULL) free(nodestr);
+    nodestr = (char *)malloc(22);
+    sprintf(nodestr, "(error: no such node)");
+    return nodestr;
+}
+
+/*--------------------------------------------------------------*/
 /* print_nets - print the nets list - created from Nlgates list */
 /*								*/
 /*   ARGS: filename to list to					*/
@@ -1819,9 +1852,15 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 /* to a single subroutine.					*/
 /*--------------------------------------------------------------*/
 
-void unable_to_route(char *netname, unsigned char forced)
+void unable_to_route(char *netname, NODE node, unsigned char forced)
 {
-    Fprintf(stderr, "Node of net %s has no tap points---", netname);
+    if (node)
+	Fprintf(stderr, "Node %s of net %s has no tap points---",
+		print_node_name(node), netname);
+    else
+	Fprintf(stderr, "Node of net %s has no tap points---",
+		netname);
+
     if (forced)
 	Fprintf(stderr, "forcing a tap point.\n");
     else
@@ -1864,7 +1903,7 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 		    iroute->pwrbus_src++;
 		    iroute->nsrc = iroute->nsrc->next;
 		}
-		unable_to_route(iroute->net->netname, forceRoutable);
+		unable_to_route(iroute->net->netname, iroute->nsrc, forceRoutable);
 	    }
 	    else if (rval < 0) return -1;
 	}
@@ -1880,7 +1919,7 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 			&iroute->bbox, stage);
 
         if (result == -2) {
-	   unable_to_route(iroute->net->netname, 0);
+	   unable_to_route(iroute->net->netname, NULL, 0);
            return -1;
 	}
      }
@@ -2020,7 +2059,7 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
      }
      if (rval == -2) {
         if (forceRoutable) make_routable(iroute->net->netnodes);
-	unable_to_route(iroute->net->netname, forceRoutable);
+	unable_to_route(iroute->net->netname, iroute->nsrc, forceRoutable);
         return -1;
      }
 
@@ -2031,7 +2070,7 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
 		&iroute->bbox, stage);
 
         if (rval == -2) {
-	   unable_to_route(iroute->net->netname, 0);
+	   unable_to_route(iroute->net->netname, NULL, 0);
            return -1;
         }
 
@@ -2048,7 +2087,7 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
            }
            else if (rval == -2) {
 	      if (forceRoutable) make_routable(node);
-	      unable_to_route(iroute->net->netname, forceRoutable);
+	      unable_to_route(iroute->net->netname, node, forceRoutable);
 	      if (result == 0) result = -1;
 	      unroutable++;
            }
@@ -2130,7 +2169,7 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
   iroute->nsrctap = iroute->nsrc->taps;
   if (iroute->nsrctap == NULL) iroute->nsrctap = iroute->nsrc->extend;
   if (iroute->nsrctap == NULL) {
-     unable_to_route(iroute->net->netname, 0);
+     unable_to_route(iroute->net->netname, iroute->nsrc, 0);
      return -1;
   }
 

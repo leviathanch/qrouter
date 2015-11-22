@@ -509,8 +509,8 @@ count_reachable_taps()
 		}
 	    }
 	    if (node->numtaps == 0) {
-		Fprintf(stderr, "Error: Node of net \"%s\" has no taps!\n",
-			node->netname);
+		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n",
+			print_node_name(node), node->netname);
 		Fprintf(stderr, "Qrouter will not be able to completely"
 			" route this net.\n");
 	    }

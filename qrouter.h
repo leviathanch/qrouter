@@ -459,6 +459,7 @@ void   helpmessage();
 void   print_nets(char *filename);
 void   print_routes(char *filename);
 void   print_nlgates(char *filename);
+char  *print_node_name(NODE node);
 
 GATE   DefFindInstance(char *name);
 void   DefHashInstance(GATE gateginfo);

@@ -517,6 +517,7 @@ int post_def_setup()
    create_obstructions_from_variable_pitch();
    adjust_stub_lengths();
    find_route_blocks();
+   count_reachable_taps();
    count_pinlayers();
    
    // If any nets are pre-routed, place those routes.

@@ -415,6 +415,110 @@ void print_nlnets( char *filename )
 } /* void print_nlnets() */
 
 /*--------------------------------------------------------------*/
+/* count_reachable_taps()					*/
+/*								*/
+/*  For each grid point in the layout, find if it corresponds	*/
+/*  to a node and is unobstructed.  If so, increment the node's	*/
+/*  count of reachable taps.  Then work through the list of	*/
+/*  nodes and determine if any are completely unreachable.  If	*/
+/*  so, then unobstruct any position that is inside tap		*/
+/*  geometry that can contain a via.				*/
+/*								*/
+/*  NOTE:  This routine should check for tap rectangles that	*/
+/*  may combine to form an area large enough to place a via;	*/
+/*  also, it should check for tap points that are routable	*/
+/*  by a wire and not a tap.  However, those conditions are	*/
+/*  rare and are left unhandled for now.			*/
+/*--------------------------------------------------------------*/
+
+void
+count_reachable_taps()
+{
+    NODE node;
+    GATE g;
+    DSEG ds;
+    int l, x, y, i;
+    int gridx, gridy;
+    double deltax, deltay;
+    double dx, dy;
+
+    for (l = 0; l < Num_layers; l++) {
+	for (x = 0; x < NumChannelsX[l]; x++) {
+	    for (y = 0; y < NumChannelsY[l]; y++) {
+		node = Nodeloc[l][OGRID(x, y, l)];
+		if (node != NULL) {
+
+		    // Redundant check;  if Obs has NO_NET set, then
+		    // Nodeloc for that position should already be NULL
+
+		    if (!(Obs[l][OGRID(x, y, l)] & NO_NET))
+			node->numtaps++;
+		}
+	    }
+	}
+    }
+
+    for (g = Nlgates; g; g = g->next) {
+	for (i = 0; i < g->nodes; i++) {
+	    node = g->noderec[i];
+	    if (node == NULL) continue;
+	    if (node->numtaps == 0) {
+		for (ds = g->taps[i]; ds; ds = ds->next) {
+		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
+		    deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 1);
+
+		    gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+		    while (1) {
+			dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+			if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+
+			if (((dx - ds->x1 + EPS) > deltax) &&
+				((ds->x2 - dx + EPS) > deltax)) {
+			    gridy = (int)((ds->y1 - Ylowerbound)
+					/ PitchY[ds->layer]) - 1;
+			    while (1) {
+				dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+				if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
+				    break;
+
+				if (((dy - ds->y1 + EPS) > deltay) &&
+					((ds->y2 - dy + EPS) > deltay)) {
+
+				    if ((ds->layer == Num_layers - 1) ||
+					  !(Obs[ds->layer + 1][OGRID(gridx, gridy,
+					  ds->layer + 1)] & NO_NET)) {
+
+					// Grid position is clear for placing a via
+
+					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] =
+						(Obs[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] & BLOCKED_MASK)
+						| (u_int)node->netnum;
+					Nodeloc[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] = node;
+					Nodesav[ds->layer][OGRID(gridx, gridy,
+						ds->layer)] = node;
+					node->numtaps++;
+				    }
+				}
+				gridy++;
+			    }
+			}
+			gridx++;
+		    }
+		}
+	    }
+	    if (node->numtaps == 0) {
+		Fprintf(stderr, "Error: Node of net \"%s\" has no taps!\n",
+			node->netname);
+		Fprintf(stderr, "Qrouter will not be able to completely"
+			" route this net.\n");
+	    }
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* check_variable_pitch()					*/
 /*								*/
 /*  This routine is used by the routine below it to generate	*/
@@ -1212,7 +1316,6 @@ void create_obstructions_inside_nodes()
 			     }
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
 					!= OBSTRUCT_MASK)) {
-// WIP
 				/* Handled on next pass */
 			     }
 			     else if (orignet & NO_NET) {
@@ -1393,7 +1496,6 @@ void create_obstructions_outside_nodes()
 
 			     if (!(orignet & NO_NET) &&
 					((orignet & ROUTED_NET_MASK) != (u_int)0)) {
-// WIP
 				/* Do nothing;  previously handled */
 			     }
 
@@ -1527,7 +1629,6 @@ void create_obstructions_outside_nodes()
 					gridx, gridy, dx, dy);
 			     }
 			 }
-// WIP
 
 		         if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0) {
 			    xdist = 0.5 * LefGetRouteWidth(ds->layer);

@@ -203,6 +203,7 @@ struct node_ {
   DPOINT  taps;			// point position for node taps
   DPOINT  extend;		// point position within halo of the tap
   char    *netname;   		// name of net this node belongs to
+  unsigned char numtaps;	// number of actual reachable taps
   int     netnum;               // number of net this node belongs to
   int     numnodes;		// number of nodes on this net
   int	  branchx;		// position of the node branch in x

@@ -464,6 +464,9 @@ count_reachable_taps()
 	    if (node == NULL) continue;
 	    if (node->numnodes == 0) continue;	 // e.g., vdd or gnd bus
 	    if (node->numtaps == 0) {
+		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n",
+			print_node_name(node), node->netname);
+
 		for (ds = g->taps[i]; ds; ds = ds->next) {
 		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
 		    deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 1);
@@ -491,6 +494,11 @@ count_reachable_taps()
 
 					// Grid position is clear for placing a via
 
+					Fprintf(stderr, "Tap position (%g, %g) appears"
+						" to be technically routable, so it"
+						" is being forced routable.\n",
+						dx, dy);
+
 					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] =
 						(Obs[ds->layer][OGRID(gridx, gridy,
 						ds->layer)] & BLOCKED_MASK)
@@ -510,8 +518,6 @@ count_reachable_taps()
 		}
 	    }
 	    if (node->numtaps == 0) {
-		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n",
-			print_node_name(node), node->netname);
 		Fprintf(stderr, "Qrouter will not be able to completely"
 			" route this net.\n");
 	    }
@@ -814,72 +820,6 @@ double get_route_clear(int lay, DSEG rect) {
    mdelta = LefGetRouteWideSpacing(lay, mwidth);
 
    return rdelta + mdelta;
-}
-
-/*--------------------------------------------------------------*/
-/* Find the distance from a point to the edge of a clearance	*/
-/* around a rectangle.  To satisfy euclidean distance rules, 	*/
-/* the clearance is clrx on the left and right sides of the	*/
-/* rectangle, clry on the top and bottom sides, and rounded on	*/
-/* the corners.							*/
-/*								*/
-/* Return 1 if point passes clearance test, 0 if not.		*/
-/*								*/
-/* This routine not currently being used, but probably will	*/
-/* need to be, eventually, to get a correct evaluation of	*/
-/* tightly-spaced taps that violate manhattan rules but pass	*/
-/* euclidean rules.						*/
-/*--------------------------------------------------------------*/
-
-char point_clearance_to_rect(double dx, double dy, DSEG ds,
-	double clrx, double clry)
-{
-   double delx, dely, dist, xp, yp, alpha, yab;
-   struct dseg_ dexp;
-
-   dexp.x1 = ds->x1 - clrx;
-   dexp.x2 = ds->x2 + clrx;
-   dexp.y1 = ds->y1 - clry;
-   dexp.y2 = ds->y2 + clry;
-
-   /* If the point is between ds top and bottom, distance is	*/
-   /* simple.							*/
-
-   if (dy <= ds->y2 && dy >= ds->y1) {
-      if (dx < dexp.x1)
-	return (dexp.x1 - dx) > 0 ? 1 : 0;
-      else if (dx > dexp.x2)
-	return (dx - dexp.x2) > 0 ? 1 : 0;
-      else
-	return 0;	// Point is inside rect
-   }
-
-   /* Likewise if the point is between ds right and left	*/
-
-   if (dx <= ds->x2 && dx >= ds->x1) {
-      if (dy < dexp.y1)
-	return (dexp.y1 - dy) > 0 ? 1 : 0;
-      else if (dy > dexp.y2)
-	return (dy - dexp.y2) > 0 ? 1 : 0;
-      else
-	return 0;	// Point is inside rect
-   }
-
-   /* Treat corners individually */
-
-   if (dy > ds->y2)
-      yab = dy - ds->y2;
-   else if (dy < ds->y1)
-      yab = ds->y1 - dy;
-
-   if (dx > ds->x2)
-      delx = dx - ds->x2;
-   else if (dx < ds->x1)
-      delx = ds->x1 - dx;
-
-   dely = yab * (clrx / clry);	// Normalize y clearance to x
-   dist = delx * delx + dely * dely;
-   return (dist > (clrx * clrx)) ? 1 : 0;
 }
 
 /*--------------------------------------------------------------*/
@@ -1666,7 +1606,9 @@ void create_obstructions_outside_nodes()
 			 }
 
 		         if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0) {
-			    xdist = 0.5 * LefGetRouteWidth(ds->layer);
+
+			    double s, edist, xp, yp;
+			    unsigned char epass = 0;
 
 			    // Area inside halo around defined pin geometry.
 			    // Exclude areas already processed (areas inside
@@ -1675,6 +1617,34 @@ void create_obstructions_outside_nodes()
 			    // Also check that we are not about to define a
 			    // route position for a pin on a layer above 0 that
 			    // blocks a pin underneath it.
+
+			    // Flag positions that pass a Euclidean distance check.
+			    // epass = 1 indicates that position clears a
+			    // Euclidean distance measurement.
+
+			    s = LefGetRouteSpacing(ds->layer);
+
+			    if (dx < (ds->x1 - s)) {
+				xp = dx + deltax - s;
+				edist = (ds->x1 - xp) * (ds->x1 - xp);
+			    }
+			    else if (dx > (ds->x2 + s)) {
+				xp = dx - deltax + s;
+				edist = (xp - ds->x2) * (xp - ds->x2);
+			    }
+			    else edist = 0;
+			    if ((edist > 0) && (dy < (ds->y1 - s))) {
+				yp = dy + deltay - s;
+				edist += (ds->y1 - yp) * (ds->y1 - yp);
+			    }
+			    else if ((edist > 0) && (dy > (ds->y2 + s))) {
+				yp = dy - deltay + s;
+				edist += (yp - ds->y2) * (yp - ds->y2);
+			    }
+			    else edist = 0;
+			    if ((edist + EPS) > (s * s)) epass = 1;
+
+			    xdist = 0.5 * LefGetRouteWidth(ds->layer);
 
 			    n2 = NULL;
 			    if (ds->layer > 0)
@@ -1900,7 +1870,9 @@ void create_obstructions_outside_nodes()
 				   }
 				}
 
-				// Stub distances of <= 1/2 route width are useless
+				// Stub distances of <= 1/2 route width are
+				// unnecessary, so don't create them.
+
 				if (dir == STUBROUTE_NS || dir == STUBROUTE_EW)
 				   if (fabs(dist) < (xdist + EPS)) {
 				      dir = 0;
@@ -1930,17 +1902,16 @@ void create_obstructions_outside_nodes()
 				Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
 					= dist;
 			    }
-			    else {
+			    else if (epass == 0) {
+
+			       // Position fails euclidean distance check
+
 			       int othernet = (k & ROUTED_NET_MASK);
 
 			       if (othernet != 0 && othernet != (u_int)node->netnum) {
 
 			          // This location is too close to two different
 				  // node terminals and should not be used
-				  // (NOTE:  This routine also disables
-				  // catecorner positions that might pass
-				  // euclidean distance DRC checks, so it's
-				  // more restrictive than necessary.)
 
 				  // If there is a stub, then we can't specify
 				  // an offset tap, so just disable it.  If
@@ -2217,12 +2188,7 @@ void tap_to_tap_interactions()
 
     for (i = 0; i < Num_layers; i++) {
 	deltax[i] = 0.5 * LefGetViaWidth(i, i, 0) + LefGetRouteSpacing(i);
-	// NOTE:  Extra space is how much vias get shifted relative to the
-	// specified offset distance to account for the via size being larger
-	// than the route width.
-	// deltax[i] += 0.5 * (LefGetViaWidth(i, i, 0) - LefGetRouteSpacing(i));
 	deltay[i] = 0.5 * LefGetViaWidth(i, i, 1) + LefGetRouteSpacing(i);
-	// deltay[i] += 0.5 * (LefGetViaWidth(i, i, 1) - LefGetRouteSpacing(i));
     }
 
     for (g = Nlgates; g; g = g->next) {

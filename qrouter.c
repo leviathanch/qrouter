@@ -2361,7 +2361,7 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
          	     gpoint->layer = curpt.lay;
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
-                   }
+                  }
                }
 	       break;
 

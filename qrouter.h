@@ -95,7 +95,7 @@ struct gridp_ {
 typedef struct proute_ PROUTE;
 
 struct proute_ {        // partial route
-   u_char flags; 	// values PR_PROCESSED and PR_CONFLICT
+   u_char flags; 	// values PR_PROCESSED and PR_CONFLICT, and others
    union {
       u_int cost;	// cost of route coming from predecessor
       u_int net;	// net number at route point

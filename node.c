@@ -462,6 +462,7 @@ count_reachable_taps()
 	for (i = 0; i < g->nodes; i++) {
 	    node = g->noderec[i];
 	    if (node == NULL) continue;
+	    if (node->numnodes == 0) continue;	 // e.g., vdd or gnd bus
 	    if (node->numtaps == 0) {
 		for (ds = g->taps[i]; ds; ds = ds->next) {
 		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
@@ -932,18 +933,48 @@ void create_obstructions_from_gates()
 	           if ((dy + EPS) > (ds->y2 + deltay)
 				|| gridy >= NumChannelsY[ds->layer]) break;
 		   if ((dy - EPS) > (ds->y1 - deltay) && gridy >= 0) {
-		      // If it clears distance for a route layer but not
-		      // vias, then block vias only.
-		      deltaxy = get_route_clear(ds->layer, ds);
-		      if (((dx - EPS) <= (ds->x1 - deltaxy)) ||
+		      double s, edist, xp, yp;
+
+		      // Check Euclidean distance measure
+		      s = LefGetRouteSpacing(ds->layer);
+
+		      if (dx < (ds->x1 - s)) {
+		         xp = dx + deltax - s;
+			 edist = (ds->x1 - xp) * (ds->x1 - xp);
+		      }
+		      else if (dx > (ds->x2 + s)) {
+		         xp = dx - deltax + s;
+			 edist = (xp - ds->x2) * (xp - ds->x2);
+		      }
+		      else edist = 0;
+		      if ((edist > 0) && (dy < (ds->y1 - s))) {
+		         yp = dy + deltay - s;
+			 edist += (ds->y1 - yp) * (ds->y1 - yp);
+		      }
+		      else if ((edist > 0) && (dy > (ds->y2 + s))) {
+		         yp = dy - deltay + s;
+			 edist += (yp - ds->y2) * (yp - ds->y2);
+		      }
+		      else edist = 0;
+
+		      if ((edist + EPS) < (s * s)) {
+
+		         // If it clears distance for a route layer but not
+		         // vias, then block vias only.
+		         deltaxy = get_route_clear(ds->layer, ds);
+		         if (((dx - EPS) <= (ds->x1 - deltaxy)) ||
 				((dx + EPS) >= (ds->x2 + deltaxy)) ||
 				((dy - EPS) <= (ds->y1 - deltaxy)) ||
 				((dy + EPS) >= (ds->y2 + deltaxy))) {
-			 block_route(gridx, gridy, ds->layer, UP);
-			 block_route(gridx, gridy, ds->layer, DOWN);
+			    block_route(gridx, gridy, ds->layer, UP);
+			    block_route(gridx, gridy, ds->layer, DOWN);
+		         }
+		         else
+			    check_obstruct(gridx, gridy, ds, dx, dy);
 		      }
-		      else
-			 check_obstruct(gridx, gridy, ds, dx, dy);
+		      else {
+			 edist = 0;	// diagnostic break
+		      }
 		   }
 		   gridy++;
 		}
@@ -985,18 +1016,46 @@ void create_obstructions_from_gates()
 		         if ((dy + EPS) > (ds->y2 + deltay)
 					|| gridy >= NumChannelsY[ds->layer]) break;
 		         if ((dy - EPS) >= (ds->y1 - deltay) && gridy >= 0) {
-		            // If it clears distance for a route layer but not
-		            // vias, then block vias only.
-		            deltaxy = get_route_clear(ds->layer, ds);
-		            if (((dx - EPS) < (ds->x1 - deltaxy)) ||
+
+		            double s, edist, xp, yp;
+
+		            // Check Euclidean distance measure
+		            s = LefGetRouteSpacing(ds->layer);
+
+		            if (dx < (ds->x1 - s)) {
+		               xp = dx + deltax - s;
+			       edist += (ds->x1 - xp) * (ds->x1 - xp);
+		            }
+		            else if (dx > (ds->x2 + s)) {
+		               xp = dx - deltax + s;
+			       edist += (xp - ds->x2) * (xp - ds->x2);
+		            }
+			    else edist = 0;
+		            if ((edist > 0) && (dy < (ds->y1 - s))) {
+		               yp = dy + deltay - s;
+			       edist += (ds->y1 - yp) * (ds->y1 - yp);
+		            }
+		            else if ((edist > 0) && (dy > (ds->y2 + s))) {
+		               yp = dy - deltay + s;
+			       edist += (yp - ds->y2) * (yp - ds->y2);
+		            }
+			    else edist = 0;
+
+		            if ((edist + EPS) < (s * s)) {
+
+		               // If it clears distance for a route layer but not
+		               // vias, then block vias only.
+		               deltaxy = get_route_clear(ds->layer, ds);
+		               if (((dx - EPS) < (ds->x1 - deltaxy)) ||
 					((dx + EPS) > (ds->x2 + deltaxy)) ||
 					((dy - EPS) < (ds->y1 - deltaxy)) ||
 					((dy + EPS) > (ds->y2 + deltaxy))) {
-			       block_route(gridx, gridy, ds->layer, UP);
-			       block_route(gridx, gridy, ds->layer, DOWN);
-		            }
-		            else
-			       check_obstruct(gridx, gridy, ds, dx, dy);
+			          block_route(gridx, gridy, ds->layer, UP);
+			          block_route(gridx, gridy, ds->layer, DOWN);
+		               }
+		               else
+			          check_obstruct(gridx, gridy, ds, dx, dy);
+			    }
 			 }
 		         gridy++;
 		      }
@@ -1317,30 +1376,6 @@ void create_obstructions_inside_nodes()
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
 					!= OBSTRUCT_MASK)) {
 				/* Handled on next pass */
-			     }
-			     else if (orignet & NO_NET) {
-				// The code in create_obstructions_from_gates
-				// does manhattan, not eucliean, checks.  If
-				// an obstruction is inside the manhattan
-				// distance, it will be marked NO_NET.  To
-				// work around this, if rect ds completely
-				// surrounds a via centered on the grid point,
-				// then allow it unconditionally.
-
-				deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
-				deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
-				if (((dx - ds->x1 + EPS) > deltax) &&
-					((ds->x2 - dx + EPS) > deltax) &&
-					((dy - ds->y1 + EPS) > deltay) &&
-					((ds->y2 - dy + EPS) > deltay)) {
-			           Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					   & BLOCKED_MASK) | (u_int)node->netnum;
-			           Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			           Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-				}
 			     }
 
 			     // Check that we have not created a PINOBSTRUCT

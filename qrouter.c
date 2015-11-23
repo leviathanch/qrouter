@@ -1095,19 +1095,21 @@ int route_net_ripup(NET net, u_char graphdebug)
     NETLIST nl, nl2;
 
     // Find the net in the Failed list and remove it.
-    if (FailedNets->net == net) {
-	nl2 = FailedNets;
-	FailedNets = FailedNets->next;
-	free(nl2);
-    }
-    else {
-	for (nl = FailedNets; nl->next; nl = nl->next) {
-	    if (nl->next->net == net)
-		break;
+    if (FailedNets) {
+	if (FailedNets->net == net) {
+	    nl2 = FailedNets;
+	    FailedNets = FailedNets->next;
+	    free(nl2);
 	}
-	nl2 = nl->next;
-	nl2->next = nl2->next->next;
-	free(nl2);
+	else {
+	    for (nl = FailedNets; nl->next; nl = nl->next) {
+		if (nl->next->net == net)
+		    break;
+	    }
+	    nl2 = nl->next;
+	    nl->next = nl2->next;
+	    free(nl2);
+	}
     }
 
     result = doroute(net, (u_char)1, graphdebug);

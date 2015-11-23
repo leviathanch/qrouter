@@ -1879,7 +1879,7 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
   ROUTE rt;
   NODE node;
   POINT gpoint;
-  int  i, x, y;
+  int  i, j;
   int  rval, result;
 
   if (iroute->do_pwrbus == TRUE) {
@@ -1938,13 +1938,11 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
-        for (x = 0; x < NumChannelsX[i]; x++) {
-	   for (y = 0; y < NumChannelsY[i]; y++) {
-	      node = Nodeloc[i][OGRID(x, y, i)];
-	      if (node != (NODE)NULL)
-		 if (node->netnum == iroute->net->netnum)
-		    Nodeloc[i][OGRID(x, y, i)] = (NODE)NULL;
-	   }
+	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	   node = Nodeloc[i][j];
+	   if (node != (NODE)NULL)
+	      if (node->netnum == iroute->net->netnum)
+		 Nodeloc[i][j] = (NODE)NULL;
         }
      }
 
@@ -1988,7 +1986,7 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 int route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   POINT gpoint;
-  int  i, x, y;
+  int  i, j;
   u_int netnum, dir;
   int  result, rval, unroutable;
   NODE node;
@@ -1998,23 +1996,21 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
   // terminal positions for the net being routed.
 
   for (i = 0; i < Num_layers; i++) {
-      for (x = 0; x < NumChannelsX[i]; x++) {
-	  for (y = 0; y < NumChannelsY[i]; y++) {
-	      netnum = Obs[i][OGRID(x, y, i)] & (~BLOCKED_MASK);
-	      Pr = &Obs2[i][OGRID(x, y, i)];
-	      if (netnum != 0) {
-	         Pr->flags = 0;		// Clear all flags
-	         Pr->prdata.net = netnum & NETNUM_MASK;
-	         dir = netnum & PINOBSTRUCTMASK;
-	         if ((dir != 0) && ((dir & STUBROUTE_X) == STUBROUTE_X)) {
-		    if ((netnum & NETNUM_MASK) == iroute->net->netnum)
-		       Pr->prdata.net = 0;	// STUBROUTE_X not routable
-	         }
-	      } else {
-	         Pr->flags = PR_COST;		// This location is routable
-	         Pr->prdata.cost = MAXRT;
+      for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	  netnum = Obs[i][j] & (~BLOCKED_MASK);
+	  Pr = &Obs2[i][j];
+	  if (netnum != 0) {
+	      Pr->flags = 0;		// Clear all flags
+	      Pr->prdata.net = netnum & NETNUM_MASK;
+	      dir = netnum & PINOBSTRUCTMASK;
+	      if ((dir != 0) && ((dir & STUBROUTE_X) == STUBROUTE_X)) {
+		 if ((netnum & NETNUM_MASK) == iroute->net->netnum)
+		    Pr->prdata.net = 0;	// STUBROUTE_X not routable
 	      }
-	  }
+	   } else {
+	      Pr->flags = PR_COST;		// This location is routable
+	      Pr->prdata.cost = MAXRT;
+	   }
       }
   }
 
@@ -2117,13 +2113,11 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
-        for (x = 0; x < NumChannelsX[i]; x++) {
-	   for (y = 0; y < NumChannelsY[i]; y++) {
-	      iroute->nsrc = Nodeloc[i][OGRID(x, y, i)];
-	      if (iroute->nsrc != (NODE)NULL)
-		 if (iroute->nsrc->netnum == iroute->net->netnum)
-		    Nodeloc[i][OGRID(x, y, i)] = (NODE)NULL;
-	   }
+	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
+	   iroute->nsrc = Nodeloc[i][j];
+	   if (iroute->nsrc != (NODE)NULL)
+	      if (iroute->nsrc->netnum == iroute->net->netnum)
+		 Nodeloc[i][j] = (NODE)NULL;
         }
      }
 

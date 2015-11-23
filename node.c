@@ -437,23 +437,21 @@ count_reachable_taps()
     NODE node;
     GATE g;
     DSEG ds;
-    int l, x, y, i;
+    int l, i, j;
     int gridx, gridy;
     double deltax, deltay;
     double dx, dy;
 
     for (l = 0; l < Num_layers; l++) {
-	for (x = 0; x < NumChannelsX[l]; x++) {
-	    for (y = 0; y < NumChannelsY[l]; y++) {
-		node = Nodeloc[l][OGRID(x, y, l)];
-		if (node != NULL) {
+	for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
+	    node = Nodeloc[l][j];
+	    if (node != NULL) {
 
-		    // Redundant check;  if Obs has NO_NET set, then
-		    // Nodeloc for that position should already be NULL
+		// Redundant check;  if Obs has NO_NET set, then
+		// Nodeloc for that position should already be NULL
 
-		    if (!(Obs[l][OGRID(x, y, l)] & NO_NET))
-			node->numtaps++;
-		}
+		if (!(Obs[l][j] & NO_NET))
+		    node->numtaps++;
 	    }
 	}
     }
@@ -680,20 +678,15 @@ disable_gridpos(int x, int y, int lay)
 void
 count_pinlayers()
 {
-   int x, y, l, haspin;
+   int j, l;
 
    Pinlayers = 0;
    for (l = 0; l < Num_layers; l++) {
-      haspin = 0;
-      for (x = 0; x < NumChannelsX[l]; x++) {
-	 for (y = 0; y < NumChannelsY[l]; y++) {
-	    if (Nodesav[l][OGRID(x, y, l)] != NULL) {
-	       haspin = 1;
-	       Pinlayers = l + 1;
-	       break;
-	    }
+      for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
+	 if (Nodesav[l][j] != NULL) {
+	    Pinlayers = l + 1;
+	    break;
 	 }
-	 if (haspin) break;
       }
    }
 
@@ -878,20 +871,20 @@ void create_obstructions_from_gates()
 		      // Check Euclidean distance measure
 		      s = LefGetRouteSpacing(ds->layer);
 
-		      if (dx < (ds->x1 - s)) {
+		      if (dx < (ds->x1 + s - deltax)) {
 		         xp = dx + deltax - s;
 			 edist = (ds->x1 - xp) * (ds->x1 - xp);
 		      }
-		      else if (dx > (ds->x2 + s)) {
+		      else if (dx > (ds->x2 - s + deltax)) {
 		         xp = dx - deltax + s;
 			 edist = (xp - ds->x2) * (xp - ds->x2);
 		      }
 		      else edist = 0;
-		      if ((edist > 0) && (dy < (ds->y1 - s))) {
+		      if ((edist > 0) && (dy < (ds->y1 + s - deltay))) {
 		         yp = dy + deltay - s;
 			 edist += (ds->y1 - yp) * (ds->y1 - yp);
 		      }
-		      else if ((edist > 0) && (dy > (ds->y2 + s))) {
+		      else if ((edist > 0) && (dy > (ds->y2 - s + deltay))) {
 		         yp = dy - deltay + s;
 			 edist += (yp - ds->y2) * (yp - ds->y2);
 		      }
@@ -962,20 +955,20 @@ void create_obstructions_from_gates()
 		            // Check Euclidean distance measure
 		            s = LefGetRouteSpacing(ds->layer);
 
-		            if (dx < (ds->x1 - s)) {
+		            if (dx < (ds->x1 + s - deltax)) {
 		               xp = dx + deltax - s;
 			       edist += (ds->x1 - xp) * (ds->x1 - xp);
 		            }
-		            else if (dx > (ds->x2 + s)) {
+		            else if (dx > (ds->x2 - s + deltax)) {
 		               xp = dx - deltax + s;
 			       edist += (xp - ds->x2) * (xp - ds->x2);
 		            }
 			    else edist = 0;
-		            if ((edist > 0) && (dy < (ds->y1 - s))) {
+		            if ((edist > 0) && (dy < (ds->y1 + s - deltay))) {
 		               yp = dy + deltay - s;
 			       edist += (ds->y1 - yp) * (ds->y1 - yp);
 		            }
-		            else if ((edist > 0) && (dy > (ds->y2 + s))) {
+		            else if ((edist > 0) && (dy > (ds->y2 - s + deltay))) {
 		               yp = dy - deltay + s;
 			       edist += (yp - ds->y2) * (yp - ds->y2);
 		            }
@@ -1624,20 +1617,20 @@ void create_obstructions_outside_nodes()
 
 			    s = LefGetRouteSpacing(ds->layer);
 
-			    if (dx < (ds->x1 - s)) {
+			    if (dx < (ds->x1 + s - deltax)) {
 				xp = dx + deltax - s;
 				edist = (ds->x1 - xp) * (ds->x1 - xp);
 			    }
-			    else if (dx > (ds->x2 + s)) {
+			    else if (dx > (ds->x2 - s + deltax)) {
 				xp = dx - deltax + s;
 				edist = (xp - ds->x2) * (xp - ds->x2);
 			    }
 			    else edist = 0;
-			    if ((edist > 0) && (dy < (ds->y1 - s))) {
+			    if ((edist > 0) && (dy < (ds->y1 + s - deltay))) {
 				yp = dy + deltay - s;
 				edist += (ds->y1 - yp) * (ds->y1 - yp);
 			    }
-			    else if ((edist > 0) && (dy > (ds->y2 + s))) {
+			    else if ((edist > 0) && (dy > (ds->y2 - s + deltay))) {
 				yp = dy - deltay + s;
 				edist += (yp - ds->y2) * (yp - ds->y2);
 			    }

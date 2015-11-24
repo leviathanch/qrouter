@@ -392,6 +392,7 @@ extern u_char keepTrying;
 extern u_char forceRoutable;
 extern u_char maskMode;
 extern u_char mapType;
+extern u_char ripLimit;
 
 extern char *vddnet;
 extern char *gndnet;

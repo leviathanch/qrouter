@@ -638,16 +638,17 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 /* create and return a list of them.				*/
 /*--------------------------------------------------------------*/
 
-NETLIST find_colliding(NET net)
+NETLIST find_colliding(NET net, int *ripnum)
 {
    NETLIST nl = (NETLIST)NULL, cnl;
    NET  fnet;
    ROUTE rt;
    SEG seg;
-   int lay, i, x, y, orignet;
+   int lay, i, x, y, orignet, rnum;
 
    /* Scan the routed points for recorded collisions.	*/
 
+   rnum = 0;
    for (rt = net->routes; rt; rt = rt->next) {
       if (rt->segments) {
 	 for (seg = rt->segments; seg; seg = seg->next) {
@@ -680,6 +681,7 @@ NETLIST find_colliding(NET net)
 		           cnl->net = fnet;
 		           cnl->next = nl;
 		           nl = cnl;
+			   rnum++;
 			   break;
 			}
 		     }
@@ -707,6 +709,7 @@ NETLIST find_colliding(NET net)
       Fprintf(stdout, "\n");
    }
 
+   if (ripnum) *ripnum = rnum;
    return nl;
 }
 

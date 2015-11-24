@@ -720,8 +720,8 @@ NET LookupNet(char *netname)
 int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	int objc, Tcl_Obj *CONST objv[])
 {
-    u_char dodebug = FALSE;
-    u_char dostep = FALSE;
+    u_char dodebug;
+    u_char dostep;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
@@ -739,7 +739,13 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	NoneIdx, AutoIdx, BboxIdx
     };
 
+    // Command defaults
+
+    dodebug = FALSE;
+    dostep = FALSE;
+    maskMode = MASK_AUTO;	// Mask mode is auto unless specified
     forceRoutable = FALSE;	// Don't force unless specified
+
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
 
@@ -851,6 +857,8 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 mask bbox	Use the net bbox as a mask	*/
 /*  stage2 mask <value> Set the mask size to <value>,	*/
 /*			an integer typ. 0 and up.	*/
+/*  stage2 limit <n>	Fail route if solution collides	*/
+/*			with more than <n> nets.	*/
 /*  stage2 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage2 force	Force a terminal to be routable	*/
@@ -860,16 +868,16 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	int objc, Tcl_Obj *CONST objv[])
 {
-    u_char dodebug = FALSE;
-    u_char dostep = FALSE;
+    u_char dodebug;
+    u_char dostep;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "tries", "step", NULL
+	"debug", "mask", "limit", "route", "force", "tries", "step", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx
+	DebugIdx, MaskIdx, LimitIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx
     };
    
     static char *maskSubCmds[] = {
@@ -879,7 +887,14 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	NoneIdx, AutoIdx, BboxIdx
     };
 
+    // Command defaults
+
+    dodebug = FALSE;
+    dostep = FALSE;
+    maskMode = MASK_AUTO;	// Mask mode is auto unless specified
     forceRoutable = FALSE;	// Don't force unless specified
+    ripLimit = 10;		// Rip limit is 10 unless specified
+
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
 
@@ -925,6 +940,17 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 		    }
 		    break;
 
+		case LimitIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "limit ?num?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
+		    if (result != TCL_OK) return result;
+		    ripLimit = (u_char)val;
+		    break;
+	
 		case MaskIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "mask ?type?");

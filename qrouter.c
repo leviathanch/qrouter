@@ -52,6 +52,8 @@ u_char keepTrying = (u_char)0;
 u_char forceRoutable = FALSE;
 u_char maskMode = MASK_AUTO;
 u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
+u_char ripLimit = 10;	// Fail net rather than rip up more than
+			// this number of other nets.
 
 char DEFfilename[256];
 
@@ -1047,15 +1049,29 @@ NET getnettoroute(int order)
 int ripup_colliding(NET net)
 {
     NETLIST nl, nl2, fn;
-    int ripped = 0;
+    int ripped;
 
     // Analyze route for nets with which it collides
 
-    nl = find_colliding(net);
+    nl = find_colliding(net, &ripped);
+
+    // "ripLimit" limits the number of collisions so that the
+    // router avoids ripping up huge numbers of nets, which can
+    // cause the number of failed nets to keep increasing.
+
+    if (ripped > ripLimit) {
+	while (nl) {
+	    nl2 = nl->next;
+	    free(nl);
+	    nl = nl2;
+	}
+	return -1;
+    }
 
     // Remove the colliding nets from the route grid and append
     // them to FailedNets.
 
+    ripped = 0;
     while(nl) {
 	ripped++;
 	nl2 = nl->next;
@@ -1158,6 +1174,8 @@ dosecondstage(u_char graphdebug, u_char singlestep)
    NET net;
    NETLIST nl, nl2, fn;
    NETLIST Abandoned;	// Abandoned routes---not even trying any more.
+   ROUTE rt, rt2;
+   SEG seg;
 
    origcount = countlist(FailedNets);
    if (FailedNets)
@@ -1196,11 +1214,15 @@ dosecondstage(u_char graphdebug, u_char singlestep)
       FailedNets = FailedNets->next;
       free(nl2);
 
+      // Keep track of which routes existed before the call to doroute().
+      for (rt = net->routes; rt && rt->next; rt = rt->next);
+
       if (Verbose > 2)
 	 Fprintf(stdout, "Routing net %s with collisions\n", net->netname);
       Flush(stdout);
 
       result = doroute(net, (u_char)1, graphdebug);
+
       if (result != 0) {
 	 if (net->noripup != NULL) {
 	    if ((net->flags & NET_PENDING) == 0) {
@@ -1216,9 +1238,25 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	    }
 	 }
       }
+
+      if (result == 0) {
+
+         // Find nets that collide with "net" and remove them, adding them
+         // to the end of the FailedNets list.
+
+	 // If the number of nets to be ripped up exceeds "ripLimit",
+	 // then treat this as a route failure, and don't rip up any of
+	 // the colliding nets.
+
+	 result = ripup_colliding(net);
+	 if (result > 0) result = 0;
+      }
+
       if (result != 0) {
+
 	 // Complete failure to route, even allowing collisions.
 	 // Abandon routing this net.
+
 	 if (Verbose > 0) {
 	    Flush(stdout);
 	    Fprintf(stderr, "----------------------------------------------\n");
@@ -1226,6 +1264,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 			net->netname);
 	    Fprintf(stderr, "----------------------------------------------\n");
 	 }
+
 	 // Add the net to the "abandoned" list
 	 nl = (NETLIST)malloc(sizeof(struct netlist_));
 	 nl->net = net;
@@ -1237,13 +1276,32 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	    free(FailedNets);
 	    FailedNets = nl;
 	 }
+
+	 // Remove routing information for all new routes that have
+	 // not been copied back into Obs[].
+	 if (rt == NULL)
+	    rt = net->routes;
+	 else {
+	    rt2 = rt->next;
+	    rt->next = NULL;
+	    rt = rt2;
+	 }
+	 while (rt != NULL) {
+	    rt2 = rt->next;
+            while (rt->segments) {
+              seg = rt->segments->next;
+              free(rt->segments);
+              rt->segments = seg;
+            }
+	    rt = rt2;
+	 }
+
+	 // Remove both routing information and remove the route from
+	 // Obs[] for all parts of the net that were previously routed
+
 	 ripup_net(net, (u_char)1);	// Remove routing information from net
 	 continue;
       }
-
-      // Find nets that collide with "net" and remove them, adding them
-      // to the end of the FailedNets list.
-      ripup_colliding(net);
 
       // Write back the original route to the grid array
       writeback_all_routes(net);

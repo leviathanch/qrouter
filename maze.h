@@ -18,7 +18,7 @@ int     commit_proute(ROUTE rt, GRIDP *ept, u_char stage);
 void	writeback_segment(SEG seg, int netnum);
 int     writeback_route(ROUTE rt);
 int     writeback_all_routes(NET net);
-NETLIST find_colliding(NET net);
+NETLIST find_colliding(NET net, int *ripnum);
 void    clear_non_source_targets(NET net, POINT *pushlist);
 int     count_targets(NET net);
 

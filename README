@@ -228,6 +228,13 @@ Completed development tasks:
    config file and its parsing is retained
    for backwards compatibility.
 
+14. Vias can be larger than metal routes.  Need
+   to identify positions as obstructions to
+   vias only.
+
+15. Make Euclidean geometry checks instead of
+   Manhattan geometry checks.
+
 ----------------------------------------------
 Development to do:
 ----------------------------------------------
@@ -243,16 +250,19 @@ Development to do:
    individual routes.  Can be run as a simple
    Tcl script).
 
-3. Vias can be larger than metal routes.  Need
-   to identify positions as obstructions to
-   vias only.
-
-4. Need to normalize the segment and jog costs to
+3. Need to normalize the segment and jog costs to
    the track pitch, so that costs do not give
    preference to the route layers with the widest
    track pitch.
 
-5. Need a command-line switch (and/or Tcl
+4. Need a command-line switch (and/or Tcl
    command) to disable the specialnets section.
+
+5. Sort trunk lines so no trunk lines overlap
+   prior to routing.
+
+6. Apply costing to terminals, giving higher cost
+   to terminals with offsets and the lowest cost
+   to simple on-grid contacts.
 
 -------------------------------------------------

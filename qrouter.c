@@ -1168,6 +1168,19 @@ dosecondstage(u_char graphdebug, u_char singlestep)
    fillMask((u_char)0);
    Abandoned = NULL;
 
+   // Clear the "noripup" field from all of the failed nets, in case
+   // the second stage route is being repeated.
+
+   for (nl2 = FailedNets; nl2; nl2 = nl2->next) {
+       net = nl2->net;
+       while (net->noripup) {
+          nl = net->noripup->next;
+          free(net->noripup);
+          net->noripup = nl;
+       }
+       net->flags &= ~NET_PENDING;
+   }
+
    while (FailedNets != NULL) {
 
       // Diagnostic:  how are we doing?
@@ -1224,6 +1237,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	    free(FailedNets);
 	    FailedNets = nl;
 	 }
+	 ripup_net(net, (u_char)1);	// Remove routing information from net
 	 continue;
       }
 

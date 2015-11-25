@@ -319,6 +319,7 @@ struct routeinfo_ {
 					     // (includes NO_NET)
 #define ROUTED_NET_MASK ((u_int)0x103fffff)  // Mask for the net number field
 					     // (includes NO_NET and ROUTED_NET)
+#define DRC_BLOCKAGE	(NO_NET | ROUTED_NET) // Special case
 
 // Definitions used along with the NO_NET bit.
 #define OBSTRUCT_MASK	((u_int)0x0000000f)  // Tells where obstruction is

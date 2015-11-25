@@ -634,6 +634,36 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 }
 
 /*--------------------------------------------------------------*/
+/* Used by find_colliding() (see below).  Save net "netnum"	*/
+/* to the list of colliding nets if it is not already in the	*/
+/* list.  Return 1 if the list got longer, 0 otherwise.		*/
+/*--------------------------------------------------------------*/
+
+int
+addcollidingnet(NETLIST *nlptr, int netnum)
+{
+    NETLIST cnl;
+    NET fnet;
+    int i;
+
+    for (cnl = *nlptr; cnl; cnl = cnl->next)
+	if (cnl->net->netnum == netnum)
+	    return 0;
+
+    for (i = 0; i < Numnets; i++) {
+	fnet = Nlnets[i];
+	if (fnet->netnum == netnum) {
+	    cnl = (NETLIST)malloc(sizeof(struct netlist_));
+	    cnl->net = fnet;
+	    cnl->next = *nlptr;
+	    *nlptr = cnl;
+	    return 1;
+	}
+    }
+    return 0;
+}
+
+/*--------------------------------------------------------------*/
 /* Find nets that are colliding with the given net "net", and	*/
 /* create and return a list of them.				*/
 /*--------------------------------------------------------------*/
@@ -641,7 +671,6 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 NETLIST find_colliding(NET net, int *ripnum)
 {
    NETLIST nl = (NETLIST)NULL, cnl;
-   NET  fnet;
    ROUTE rt;
    SEG seg;
    int lay, i, x, y, orignet, rnum;
@@ -662,31 +691,45 @@ NETLIST find_colliding(NET net, int *ripnum)
 	    // belong to a different net.
 
 	    while (1) {
-	       orignet = Obs[lay][OGRID(x, y, lay)] & NETNUM_MASK;
+	       orignet = Obs[lay][OGRID(x, y, lay)] & ROUTED_NET_MASK;
 
-	       if (orignet != net->netnum) {
+	       if (orignet == DRC_BLOCKAGE) {
 
-	          /* Route collision.  Save this net if it is	*/
-	          /* not already in the list of colliding nets.	*/
+		  /* If original position was a DRC-related blockage,	*/
+		  /* find out which net or nets would be in conflict.	*/
 
-	          for (cnl = nl; cnl; cnl = cnl->next) {
-		     if (cnl->net->netnum == orignet)
-		        break;
-	          }
-	          if (cnl == NULL) {
-		     for (i = 0; i < Numnets; i++) {
-			fnet = Nlnets[i];
-		        if (fnet->netnum == orignet) {
-			   cnl = (NETLIST)malloc(sizeof(struct netlist_));
-		           cnl->net = fnet;
-		           cnl->next = nl;
-		           nl = cnl;
-			   rnum++;
-			   break;
-			}
+		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
+		     orignet = Obs[lay][OGRID(x + 1, y, lay)] & ROUTED_NET_MASK;
+		     if (!(orignet & NO_NET)) {
+			orignet &= NETNUM_MASK;
+			if ((orignet != 0) && (orignet != net->netnum))
+		 	    rnum += addcollidingnet(&nl, orignet);
+		     }
+		     orignet = Obs[lay][OGRID(x - 1, y, lay)] & ROUTED_NET_MASK;
+		     if (!(orignet & NO_NET)) {
+			orignet &= NETNUM_MASK;
+			if ((orignet != 0) && (orignet != net->netnum))
+		 	    rnum += addcollidingnet(&nl, orignet);
+		     }
+		  }
+		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
+		     orignet = Obs[lay][OGRID(x, y + 1, lay)] & ROUTED_NET_MASK;
+		     if (!(orignet & NO_NET)) {
+			orignet &= NETNUM_MASK;
+			if ((orignet != 0) && (orignet != net->netnum))
+		 	    rnum += addcollidingnet(&nl, orignet);
+		     }
+		     orignet = Obs[lay][OGRID(x, y - 1, lay)] & ROUTED_NET_MASK;
+		     if (!(orignet & NO_NET)) {
+			orignet &= NETNUM_MASK;
+			if ((orignet != 0) && (orignet != net->netnum))
+		 	    rnum += addcollidingnet(&nl, orignet);
 		     }
 		  }
 	       }
+	       else if ((orignet & NETNUM_MASK) != net->netnum)
+		  rnum += addcollidingnet(&nl, (orignet & NETNUM_MASK));
+
 	       if ((x == seg->x2) && (y == seg->y2)) break;
 
 	       if (x < seg->x2) x++;
@@ -768,26 +811,26 @@ u_char ripup_net(NET net, u_char restore)
 		  }
 
 		  // Routes which had blockages added on the sides due
-		  // to spacing constraints have (NO_NET | ROUTED_NET)
-		  // set;  these flags should be removed.
+		  // to spacing constraints have DRC_BLOCKAGE set;
+		  // these flags should be removed.
 
 		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
 		     if ((x > 0) && ((Obs[lay][OGRID(x - 1, y, lay)] &
-				(NO_NET | ROUTED_NET)) == (NO_NET | ROUTED_NET)))
-			Obs[lay][OGRID(x - 1, y, lay)] &= ~(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE) == DRC_BLOCKAGE))
+			Obs[lay][OGRID(x - 1, y, lay)] &= ~DRC_BLOCKAGE;
 		     else if ((x < NumChannelsX[lay] - 1) &&
 				((Obs[lay][OGRID(x + 1, y, lay)] &
-				(NO_NET | ROUTED_NET)) == (NO_NET | ROUTED_NET)))
-			Obs[lay][OGRID(x + 1, y, lay)] &= ~(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE) == DRC_BLOCKAGE))
+			Obs[lay][OGRID(x + 1, y, lay)] &= ~DRC_BLOCKAGE;
 		  }
 		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
 		     if ((y > 0) && ((Obs[lay][OGRID(x, y - 1, lay)] &
-				(NO_NET | ROUTED_NET)) == (NO_NET | ROUTED_NET)))
-			Obs[lay][OGRID(x, y - 1, lay)] &= ~(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE) == DRC_BLOCKAGE))
+			Obs[lay][OGRID(x, y - 1, lay)] &= ~DRC_BLOCKAGE;
 		     else if ((y < NumChannelsY[lay] - 1) &&
 				((Obs[lay][OGRID(x, y + 1, lay)] &
-				(NO_NET | ROUTED_NET)) == (NO_NET | ROUTED_NET)))
-			Obs[lay][OGRID(x, y + 1, lay)] &= ~(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE) == DRC_BLOCKAGE))
+			Obs[lay][OGRID(x, y + 1, lay)] &= ~DRC_BLOCKAGE;
 		  }
 	       }
 
@@ -893,7 +936,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
-       if (stage && (Pr->prdata.net < MAXNETNUM)) {
+       if (stage && ((Pr->prdata.net < MAXNETNUM) ||
+		    (Pr->prdata.net == DRC_BLOCKAGE))) {
 	  if ((newpt.lay < Pinlayers) &&
 		Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
 	     return 0;			// But cannot route over terminals!
@@ -1003,7 +1047,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 /* adjacent positions in Obs against the mask		*/
 /* NETNUM_MASK, because NETNUM_MASK includes NO_NET.	*/
 /* By replacing only empty and routable positions with	*/
-/* the unique flag combination	NO_NET | ROUTED_NET, it	*/
+/* the unique flag combination	DRC_BLOCKAGE, it	*/
 /* is possible to detect and remove the same if that	*/
 /* net is ripped up, without touching any position	*/
 /* originally marked NO_NET.				*/
@@ -1029,24 +1073,24 @@ void writeback_segment(SEG seg, int netnum)
 		(Obs[seg->layer + 1][OGRID(seg->x1 + 1, seg->y1, seg->layer + 1)]
 		& NETNUM_MASK) == 0)
  	    Obs[seg->layer + 1][OGRID(seg->x1 + 1, seg->y1, seg->layer + 1)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	 if ((seg->x1 > 0) &&
 		(Obs[seg->layer + 1][OGRID(seg->x1 - 1, seg->y1, seg->layer + 1)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer + 1][OGRID(seg->x1 - 1, seg->y1, seg->layer + 1)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
       }
       if (needblock[seg->layer + 1] & VIABLOCKY) {
 	 if ((seg->y1 < (NumChannelsY[seg->layer + 1] - 1)) &&
 		(Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 + 1, seg->layer + 1)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 + 1, seg->layer + 1)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	 if ((seg->y1 > 0) &&
 		(Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 - 1, seg->layer + 1)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 - 1, seg->layer + 1)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
       }
 
       // If position itself is an offset route, then make the route position
@@ -1061,29 +1105,29 @@ void writeback_segment(SEG seg, int netnum)
 	 if (sobs & STUBROUTE_EW) {
 	    if ((dist > 0) && (seg->x1 < (NumChannelsX[seg->layer] - 1))) {
 	       Obs[seg->layer][OGRID(seg->x1 + 1, seg->y1, seg->layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       Obs[seg->layer + 1][OGRID(seg->x1 + 1, seg->y1, seg->layer + 1)] |=
-				(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE;
 	    }
 	    if ((dist < 0) && (seg->x1 > 0)) {
 	       Obs[seg->layer][OGRID(seg->x1 - 1, seg->y1, seg->layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       Obs[seg->layer + 1][OGRID(seg->x1 - 1, seg->y1, seg->layer + 1)] |=
-				(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE;
 	    }
 	 }
 	 else if (sobs & STUBROUTE_NS) {
 	    if ((dist > 0) && (seg->y1 < (NumChannelsY[seg->layer] - 1))) {
 	       Obs[seg->layer][OGRID(seg->x1, seg->y1 + 1, seg->layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 + 1, seg->layer + 1)] |=
-				(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE;
 	    }
 	    if ((dist < 0) && (seg->y1 > 0)) {
 	       Obs[seg->layer][OGRID(seg->x1, seg->y1 - 1, seg->layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 - 1, seg->layer + 1)] |=
-				(NO_NET | ROUTED_NET);
+				DRC_BLOCKAGE;
 	    }
 	 }
       }
@@ -1096,12 +1140,12 @@ void writeback_segment(SEG seg, int netnum)
 		(Obs[seg->layer][OGRID(i, seg->y1 + 1, seg->layer)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer][OGRID(i, seg->y1 + 1, seg->layer)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	 if ((seg->y1 > 0) &&
 		(Obs[seg->layer][OGRID(i, seg->y1 - 1, seg->layer)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer][OGRID(i, seg->y1 - 1, seg->layer)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
       }
 
       // Check position on each side for an offset tap on a different net, and
@@ -1119,7 +1163,7 @@ void writeback_segment(SEG seg, int netnum)
 	       dist = Stub[layer][OGRID(i, seg->y1 + 1, layer)];
 	       if (dist < 0) {
 		  Obs[layer][OGRID(i, seg->y1 + 1, layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       }
 	    }
 	 }
@@ -1131,7 +1175,7 @@ void writeback_segment(SEG seg, int netnum)
 	       dist = Stub[layer][OGRID(i, seg->y1 - 1, layer)];
 	       if (dist > 0) {
 		  Obs[layer][OGRID(i, seg->y1 - 1, layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       }
 	    }
 	 }
@@ -1145,12 +1189,12 @@ void writeback_segment(SEG seg, int netnum)
 		(Obs[seg->layer][OGRID(seg->x1 + 1, i, seg->layer)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer][OGRID(seg->x1 + 1, i, seg->layer)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	 if ((seg->x1 > 0) &&
 		(Obs[seg->layer][OGRID(seg->x1 - 1, i, seg->layer)]
 		& NETNUM_MASK) == 0)
 	    Obs[seg->layer][OGRID(seg->x1 - 1, i, seg->layer)] =
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
       }
 
       // Check position on each side for an offset tap on a different net, and
@@ -1164,7 +1208,7 @@ void writeback_segment(SEG seg, int netnum)
 	       dist = Stub[layer][OGRID(seg->x1 + 1, i, layer)];
 	       if (dist < 0) {
 		  Obs[layer][OGRID(seg->x1 + 1, i, layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       }
 	    }
 	 }
@@ -1176,7 +1220,7 @@ void writeback_segment(SEG seg, int netnum)
 	       dist = Stub[layer][OGRID(seg->x1 - 1, i, layer)];
 	       if (dist > 0) {
 		  Obs[layer][OGRID(seg->x1 - 1, i, layer)] |=
-			(NO_NET | ROUTED_NET);
+			DRC_BLOCKAGE;
 	       }
 	    }
 	 }

@@ -2073,7 +2073,10 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
 	  Pr = &Obs2[i][j];
 	  if (netnum != 0) {
 	      Pr->flags = 0;		// Clear all flags
-	      Pr->prdata.net = netnum & NETNUM_MASK;
+	      if (netnum == DRC_BLOCKAGE)
+	         Pr->prdata.net = netnum;
+	      else
+	         Pr->prdata.net = netnum & NETNUM_MASK;
 	      dir = netnum & PINOBSTRUCTMASK;
 	      if ((dir != 0) && ((dir & STUBROUTE_X) == STUBROUTE_X)) {
 		 if ((netnum & NETNUM_MASK) == iroute->net->netnum)

@@ -699,31 +699,39 @@ NETLIST find_colliding(NET net, int *ripnum)
 		  /* find out which net or nets would be in conflict.	*/
 
 		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
-		     orignet = Obs[lay][OGRID(x + 1, y, lay)] & ROUTED_NET_MASK;
-		     if (!(orignet & NO_NET)) {
-			orignet &= NETNUM_MASK;
-			if ((orignet != 0) && (orignet != net->netnum))
-		 	    rnum += addcollidingnet(&nl, orignet);
+		     if (x < NumChannelsX[lay] - 1) {
+		        orignet = Obs[lay][OGRID(x + 1, y, lay)] & ROUTED_NET_MASK;
+		        if (!(orignet & NO_NET)) {
+			   orignet &= NETNUM_MASK;
+			   if ((orignet != 0) && (orignet != net->netnum))
+		 	       rnum += addcollidingnet(&nl, orignet);
+		        }
 		     }
-		     orignet = Obs[lay][OGRID(x - 1, y, lay)] & ROUTED_NET_MASK;
-		     if (!(orignet & NO_NET)) {
-			orignet &= NETNUM_MASK;
-			if ((orignet != 0) && (orignet != net->netnum))
-		 	    rnum += addcollidingnet(&nl, orignet);
+		     if (x > 0) {
+		        orignet = Obs[lay][OGRID(x - 1, y, lay)] & ROUTED_NET_MASK;
+		        if (!(orignet & NO_NET)) {
+			   orignet &= NETNUM_MASK;
+			   if ((orignet != 0) && (orignet != net->netnum))
+		 	       rnum += addcollidingnet(&nl, orignet);
+		        }
 		     }
 		  }
 		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
-		     orignet = Obs[lay][OGRID(x, y + 1, lay)] & ROUTED_NET_MASK;
-		     if (!(orignet & NO_NET)) {
-			orignet &= NETNUM_MASK;
-			if ((orignet != 0) && (orignet != net->netnum))
-		 	    rnum += addcollidingnet(&nl, orignet);
+		     if (y < NumChannelsY[lay] - 1) {
+		        orignet = Obs[lay][OGRID(x, y + 1, lay)] & ROUTED_NET_MASK;
+		        if (!(orignet & NO_NET)) {
+			   orignet &= NETNUM_MASK;
+			   if ((orignet != 0) && (orignet != net->netnum))
+		 	       rnum += addcollidingnet(&nl, orignet);
+			}
 		     }
-		     orignet = Obs[lay][OGRID(x, y - 1, lay)] & ROUTED_NET_MASK;
-		     if (!(orignet & NO_NET)) {
-			orignet &= NETNUM_MASK;
-			if ((orignet != 0) && (orignet != net->netnum))
-		 	    rnum += addcollidingnet(&nl, orignet);
+		     if (y > 0) {
+		        orignet = Obs[lay][OGRID(x, y - 1, lay)] & ROUTED_NET_MASK;
+		        if (!(orignet & NO_NET)) {
+			   orignet &= NETNUM_MASK;
+			   if ((orignet != 0) && (orignet != net->netnum))
+		 	       rnum += addcollidingnet(&nl, orignet);
+			}
 		     }
 		  }
 	       }
@@ -904,6 +912,7 @@ u_char ripup_net(NET net, u_char restore)
 int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 {
     int thiscost = 0;
+    int netnum;
     NODE node;
     NETLIST nl;
     PROUTE *Pr, *Pt;
@@ -936,8 +945,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
-       if (stage && ((Pr->prdata.net < MAXNETNUM) ||
-		    (Pr->prdata.net == DRC_BLOCKAGE))) {
+       netnum = Pr->prdata.net;
+       if (stage && (netnum < MAXNETNUM)) {
 	  if ((newpt.lay < Pinlayers) &&
 		Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
 	     return 0;			// But cannot route over terminals!
@@ -945,8 +954,83 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  // Is net k in the "noripup" list?  If so, don't route it */
 
 	  for (nl = CurNet->noripup; nl; nl = nl->next) {
-	     if (nl->net->netnum == Pr->prdata.net)
+	     if (nl->net->netnum == netnum)
 		return 0;
+	  }
+
+	  // In case of a collision, we change the grid point to be routable
+	  // but flag it as a point of collision so we can later see what
+	  // were the net numbers of the interfering routes by cross-referencing
+	  // the Obs[][] array.
+
+	  Pr->flags |= (PR_CONFLICT | PR_COST);
+	  Pr->prdata.cost = MAXRT;
+	  thiscost = ConflictCost;
+       }
+       else if (stage && (netnum == DRC_BLOCKAGE)) {
+	  if ((newpt.lay < Pinlayers) &&
+		Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
+	     return 0;			// But cannot route over terminals!
+
+	  // Position does not contain the net number, so we have to
+	  // go looking for it.  Fortunately this is a fairly rare
+	  // occurrance.  But it is necessary to find all neighboring
+	  // nets that might have created the blockage, and refuse to
+	  // route here if any of them are on the noripup list.
+
+	  if (needblock[newpt.lay] & (ROUTEBLOCKX | VIABLOCKX)) {
+	     if (newpt.x < NumChannelsX[newpt.lay] - 1) {
+	        netnum = Obs[newpt.lay][OGRID(newpt.x + 1, newpt.y, newpt.lay)] &
+			ROUTED_NET_MASK;
+	        if (!(netnum & NO_NET)) {
+		   netnum &= NETNUM_MASK;
+		   if ((netnum != 0) && (netnum != CurNet->netnum))
+	              // Is net k in the "noripup" list?  If so, don't route it */
+	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	                 if (nl->net->netnum == netnum)
+		            return 0;
+		}
+	     }
+
+	     if (newpt.x > 0) {
+	        netnum = Obs[newpt.lay][OGRID(newpt.x - 1, newpt.y, newpt.lay)] &
+			ROUTED_NET_MASK;
+	        if (!(netnum & NO_NET)) {
+		   netnum &= NETNUM_MASK;
+		   if ((netnum != 0) && (netnum != CurNet->netnum))
+	              // Is net k in the "noripup" list?  If so, don't route it */
+	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	                 if (nl->net->netnum == netnum)
+		            return 0;
+		}
+	     }
+	  } 
+	  if (needblock[newpt.lay] & (ROUTEBLOCKY | VIABLOCKY)) {
+	     if (newpt.y < NumChannelsY[newpt.lay] - 1) {
+	        netnum = Obs[newpt.lay][OGRID(newpt.x, newpt.y + 1, newpt.lay)] &
+			ROUTED_NET_MASK;
+	        if (!(netnum & NO_NET)) {
+		   netnum &= NETNUM_MASK;
+		   if ((netnum != 0) && (netnum != CurNet->netnum))
+	              // Is net k in the "noripup" list?  If so, don't route it */
+	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	                 if (nl->net->netnum == netnum)
+		            return 0;
+		}
+	     }
+
+	     if (newpt.y > 0) {
+	        netnum = Obs[newpt.lay][OGRID(newpt.x, newpt.y - 1, newpt.lay)] &
+			ROUTED_NET_MASK;
+	        if (!(netnum & NO_NET)) {
+		   netnum &= NETNUM_MASK;
+		   if ((netnum != 0) && (netnum != CurNet->netnum))
+	              // Is net k in the "noripup" list?  If so, don't route it */
+	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	                 if (nl->net->netnum == netnum)
+		            return 0;
+		}
+	     }
 	  }
 
 	  // In case of a collision, we change the grid point to be routable

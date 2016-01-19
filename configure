@@ -4069,6 +4069,10 @@ if test "${with_libdir+set}" = set; then :
 fi
 
 
+if test "$GCC" = "yes" ; then
+    CFLAGS="${CFLAGS} -Wall -Werror"
+fi
+
 # Interpreter Options
 # =========================================
 

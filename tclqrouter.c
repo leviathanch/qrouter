@@ -21,6 +21,9 @@
 #include "maze.h"
 #include "qconfig.h"
 #include "lef.h"
+#include "graphics.h"
+#include "node.h"
+#include "tkSimple.h"
 
 /* Global variables */
 
@@ -30,75 +33,121 @@ Tcl_Interp *consoleinterp;
 
 int stepnet = -1;
 
-/* This hash table speeds up DEF file reading */
-
-Tcl_HashTable InstanceTable;
-
 /* Command structure */
 
 typedef struct {
    const char	*cmdstr;
-   void		(*func)();
+   int		(*func)(ClientData clientData, Tcl_Interp *interp,
+                        int objc, Tcl_Obj *CONST objv[]);
 } cmdstruct;
 
 /* Forward declarations of commands */
 
-extern int Tk_SimpleObjCmd();
-extern int redraw();
-extern int qrouter_map();
-extern int qrouter_start();
-extern int qrouter_stage1();
-extern int qrouter_stage2();
-extern int qrouter_writedef();
-extern int qrouter_readdef();
-extern int qrouter_readlef();
-extern int qrouter_readconfig();
-extern int qrouter_failing();
-extern int qrouter_cost();
-extern int qrouter_tag();
-extern int qrouter_remove();
-extern int qrouter_obs();
-extern int qrouter_layerinfo();
-extern int qrouter_priority();
-extern int qrouter_ignore();
-extern int qrouter_via();
-extern int qrouter_resolution();
-extern int qrouter_congested();
-extern int qrouter_layers();
-extern int qrouter_passes();
-extern int qrouter_vdd();
-extern int qrouter_gnd();
-extern int qrouter_verbose();
-extern int QuitCallback();
+static int qrouter_map(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_start(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_stage1(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_stage2(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_writedef(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_readdef(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_readlef(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_readconfig(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_failing(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_cost(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_tag(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_remove(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_obs(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_layerinfo(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_priority(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_ignore(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_via(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_resolution(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_congested(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_layers(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_passes(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_vdd(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_gnd(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_verbose(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_print(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 
 static cmdstruct qrouter_commands[] =
 {
-   {"tag", (void *)qrouter_tag},
-   {"start", (void *)qrouter_start},
-   {"stage1", (void *)qrouter_stage1},
-   {"stage2", (void *)qrouter_stage2},
-   {"write_def", (void *)qrouter_writedef},
-   {"read_def", (void *)qrouter_readdef},
-   {"read_lef", (void *)qrouter_readlef},
-   {"read_config", (void *)qrouter_readconfig},
-   {"layer_info", (void *)qrouter_layerinfo},
-   {"obstruction", (void *)qrouter_obs},
-   {"ignore", (void *)qrouter_ignore},
-   {"priority", (void *)qrouter_priority},
-   {"via", (void *)qrouter_via},
-   {"resolution", (void *)qrouter_resolution},
-   {"congested", (void *)qrouter_congested},
-   {"layers", (void *)qrouter_layers},
-   {"passes", (void *)qrouter_passes},
-   {"vdd", (void *)qrouter_vdd},
-   {"gnd", (void *)qrouter_gnd},
-   {"failing", (void *)qrouter_failing},
-   {"remove", (void *)qrouter_remove},
-   {"cost", (void *)qrouter_cost},
-   {"map", (void *)qrouter_map},
-   {"verbose", (void *)qrouter_verbose},
-   {"redraw", (void *)redraw},
-   {"quit", (void *)QuitCallback},
+   {"tag", qrouter_tag},
+   {"start", qrouter_start},
+   {"stage1", qrouter_stage1},
+   {"stage2", qrouter_stage2},
+   {"write_def", qrouter_writedef},
+   {"read_def", qrouter_readdef},
+   {"read_lef", qrouter_readlef},
+   {"read_config", qrouter_readconfig},
+   {"layer_info", qrouter_layerinfo},
+   {"obstruction", qrouter_obs},
+   {"ignore", qrouter_ignore},
+   {"priority", qrouter_priority},
+   {"via", qrouter_via},
+   {"resolution", qrouter_resolution},
+   {"congested", qrouter_congested},
+   {"layers", qrouter_layers},
+   {"passes", qrouter_passes},
+   {"vdd", qrouter_vdd},
+   {"gnd", qrouter_gnd},
+   {"failing", qrouter_failing},
+   {"remove", qrouter_remove},
+   {"cost", qrouter_cost},
+   {"map", qrouter_map},
+   {"verbose", qrouter_verbose},
+   {"redraw", redraw},
+   {"print", qrouter_print},
+   {"quit", QuitCallback},
    {"", NULL}  /* sentinel */
 };
 
@@ -156,7 +205,7 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
    va_list args;
    static char outstr[128] = "puts -nonewline std";
    char *outptr, *bigstr = NULL, *finalstr = NULL;
-   int i, nchars, result, escapes = 0, limit;
+   int i, nchars, escapes = 0;
 
    /* If we are printing an error message, we want to bring attention	*/
    /* to it by mapping the console window and raising it, as necessary.	*/
@@ -167,8 +216,8 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
       Tk_Window tkwind;
       tkwind = Tk_MainWindow(consoleinterp);
       if ((tkwind != NULL) && (!Tk_IsMapped(tkwind)))
-	 result = Tcl_Eval(consoleinterp, "wm deiconify .\n");
-      result = Tcl_Eval(consoleinterp, "raise .\n");
+         Tcl_Eval(consoleinterp, "wm deiconify .\n");
+      Tcl_Eval(consoleinterp, "raise .\n");
    }
 
    strcpy (outstr + 19, (f == stderr) ? "err \"" : "out \"");
@@ -218,7 +267,7 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
     *(outptr + 24 + nchars + escapes) = '\"';
     *(outptr + 25 + nchars + escapes) = '\0';
 
-    result = Tcl_Eval(consoleinterp, outptr);
+    Tcl_Eval(consoleinterp, outptr);
 
     if (bigstr != NULL) Tcl_Free(bigstr);
     if (finalstr != NULL) Tcl_Free(finalstr);
@@ -267,7 +316,7 @@ int QrouterTagCallback(Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
     Tcl_HashEntry *entry;
     Tcl_SavedResult state;
     int reset = FALSE;
-    int i, llen, cmdnum;
+    int i, llen;
 
     entry = Tcl_FindHashEntry(&QrouterTagTable, croot);
     postcmd = (entry) ? (char *)Tcl_GetHashValue(entry) : NULL;
@@ -410,8 +459,9 @@ int QrouterTagCallback(Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 /* Add a command tag callback					*/
 /*--------------------------------------------------------------*/
 
-int qrouter_tag(ClientData clientData,
-        Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_tag(ClientData clientData,
+            Tcl_Interp *interp, int objc, Tcl_Obj *CONST objv[])
 {
     Tcl_HashEntry *entry;
     char *hstring;
@@ -443,40 +493,6 @@ int qrouter_tag(ClientData clientData,
 }
 
 /*--------------------------------------------------------------*/
-/* Cell macro lookup based on the hash table			*/
-/*--------------------------------------------------------------*/
-
-GATE
-DefFindInstance(char *name)
-{
-    GATE ginst;
-    Tcl_HashEntry *entry;
-
-    entry = Tcl_FindHashEntry(&InstanceTable, name);
-    ginst = (entry) ? (GATE)Tcl_GetHashValue(entry) : NULL;
-    return ginst;
-}
-
-/*--------------------------------------------------------------*/
-/* Cell macro hash table generation				*/
-/* Given an instance record, create an entry in the hash table	*/
-/* for the instance name, with the record entry pointing to the	*/
-/* instance record.						*/
-/*--------------------------------------------------------------*/
-
-void
-DefHashInstance(GATE gateginfo)
-{
-    int new;
-    Tcl_HashEntry *entry;
-
-    entry = Tcl_CreateHashEntry(&InstanceTable,
-		gateginfo->gatename, &new);
-    if (entry != NULL)
-	Tcl_SetHashValue(entry, (ClientData)gateginfo);
-}
-
-/*--------------------------------------------------------------*/
 /* Initialization procedure for Tcl/Tk				*/
 /*--------------------------------------------------------------*/
 
@@ -485,7 +501,6 @@ Qrouter_Init(Tcl_Interp *interp)
 {
    int cmdidx;
    Tk_Window tktop;
-   char *tmp_s;
    char command[256];
    char version_string[20];
 
@@ -531,10 +546,6 @@ Qrouter_Init(Tcl_Interp *interp)
    if ((consoleinterp = Tcl_GetMaster(interp)) == NULL)
       consoleinterp = interp;
 
-   /* Initialize the macro hash table */
-
-   Tcl_InitHashTable(&InstanceTable, TCL_STRING_KEYS);
-
    /* Initialize the command tag table */
 
    Tcl_InitHashTable(&QrouterTagTable, TCL_STRING_KEYS);
@@ -546,10 +557,11 @@ Qrouter_Init(Tcl_Interp *interp)
 /* Command "start"					*/
 /*------------------------------------------------------*/
 
-int qrouter_start(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_start(ClientData clientData, Tcl_Interp *interp,
+              int objc, Tcl_Obj *CONST objv[])
 {
-    int i, j, result, argc;
+    int i, result, argc;
     char *scriptfile = NULL;
     char **argv;
 
@@ -599,19 +611,22 @@ int qrouter_start(ClientData clientData, Tcl_Interp *interp,
 /*	map none	    route background is plain	*/
 /*	map routes	    draw routes over map	*/
 /*	map noroutes	    don't draw routes over map	*/
+/*	map unrouted	    draw unrouted nets over map	*/
+/*	map nounrouted	    don't draw unrouted nets	*/
 /*------------------------------------------------------*/
 
-int qrouter_map(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_map(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
 {
-    int i, idx, result;
+    int idx, result;
 
     static char *subCmds[] = {
 	"obstructions", "congestion", "estimate", "none",
-	"routes", "noroutes", NULL
+	"routes", "noroutes", "unrouted", "nounrouted", NULL
     };
     enum SubIdx {
-	ObsIdx, CongIdx, EstIdx, NoneIdx, RouteIdx, NoRouteIdx
+	ObsIdx, CongIdx, EstIdx, NoneIdx, RouteIdx, NoRouteIdx, UnroutedIdx, NoUnroutedIdx
     };
    
     if (objc != 2) {
@@ -652,19 +667,20 @@ int qrouter_map(ClientData clientData, Tcl_Interp *interp,
 	    }
 	    break;
 	case RouteIdx:
-	    if ((mapType & DRAW_MASK) != DRAW_ROUTES) {
-		mapType &= ~DRAW_MASK;
-		mapType |= DRAW_ROUTES;
-		draw_layout();
-	    }
+            mapType |= DRAW_ROUTES;
+            draw_layout();
 	    break;
 	case NoRouteIdx:
-	    if ((mapType & DRAW_MASK) != DRAW_NONE) {
-		mapType &= ~DRAW_MASK;
-		mapType |= DRAW_NONE;
-		draw_layout();
-	    }
+            mapType &= ~DRAW_ROUTES;
+            draw_layout();
 	    break;
+        case UnroutedIdx:
+            mapType |= DRAW_UNROUTED;
+            draw_layout();
+            break;
+        case NoUnroutedIdx:
+            mapType &= ~DRAW_UNROUTED;
+            draw_layout();
     }
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -685,6 +701,40 @@ NET LookupNet(char *netname)
        net = Nlnets[i];
        if (!strcmp(net->netname, netname))
 	  return net;
+    }
+    return NULL;
+}
+
+/*------------------------------------------------------*/
+/* Find the net with number "number" in the list of	*/
+/* nets and return a pointer to it.			*/
+/*------------------------------------------------------*/
+
+NET LookupNetNr(int number)
+{
+    NET net;
+    int i;
+
+    for (i = 0; i < Numnets; i++) {
+       net = Nlnets[i];
+       if (net->netnum == number)
+	  return net;
+    }
+    return NULL;
+}
+
+/*------------------------------------------------------*/
+/* Find the gate instance named gatename and return a	*/
+/* pointer to it.					*/
+/*------------------------------------------------------*/
+
+GATE LookupGate(char *gatename)
+{
+    GATE gate;
+
+    for (gate = Nlgates; gate != NULL; gate = gate->next) {
+       if (!strcmp(gate->gatename, gatename))
+	  return gate;
     }
     return NULL;
 }
@@ -717,12 +767,13 @@ NET LookupNet(char *netname)
 /*  stage1 force	Force a terminal to be routable	*/
 /*------------------------------------------------------*/
 
-int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
 {
     u_char dodebug;
     u_char dostep;
-    int i, idx, idx2, val, result, failcount;
+    int i, idx, idx2, val, result, failcount = 0;
     NET net = NULL;
 
     static char *subCmds[] = {
@@ -865,8 +916,9 @@ int qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 tries <n>	Keep trying n additional times	*/
 /*------------------------------------------------------*/
 
-int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
 {
     u_char dodebug;
     u_char dostep;
@@ -1011,8 +1063,9 @@ int qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 /*			the design.			*/
 /*------------------------------------------------------*/
 
-int qrouter_remove(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_remove(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
 {
     int result, idx, i;
     NET net;
@@ -1068,8 +1121,9 @@ int qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 /*			as originally ordered		*/
 /*------------------------------------------------------*/
 
-int qrouter_failing(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_failing(ClientData clientData, Tcl_Interp *interp,
+                int objc, Tcl_Obj *CONST objv[])
 {
     Tcl_Obj *lobj;
     NETLIST nl, nlast;
@@ -1149,8 +1203,9 @@ int qrouter_failing(ClientData clientData, Tcl_Interp *interp,
 /* Command "read_lef"					*/
 /*------------------------------------------------------*/
 
-int qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
+                int objc, Tcl_Obj *CONST objv[])
 {
     char *LEFfile;
 
@@ -1170,8 +1225,9 @@ int qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
 /* Command "read_def"					*/
 /*------------------------------------------------------*/
 
-int qrouter_readdef(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_readdef(ClientData clientData, Tcl_Interp *interp,
+                int objc, Tcl_Obj *CONST objv[])
 {
     if ((DEFfilename[0] == '\0') && (objc != 2)) {
 	Tcl_SetResult(interp, "No DEF filename specified!", NULL);
@@ -1192,8 +1248,9 @@ int qrouter_readdef(ClientData clientData, Tcl_Interp *interp,
 /* Command "write_def"					*/
 /*------------------------------------------------------*/
 
-int qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
+                 int objc, Tcl_Obj *CONST objv[])
 {
     char *DEFoutfile = NULL;
 
@@ -1212,8 +1269,9 @@ int qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
 /* Command "read_config"				*/
 /*------------------------------------------------------*/
 
-int qrouter_readconfig(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_readconfig(ClientData clientData, Tcl_Interp *interp,
+                   int objc, Tcl_Obj *CONST objv[])
 {
     FILE *configFILE;
     char *configname = NULL;
@@ -1249,8 +1307,9 @@ int qrouter_readconfig(ClientData clientData, Tcl_Interp *interp,
 /*	obstruction <xmin> <ymin> <xmax> <ymax> <layer>	*/
 /*------------------------------------------------------*/
 
-int qrouter_obs(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_obs(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
 {
     Tcl_Obj *lobj;
     Tcl_Obj *oobj;
@@ -1322,8 +1381,9 @@ int qrouter_obs(ClientData clientData, Tcl_Interp *interp,
 /*	ignore [<net> ...]				*/
 /*------------------------------------------------------*/
 
-int qrouter_ignore(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_ignore(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
 {
     int i;
     NET net;
@@ -1365,8 +1425,9 @@ int qrouter_ignore(ClientData clientData, Tcl_Interp *interp,
 /*	priority [<net> ...]				*/
 /*------------------------------------------------------*/
 
-int qrouter_priority(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_priority(ClientData clientData, Tcl_Interp *interp,
+                 int objc, Tcl_Obj *CONST objv[])
 {
     int i;
     char *netname;
@@ -1405,7 +1466,7 @@ int qrouter_priority(ClientData clientData, Tcl_Interp *interp,
 		}
 	    }
 	}
-	create_netorder(0, NULL);
+	create_netorder(0);
     }
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -1444,11 +1505,12 @@ int qrouter_priority(ClientData clientData, Tcl_Interp *interp,
 /* No option is the same as option "layer_info all"	*/
 /*------------------------------------------------------*/
 
-int qrouter_layerinfo(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_layerinfo(ClientData clientData, Tcl_Interp *interp,
+                  int objc, Tcl_Obj *CONST objv[])
 {
     Tcl_Obj *lobj, *oobj;
-    int i, idx, idx2, val, result, layer;
+    int i, idx, idx2, val, result, layer = -1;
     char *layername;
 
     static char *subCmds[] = {
@@ -1572,6 +1634,7 @@ int qrouter_layerinfo(ClientData clientData, Tcl_Interp *interp,
 	    Tcl_SetObjResult(interp, lobj);
 	    break;
     }
+    return TCL_OK;
 }
 
 /*------------------------------------------------------*/
@@ -1596,8 +1659,9 @@ int qrouter_layerinfo(ClientData clientData, Tcl_Interp *interp,
 /*	via pattern [normal|inverted]			*/
 /*------------------------------------------------------*/
 
-int qrouter_via(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_via(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
 {
     int idx, idx2, result, value;
 
@@ -1693,8 +1757,9 @@ int qrouter_via(ClientData clientData, Tcl_Interp *interp,
 /*	resolution [<value>]				*/
 /*------------------------------------------------------*/
 
-int qrouter_verbose(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_verbose(ClientData clientData, Tcl_Interp *interp,
+                int objc, Tcl_Obj *CONST objv[])
 {
     int result, value;
 
@@ -1735,8 +1800,9 @@ int qrouter_verbose(ClientData clientData, Tcl_Interp *interp,
 /*	resolution [<value>]				*/
 /*------------------------------------------------------*/
 
-int qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
+                   int objc, Tcl_Obj *CONST objv[])
 {
     int result, value;
 
@@ -1775,8 +1841,9 @@ int qrouter_resolution(ClientData clientData, Tcl_Interp *interp,
 /*	layers [<number>]				*/
 /*------------------------------------------------------*/
 
-int qrouter_layers(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_layers(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
 {
     int result, value;
 
@@ -1816,8 +1883,9 @@ int qrouter_layers(ClientData clientData, Tcl_Interp *interp,
 /*	passes [<number>]				*/
 /*------------------------------------------------------*/
 
-int qrouter_passes(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_passes(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
 {
     int result, value;
 
@@ -1852,8 +1920,9 @@ int qrouter_passes(ClientData clientData, Tcl_Interp *interp,
 /*	vdd [<name>]					*/
 /*------------------------------------------------------*/
 
-int qrouter_vdd(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_vdd(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
 {
     if (objc == 1) {
 	if (vddnet == NULL)
@@ -1884,8 +1953,9 @@ int qrouter_vdd(ClientData clientData, Tcl_Interp *interp,
 /*	gnd [<name>]					*/
 /*------------------------------------------------------*/
 
-int qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
 {
     if (objc == 1) {
 	if (gndnet == NULL)
@@ -1919,8 +1989,9 @@ int qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
 /*	cost conflict					*/
 /*------------------------------------------------------*/
 
-int qrouter_cost(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_cost(ClientData clientData, Tcl_Interp *interp,
+             int objc, Tcl_Obj *CONST objv[])
 {
     int idx, result, value;
 
@@ -2038,12 +2109,13 @@ int compcong(CLIST *a, CLIST *b)
 /*			gates in the design.		*/
 /*------------------------------------------------------*/
 
-int qrouter_congested(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *CONST objv[])
+static int
+qrouter_congested(ClientData clientData, Tcl_Interp *interp,
+                  int objc, Tcl_Obj *CONST objv[])
 {
     NET net;
     int i, x, y, nwidth, nheight, area, length;
-    int value, entries, numgates, result;
+    int entries, numgates, result;
     float density, *Congestion;
     CLIST *cgates, csrch;
     GATE gsrch;
@@ -2055,7 +2127,7 @@ int qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 	result = Tcl_GetIntFromObj(interp, objv[1], &entries);
 	if (result != TCL_OK) return result;
 
-	if (value <= 0) {
+	if (entries <= 0) {
 	    Tcl_SetResult(interp, "List size must be > 0", NULL);
 	    return TCL_ERROR;
 	}
@@ -2155,6 +2227,76 @@ int qrouter_congested(ClientData clientData, Tcl_Interp *interp,
     free(Congestion);
     for (i = 0; i < numgates; i++) free(cgates[i]);
     free(cgates);
+
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "print"					*/
+/*							*/
+/* print an object                          		*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	print net <netname> 				*/
+/*	print netnr <netnumber>				*/
+/*      print gate <gatename>				*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_print(ClientData clientData, Tcl_Interp *interp,
+              int objc, Tcl_Obj *CONST objv[])
+{
+    int idx, result, value;
+    NET net;
+    GATE gate;
+
+    static char *subCmds[] = {
+	"net", "netnr", "gate", NULL
+    };
+    enum SubIdx {
+	NetIdx, NetNrIdx, GateIdx
+    };
+
+    value = 0;
+    if (objc != 3) {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+
+    if ((result = Tcl_GetIndexFromObj(interp, objv[1],
+		(CONST84 char **)subCmds, "option", 0, &idx)) != TCL_OK)
+	return result;
+
+    switch (idx) {
+        case NetIdx:
+            net = LookupNet(Tcl_GetString(objv[2]));
+            if (net == NULL) {
+                Tcl_SetResult(interp, "Net not found", NULL);
+                return TCL_ERROR;
+            }
+            print_net(net);
+            break;
+
+        case NetNrIdx:
+            result = Tcl_GetIntFromObj(interp, objv[2], &value);
+            if (result != TCL_OK) return result;
+            net = LookupNetNr(value);
+            if (net == NULL) {
+                Tcl_SetResult(interp, "Net not found", NULL);
+                return TCL_ERROR;
+            }
+            print_net(net);
+            break;
+
+        case GateIdx:
+            gate = LookupGate(Tcl_GetString(objv[2]));
+            if (gate == NULL) {
+                Tcl_SetResult(interp, "Gate not found", NULL);
+                return TCL_ERROR;
+            }
+            print_gate(gate);
+    }
 
     return QrouterTagCallback(interp, objc, objv);
 }

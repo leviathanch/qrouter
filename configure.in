@@ -168,6 +168,10 @@ AC_ARG_WITH(libdir,
    QROUTER_LIB_DIR=$withval
 ], [])
 
+if test "$GCC" = "yes" ; then
+    CFLAGS="${CFLAGS} -Wall -Werror"
+fi
+
 # Interpreter Options
 # =========================================
 

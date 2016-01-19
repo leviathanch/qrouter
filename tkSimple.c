@@ -10,11 +10,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <tk.h>
+/* TODO: include proper include for TkpUseWindow */
+int TkpUseWindow();
 
-void resize();
-void expose();
+#include "graphics.h"
 
 /* Backwards compatibility to tk8.3 and earlier */
 #if TK_MAJOR_VERSION == 8
@@ -126,9 +128,9 @@ Tk_SimpleObjCmd(clientData, interp, objc, objv)
 {
     Tk_Window tkwin = (Tk_Window) clientData;
     Simple *simplePtr;
-    Tk_Window new;
+    Tk_Window new = NULL;
     char *arg, *useOption;
-    int i, c, depth;
+    int i, c;
     size_t length;
     unsigned int mask;
 
@@ -373,7 +375,6 @@ ConfigureSimple(interp, simplePtr, objc, objv, flags)
     Tcl_Obj *CONST objv[];	/* Arguments. */
     int flags;			/* Flags to pass to Tk_ConfigureWidget. */
 {
-    char *oldMenuName;
     
     if (Tk_ConfigureWidget(interp, simplePtr->tkwin, configSpecs,
 	    objc, (CONST84 char **) objv, (char *) simplePtr,

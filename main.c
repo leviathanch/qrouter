@@ -40,11 +40,11 @@ main(int argc, char *argv[])
 /*--------------------------------------------------------------*/
 
 void
-highlight_source() {
+highlight_source(void) {
 }
 
 void
-highlight_dest() {
+highlight_dest(void) {
 }
 
 void
@@ -52,7 +52,7 @@ highlight_starts(POINT glist) {
 }
 
 void
-highlight_mask() {
+highlight_mask(void) {
 }
 
 void
@@ -64,10 +64,10 @@ draw_net(NET net, u_char single, int *lastlayer) {
 }
 
 void
-draw_layout() {
+draw_layout(void) {
 }
 
 int
-recalc_spacing() {
+recalc_spacing(void) {
    return 0;
 }

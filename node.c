@@ -122,7 +122,7 @@ int altCompNets(NET *a, NET *b)
 
 void create_netorder(u_char method)
 {
-  int i, j, max;
+  int i, j;
   NET  net;
   STRING cn;
 
@@ -337,7 +337,7 @@ AUTHOR and DATE: steve beccue      Tue Aug 04  2003
 void print_nodes(char *filename)
 {
   FILE *o;
-  int i, j;
+  int i;
   NET net;
   NODE node;
   DPOINT dp;
@@ -599,7 +599,7 @@ void check_variable_pitch(int l, int *hptr, int *vptr)
 /*  to be revisited.						*/
 /*--------------------------------------------------------------*/
 
-void create_obstructions_from_variable_pitch()
+void create_obstructions_from_variable_pitch(void)
 {
    int l, vnum, hnum, x, y;
 
@@ -656,7 +656,7 @@ void create_obstructions_from_variable_pitch()
 /*	the Nodeloc and Nodesav records.			*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 disable_gridpos(int x, int y, int lay)
 {
     int apos = OGRID(x, y, lay);
@@ -676,7 +676,7 @@ disable_gridpos(int x, int y, int lay)
 /*--------------------------------------------------------------*/
 
 void
-count_pinlayers()
+count_pinlayers(void)
 {
    int j, l;
 
@@ -710,10 +710,10 @@ count_pinlayers()
 /*	the grid position.					*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 {
-    int *obsptr;
+    u_int *obsptr;
     float dist;
 
     obsptr = &(Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]);
@@ -773,7 +773,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 /* via placed at the position is or is not symmetric in X and Y	*/
 /*--------------------------------------------------------------*/
 
-double get_via_clear(int lay, int horiz, DSEG rect) {
+static double get_via_clear(int lay, int horiz, DSEG rect) {
    double vdelta, v2delta, mdelta, mwidth;
 
    vdelta = LefGetViaWidth(lay, lay, 1 - horiz);
@@ -799,7 +799,7 @@ double get_via_clear(int lay, int horiz, DSEG rect) {
 /* not vias.							*/
 /*--------------------------------------------------------------*/
 
-double get_route_clear(int lay, DSEG rect) {
+static double get_route_clear(int lay, DSEG rect) {
    double rdelta, mdelta, mwidth;
 
    rdelta = LefGetRouteWidth(lay);
@@ -828,14 +828,13 @@ double get_route_clear(int lay, DSEG rect) {
 /*  this netlist.						*/
 /*--------------------------------------------------------------*/
 
-void create_obstructions_from_gates()
+void create_obstructions_from_gates(void)
 {
     GATE g;
     DSEG ds;
-    int i, gridx, gridy, *obsptr;
+    int i, gridx, gridy;
     double deltax, deltay, delta[MAX_LAYERS];
     double dx, dy, deltaxy;
-    float dist;
 
     // Give a single net number to all obstructions, over the range of the
     // number of known nets, so these positions cannot be routed through.
@@ -950,7 +949,7 @@ void create_obstructions_from_gates()
 					|| gridy >= NumChannelsY[ds->layer]) break;
 		         if ((dy - EPS) >= (ds->y1 - deltay) && gridy >= 0) {
 
-		            double s, edist, xp, yp;
+		            double s, edist = 0.0, xp, yp;
 
 		            // Check Euclidean distance measure
 		            s = LefGetRouteSpacing(ds->layer);
@@ -1052,7 +1051,7 @@ void create_obstructions_from_gates()
 /*  value, and so forth.					*/
 /*--------------------------------------------------------------*/
 
-void expand_tap_geometry()
+void expand_tap_geometry(void)
 {
     DSEG ds, ds2;
     GATE g;
@@ -1133,15 +1132,14 @@ void expand_tap_geometry()
 /*	Beccue.							*/
 /*--------------------------------------------------------------*/
 
-void create_obstructions_inside_nodes()
+void create_obstructions_inside_nodes(void)
 {
-    NODE node, n2;
+    NODE node;
     GATE g;
-    DPOINT dp;
     DSEG ds;
     u_int dir, k;
-    int i, gx, gy, gridx, gridy, net;
-    double dx, dy, deltax, deltay;
+    int i, gridx, gridy;
+    double dx, dy;
     float dist, xdist;
     double offmaxx[MAX_LAYERS], offmaxy[MAX_LAYERS];
 
@@ -1367,14 +1365,13 @@ void create_obstructions_inside_nodes()
 /*--------------------------------------------------------------*/
 
 
-void create_obstructions_outside_nodes()
+void create_obstructions_outside_nodes(void)
 {
     NODE node, n2;
     GATE g;
-    DPOINT dp;
     DSEG ds;
     u_int dir, k;
-    int i, gx, gy, gridx, gridy, net;
+    int i, gridx, gridy;
     double dx, dy, deltax, deltay;
     float dist, xdist;
     double offmaxx[MAX_LAYERS], offmaxy[MAX_LAYERS];
@@ -2164,9 +2161,8 @@ void create_obstructions_outside_nodes()
 /*  grid point.							*/
 /*--------------------------------------------------------------*/
 
-void tap_to_tap_interactions()
+void tap_to_tap_interactions(void)
 {
-    NODE node;
     GATE g;
     DSEG ds;
     struct dseg_ de;
@@ -2174,7 +2170,6 @@ void tap_to_tap_interactions()
     int i, gridx, gridy, net, orignet, offset;
     double dx, dy;
     float dist;
-    u_char errbox;
 
     double deltax[MAX_LAYERS];
     double deltay[MAX_LAYERS];
@@ -2188,9 +2183,6 @@ void tap_to_tap_interactions()
        for (i = 0; i < g->nodes; i++) {
 	  net = g->netnum[i];
 	  if (net != 0) {
-
-	     // Get the node record associated with this pin.
-	     node = g->noderec[i];
 
              for (ds = g->taps[i]; ds; ds = ds->next) {
 
@@ -2280,7 +2272,7 @@ make_routable(NODE node)
 {
     GATE g;
     DSEG ds;
-    int i, gridx, gridy, net;
+    int i, gridx, gridy;
     double dx, dy;
 
     /* The database is not organized to find tap points	*/
@@ -2342,16 +2334,14 @@ make_routable(NODE node)
 /*  AUTHOR:  Tim Edwards, April 2013				*/
 /*--------------------------------------------------------------*/
 
-void adjust_stub_lengths()
+void adjust_stub_lengths(void)
 {
-    NODE node, n2;
+    NODE node;
     GATE g;
-    DPOINT dp;
     DSEG ds, ds2;
     struct dseg_ dt, de;
-    u_int dir, k;
-    int i, gx, gy, gridx, gridy, net, orignet;
-    double dx, dy, wx, wy, s, dd;
+    int i, gridx, gridy, orignet;
+    double dx, dy, wx, wy, s;
     float dist;
     u_char errbox;
 
@@ -2817,22 +2807,17 @@ block_route(int x, int y, int lay, u_char dir)
 void
 find_route_blocks()
 {
-   NODE node;
    GATE g;
    // DPOINT dp;
-   DSEG ds, ds2;
-   struct dseg_ dt, de;
+   DSEG ds;
+   struct dseg_ dt;
    int i, gridx, gridy;
    double dx, dy, w, v, s, u;
    float dist;
-   u_char errbox;
 
    for (g = Nlgates; g; g = g->next) {
       for (i = 0; i < g->nodes; i++) {
 	 if (g->netnum[i] != 0) {
-
-	    // Get the node record associated with this pin.
-	    node = g->noderec[i];
 
 	    // Work through each rectangle in the tap geometry
 

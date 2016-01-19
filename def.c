@@ -31,7 +31,7 @@
 #include "qconfig.h"
 #include "maze.h"
 #include "lef.h"
-
+#include "def.h"
 
 #ifndef TCL_QROUTER
 
@@ -40,7 +40,7 @@
 /* found in tclqrouter.c and uses hash tables, greatly	*/
 /* speeding up the read-in of large DEF files.		*/
 
-GATE
+static GATE
 DefFindInstance(char *name)
 {
     GATE ginst;
@@ -52,11 +52,66 @@ DefFindInstance(char *name)
     return NULL;
 }
 
-/* For the non-Tcl version, this is an empty placeholder */
+/* For the non-Tcl version, these are empty placeholders */
 
-void
+static void
+DefHashInit(void)
+{
+}
+
+static void
 DefHashInstance(GATE gateginfo)
 {
+}
+
+#else /* The versions using TCL hash tables */
+
+#include <tk.h>
+
+/* This hash table speeds up DEF file reading */
+
+static Tcl_HashTable InstanceTable;
+
+/*--------------------------------------------------------------*/
+/* Cell macro lookup based on the hash table			*/
+/*--------------------------------------------------------------*/
+
+static void
+DefHashInit(void)
+{
+   /* Initialize the macro hash table */
+
+   Tcl_InitHashTable(&InstanceTable, TCL_STRING_KEYS);
+}
+
+static GATE
+DefFindInstance(char *name)
+{
+    GATE ginst;
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_FindHashEntry(&InstanceTable, name);
+    ginst = (entry) ? (GATE)Tcl_GetHashValue(entry) : NULL;
+    return ginst;
+}
+
+/*--------------------------------------------------------------*/
+/* Cell macro hash table generation				*/
+/* Given an instance record, create an entry in the hash table	*/
+/* for the instance name, with the record entry pointing to the	*/
+/* instance record.						*/
+/*--------------------------------------------------------------*/
+
+static void
+DefHashInstance(GATE gateginfo)
+{
+    int new;
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_CreateHashEntry(&InstanceTable,
+		gateginfo->gatename, &new);
+    if (entry != NULL)
+	Tcl_SetHashValue(entry, (ClientData)gateginfo);
 }
 
 #endif	/* TCL_QROUTER */
@@ -81,7 +136,7 @@ DefHashInstance(GATE gateginfo)
  *------------------------------------------------------------
  */
 
-char *
+static char *
 DefAddRoutes(FILE *f, float oscale, NET net, char special)
 {
     char *token;
@@ -92,12 +147,12 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     char initial = TRUE;
     struct dseg_ locarea;
     double x, y, lx, ly, w;
-    int routeLayer, paintLayer;
+    int routeLayer = -1, paintLayer;
     LefList lefl;
-    NODE node;
     ROUTE routednet = NULL;
 
-    node = net->netnodes;
+    refp.x1 = 0;
+    refp.y1 = 0;
 
     /* Set pitches and allocate memory for Obs[] if we haven't yet. */
     set_num_channels();
@@ -385,11 +440,10 @@ endCoord:
  *------------------------------------------------------------
  */
 
-void
+static void
 DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 {
-    NODE node2;
-    int i, j;
+    int i;
     GATE gateginfo;
     DSEG drect;
     GATE g;
@@ -504,7 +558,7 @@ enum def_netprop_keys {
 	DEF_NETPROP_COVER, DEF_NETPROP_SHAPE, DEF_NETPROP_SOURCE,
 	DEF_NETPROP_WEIGHT, DEF_NETPROP_PROPERTY};
 
-void
+static void
 DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 {
     char *token;
@@ -515,13 +569,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 
     NET net;
     int netidx;
-    NODE node, node2;
-    GATE gateginfo;
-    DSEG drect;
-    GATE g;
-    double dx, dy;
-    int gridx, gridy;
-    DPOINT dp;
+    NODE node;
     double home[MAX_LAYERS];
 
     static char *net_keys[] = {
@@ -736,14 +784,12 @@ enum def_orient {DEF_NORTH, DEF_SOUTH, DEF_EAST, DEF_WEST,
 	DEF_FLIPPED_NORTH, DEF_FLIPPED_SOUTH, DEF_FLIPPED_EAST,
 	DEF_FLIPPED_WEST};
 
-int
+static int
 DefReadLocation(gate, f, oscale)
     GATE gate;
     FILE *f;
     float oscale;
 {
-    DSEG r;
-    struct dseg_ tr;
     int keyword;
     char *token;
     float x, y;
@@ -831,14 +877,13 @@ enum def_pins_prop_keys {
 	DEF_PINS_PROP_USE, DEF_PINS_PROP_FIXED,
 	DEF_PINS_PROP_COVER};
 
-void
+static void
 DefReadPins(FILE *f, char *sname, float oscale, int total)
 {
     char *token;
     char pinname[MAX_NAME_LEN];
-    int keyword, subkey, values;
+    int keyword, subkey;
     int processed = 0;
-    int pinDir = PORT_CLASS_DEFAULT;
     DSEG currect, drect;
     GATE gate;
     int curlayer;
@@ -869,15 +914,6 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 	"INOUT",
 	"FEEDTHRU",
 	NULL
-    };
-
-    static int lef_class_to_bitmask[] = {
-	PORT_CLASS_DEFAULT,
-	PORT_CLASS_INPUT,
-	PORT_CLASS_TRISTATE,
-	PORT_CLASS_OUTPUT,
-	PORT_CLASS_BIDIRECTIONAL,
-	PORT_CLASS_FEEDTHROUGH
     };
 
     while ((token = LefNextToken(f, TRUE)) != NULL)
@@ -946,8 +982,6 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 			    subkey = Lookup(token, pin_classes);
 			    if (subkey < 0)
 				LefError("Unknown pin class\n");
-			    else
-				pinDir = lef_class_to_bitmask[subkey];
 			    break;
 			case DEF_PINS_PROP_LAYER:
 			    curlayer = LefReadLayer(f, FALSE);
@@ -1044,7 +1078,7 @@ enum def_vias_keys {DEF_VIAS_START = 0, DEF_VIAS_END};
 enum def_vias_prop_keys {
 	DEF_VIAS_PROP_RECT = 0};
 
-void
+static void
 DefReadVias(f, sname, oscale, total)
     FILE *f;
     char *sname;
@@ -1053,10 +1087,9 @@ DefReadVias(f, sname, oscale, total)
 {
     char *token;
     char vianame[LEF_LINE_MAX];
-    int keyword, subkey, values;
+    int keyword, subkey;
     int processed = 0;
     int curlayer;
-    DSEG currect;
     LefList lefl;
 
     static char *via_keys[] = {
@@ -1188,11 +1221,11 @@ DefReadVias(f, sname, oscale, total)
 
 enum def_block_keys {DEF_BLOCK_START = 0, DEF_BLOCK_END};
 
-void
+static void
 DefReadBlockages(FILE *f, char *sname, float oscale, int total)
 {
     char *token;
-    int keyword, subkey, values, i;
+    int keyword;
     int processed = 0;
     DSEG drect, rsrch;
     LefList lefl;
@@ -1289,14 +1322,14 @@ enum def_prop_keys {
 	DEF_PROP_REGION, DEF_PROP_GENERATE, DEF_PROP_PROPERTY,
 	DEF_PROP_EEQMASTER};
 
-void
+static void
 DefReadComponents(FILE *f, char *sname, float oscale, int total)
 {
     GATE gateginfo;
-    GATE gate;
+    GATE gate = NULL;
     char *token;
     char usename[512];
-    int keyword, subkey, values, i;
+    int keyword, subkey, i;
     int processed = 0;
     char OK;
     DSEG drect, newrect;
@@ -1607,7 +1640,7 @@ DefRead(char *inName)
     char filename[256];
     char *token;
     int keyword, dscale, total;
-    int curlayer, channels;
+    int curlayer = -1, channels;
     int v, h, i;
     float oscale;
     double start, step;
@@ -1671,6 +1704,8 @@ DefRead(char *inName)
     oscale = 1;
     lefCurrentLine = 0;
     v = h = -1;
+
+    DefHashInit();
 
     /* Read file contents */
 

@@ -23,8 +23,8 @@
 /* Type declarations		*/
 /*------------------------------*/
 
-void load_font(XFontStruct **);
-void createGC(Window, GC *, XFontStruct *);
+static void load_font(XFontStruct **);
+static void createGC(Window, GC *, XFontStruct *);
 
 /*----------------------------------*/
 /* Global variables for X11 drawing */
@@ -175,11 +175,10 @@ void highlight_starts(POINT glist) {
 /* Highlight mask (in tan)		*/
 /*--------------------------------------*/
 
-void highlight_mask() {
+void highlight_mask(void) {
 
     int xspc, yspc, hspc;
     int x, y;
-    u_char value;
 
     if (RMask == NULL) return;
 
@@ -204,13 +203,11 @@ void highlight_mask() {
 /* Draw a map of obstructions and pins		*/
 /*----------------------------------------------*/
 
-void
+static void
 map_obstruction()
 {
     int xspc, yspc, hspc;
-    int i, x, y, n, norm;
-    u_char *Congestion;
-    u_char value, maxval;
+    int i, x, y;
 
     hspc = spacing >> 1;
 
@@ -249,7 +246,7 @@ map_obstruction()
 /* Draw a map of actual route congestion	*/
 /*----------------------------------------------*/
 
-void
+static void
 map_congestion()
 {
     int xspc, yspc, hspc;
@@ -304,7 +301,7 @@ map_congestion()
 /* Draw a map of route congestion estimated from net bounding boxes	*/
 /*----------------------------------------------------------------------*/
 
-void
+static void
 map_estimate()
 {
     NET net;
@@ -367,7 +364,6 @@ map_estimate()
 
 void draw_net(NET net, u_char single, int *lastlayer) {
 
-    int i, xspc, yspc;
     int layer;
     SEG seg;
     ROUTE rt;
@@ -423,15 +419,104 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 }
 
 /*--------------------------------------*/
+/* Draw one unrouted net on the display	*/
+/*--------------------------------------*/
+
+static void
+draw_net_nodes(NET net) {
+
+    NODE node;
+    SEG bboxlist = NULL; /* bbox list of all the nodes in the net */
+    SEG lastbbox, bboxit;
+    DPOINT tap;
+    int first, w, h, n;
+
+    /* Compute bbox for each node and draw it */
+    for (node = net->netnodes, n = 0; node != NULL; node = node->next, n++) {
+        if (bboxlist == NULL) {
+            lastbbox = bboxlist = (SEG)malloc(sizeof(struct seg_));
+        }
+        else {
+            lastbbox->next = (SEG)malloc(sizeof(struct seg_));
+            lastbbox = lastbbox->next;
+        }
+        lastbbox->next = NULL;
+        for (tap = node->taps, first = TRUE;
+             tap != NULL;
+             tap = tap->next, first = FALSE) {
+            if (first) {
+                lastbbox->x1 = lastbbox->x2 = tap->gridx;
+                lastbbox->y1 = lastbbox->y2 = tap->gridy;
+            }
+            else {
+                lastbbox->x1 = MIN(lastbbox->x1, tap->gridx);
+                lastbbox->x2 = MAX(lastbbox->x2, tap->gridx);
+                lastbbox->y1 = MIN(lastbbox->y1, tap->gridy);
+                lastbbox->y2 = MAX(lastbbox->y2, tap->gridy);
+            }
+        }
+
+        /* Convert to X coordinates */
+        lastbbox->x1 = spacing * (lastbbox->x1 + 1);
+        lastbbox->y1 = height - spacing * (lastbbox->y1 + 1);
+        lastbbox->x2 = spacing * (lastbbox->x2 + 1);
+        lastbbox->y2 = height - spacing * (lastbbox->y2 + 1);
+
+        /* Draw the bbox */
+        w = lastbbox->x2 - lastbbox->x1;
+        h = lastbbox->y1 - lastbbox->y2;
+        XDrawRectangle(dpy, buffer, gc,
+                       lastbbox->x1, lastbbox->y1, w, h
+        );
+    }
+
+    /* if net->numnodes == 1 don't draw a wire */
+    if (n == 2) {
+        XDrawLine(
+            dpy, buffer, gc,
+            (bboxlist->x1 + bboxlist->x2)/2, (bboxlist->y1 + bboxlist->y2)/2,
+            (lastbbox->x1 + lastbbox->x2)/2, (lastbbox->y1 + lastbbox->y2)/2
+        );
+    }
+    else if (n > 2) {
+        /* Compute center point */
+        POINT midpoint = (POINT)malloc(sizeof(struct point_));
+        midpoint->x1 = midpoint->y1 = 0;
+
+        for (bboxit = bboxlist; bboxit != NULL; bboxit = bboxit->next) {
+            midpoint->x1 += (bboxit->x1 + bboxit->x2)/2;
+            midpoint->y1 += (bboxit->y1 + bboxit->y2)/2;
+        }
+        midpoint->x1 /= n;
+        midpoint->y1 /= n;
+
+        for (bboxit = bboxlist; bboxit != NULL; bboxit = bboxit->next) {
+            XDrawLine(
+                dpy, buffer, gc,
+                midpoint->x1, midpoint->y1,
+                (bboxit->x1 + bboxit->x2)/2, (bboxit->y1 + bboxit->y2)/2
+            );
+        }
+
+        free(midpoint);
+    }
+
+    for (bboxit = bboxlist; bboxit != NULL; bboxit = lastbbox) {
+        lastbbox = bboxit->next;
+        free(bboxit);
+    }
+}
+
+
+/*--------------------------------------*/
 /* Graphical display of the layout	*/
 /*--------------------------------------*/
 
 void draw_layout() {
 
-    int lastlayer, xspc, yspc, hspc;
-    int i, x, y;
+    int lastlayer;
+    int i;
     NET net;
-    NETLIST nlist;
 
     if (dpy == NULL) return;
     else if (buffer == (Pixmap)NULL) return;
@@ -460,12 +545,26 @@ void draw_layout() {
     // Draw all nets, much like "emit_routes" does when writing
     // routes to the DEF file.
 
-    if ((mapType & DRAW_MASK) == DRAW_ROUTES) {
+    if ((mapType & DRAW_ROUTES) != 0) {
 	lastlayer = -1;
 	for (i = 0; i < Numnets; i++) {
 	    net = Nlnets[i];
 	    draw_net(net, FALSE, &lastlayer);
 	}
+    }
+
+    // Draw unrouted nets
+
+    if ((mapType & DRAW_UNROUTED) != 0) {
+        XSetForeground(dpy, gc, blackpix);
+        for (i = 0; i < Numnets; i++) {
+            net = Nlnets[i];
+            if (strcmp(net->netname, gndnet) != 0
+                && strcmp(net->netname, vddnet) != 0
+                &&net->routes == NULL) {
+                draw_net_nodes(net);
+            }
+        }
     }
 
     /* Copy double-buffer onto display window */
@@ -488,7 +587,7 @@ int GUI_init(Tcl_Interp *interp)
    tktop = Tk_MainWindow(interp);
    if (tktop == NULL) {
       tcl_printf(stderr, "No Top-level Tk window available. . .\n");
-      return;
+      return TCL_ERROR;
    }
 
    qrouterdrawwin = (char *)Tcl_GetVar(interp, "drawwindow", TCL_GLOBAL_ONLY);
@@ -581,7 +680,8 @@ int QuitCallback(ClientData clientData, Tcl_Interp *interp,
 
 /*----------------------------------------------------------------*/
 
-void load_font(XFontStruct **font_info)
+static void
+load_font(XFontStruct **font_info)
 {
    char *fontname = "9x15";
 
@@ -595,7 +695,8 @@ void load_font(XFontStruct **font_info)
 
 /*----------------------------------------------------------------*/
 
-void createGC(Window win, GC *gc, XFontStruct *font_info)
+static void
+createGC(Window win, GC *gc, XFontStruct *font_info)
 {
    unsigned long valuemask = 0; /* ignore XGCvalues and use defaults */
    XGCValues values;
@@ -668,7 +769,6 @@ int recalc_spacing()
 
 void resize(Tk_Window tkwind, int locwidth, int locheight)
 {
-   Window window;
 
    if ((locwidth == 0) || (locheight == 0)) return;
 

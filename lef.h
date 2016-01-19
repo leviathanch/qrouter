@@ -107,6 +107,8 @@ extern LefList LefInfo;
 
 /* Forward declarations */
 
+int   Lookup(char *str, char*(table[]));
+
 u_char LefParseEndStatement(FILE *f, char *match);
 void  LefSkipSection(FILE *f, char *match);
 void  LefEndStatement(FILE *f);
@@ -130,13 +132,12 @@ double LefGetRoutePitch(int layer);
 double LefGetRouteOffset(int layer);
 char  *LefGetRouteName(int layer);
 int    LefGetRouteOrientation(int layer);
-int    LefGetMaxLayer();
+int    LefGetMaxLayer(void);
 
 GATE   LefFindInstance(char *name);
 void   LefHashCell(GATE gateginfo);
 
 void   LefRead(char *inName);
-float  DefRead(char *inName);
 
 void LefError(char *fmt, ...);	/* Variable argument procedure requires */
 				/* parameter list.			*/

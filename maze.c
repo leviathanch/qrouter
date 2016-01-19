@@ -233,7 +233,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 /* Remove PR_TARGET flags from all points belonging to a node	*/
 /*--------------------------------------------------------------*/
 
-int clear_target_node(NODE node)
+void clear_target_node(NODE node)
 {
     int x, y, lay;
     DPOINT ntap;
@@ -257,8 +257,9 @@ int clear_target_node(NODE node)
        x = ntap->gridx;
        y = ntap->gridy;
 
-       if ((lay < Pinlayers) && Nodesav[lay][OGRID(x, y, lay)] ==
-		(NODE)NULL || Nodesav[lay][OGRID(x, y, lay)] != node)
+       if (( (lay < Pinlayers)
+             && Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL
+           ) || Nodesav[lay][OGRID(x, y, lay)] != node)
        continue;
 	
        Pr = &Obs2[lay][OGRID(x, y, lay)];
@@ -348,7 +349,7 @@ count_targets(NET net)
 
 int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char stage)
 {
-    int x, y, lay, k, obsnet = 0;
+    int x, y, lay, obsnet = 0;
     int result = 0;
     u_char found_one = (u_char)0;
     POINT gpoint;
@@ -549,7 +550,7 @@ int disable_node_nets(NODE node)
 int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		SEG bbox, u_char stage)
 {
-    int x, y, lay, k;
+    int x, y, lay;
     int result = 0;
     POINT gpoint;
     SEG seg;
@@ -625,7 +626,7 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 		u_char stage)
 {
     ROUTE rt;
-    int result;
+    int result = 0;
 
     for (rt = net->routes; rt; rt = rt->next)
 	result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
@@ -639,7 +640,7 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 /* list.  Return 1 if the list got longer, 0 otherwise.		*/
 /*--------------------------------------------------------------*/
 
-int
+static int
 addcollidingnet(NETLIST *nlptr, int netnum)
 {
     NETLIST cnl;
@@ -673,7 +674,7 @@ NETLIST find_colliding(NET net, int *ripnum)
    NETLIST nl = (NETLIST)NULL, cnl;
    ROUTE rt;
    SEG seg;
-   int lay, i, x, y, orignet, rnum;
+   int lay, x, y, orignet, rnum;
 
    /* Scan the routed points for recorded collisions.	*/
 
@@ -777,7 +778,6 @@ NETLIST find_colliding(NET net, int *ripnum)
 u_char ripup_net(NET net, u_char restore)
 {
    int thisnet, oldnet, x, y, lay, dir;
-   double sreq;
    NODE node;
    ROUTE rt;
    SEG seg;
@@ -1148,7 +1148,6 @@ void writeback_segment(SEG seg, int netnum)
    double dist;
    int  i, layer;
    u_int sobs;
-   NODE node;
 
    if (seg->segtype == ST_VIA) {
       Obs[seg->layer + 1][OGRID(seg->x1, seg->y1, seg->layer + 1)] = netnum;
@@ -1331,16 +1330,14 @@ void writeback_segment(SEG seg, int netnum)
 int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
-   int  i, j, k, lay, lay2, rval;
-   int  x, y;
-   int  dx, dy, dl;
+   int  lay2, rval;
+   int  dx = -1, dy = -1, dl;
    u_int netnum, netobs1, netobs2, dir1, dir2;
    u_char first = (u_char)1;
    u_char dmask;
    u_char pflags, p2flags;
    PROUTE *Pr;
    POINT newlr, newlr2, lrtop, lrend, lrnext, lrcur, lrprev;
-   double sreq;
 
    if (Verbose > 1) {
       Flush(stdout);
@@ -1412,7 +1409,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       PROUTE *pri, *pri2;
       int stacks = 1, stackheight;
       int cx, cy, cl;
-      int mincost, minx, miny, ci, ci2, collide, cost;
+      int mincost, minx = -1, miny = -1, collide, cost;
 
       while (stacks != 0) {	// Keep doing until all illegal stacks are gone
 	 stacks = 0;
@@ -1554,7 +1551,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       }
 	       if (pflags & PR_COST) {
 		  pflags &= ~PR_COST;
-		  if (pflags & PR_PRED_DMASK != PR_PRED_NONE && cost < mincost) {
+		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
 	             pri2 = &Obs2[dl][OGRID(cx, dy, dl)];
 		     p2flags = pri2->flags;
 		     if (p2flags & PR_COST) {
@@ -1601,7 +1598,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		  // Check if point at pri2 is equal to position of
 		  // lrppre->next.  If so, bypass lrppre.
 
-		  if (lrnext = lrppre->next) {
+		  if ((lrnext = lrppre->next) != NULL) {
 		     if (lrnext->x1 == minx && lrnext->y1 == miny &&
 				lrnext->layer == dl) {
 			newlr->next = lrnext;
@@ -1731,9 +1728,10 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	             pri = &Obs2[cl][OGRID(minx, miny, cl)];
 	             pri2 = &Obs2[lrcur->layer][OGRID(lrcur->x1,
 					lrcur->y1, lrcur->layer)];
-		     if (((pri->flags & PR_SOURCE) && (pri2->flags & PR_SOURCE)) ||
-			 	((pri->flags & PR_TARGET) &&
-				(pri2->flags & PR_TARGET)) && (lrcur == lrtop)) {
+		     if ((((pri->flags & PR_SOURCE) && (pri2->flags & PR_SOURCE)) ||
+			 ((pri->flags & PR_TARGET) && (pri2->flags & PR_TARGET)))
+                         && (lrcur == lrtop)
+			) {
 			lrtop = newlr;
 			lrend = newlr;
 			free(lrcur);
@@ -1996,7 +1994,7 @@ cleanup:
 int writeback_route(ROUTE rt)
 {
    SEG seg;
-   int  i, lay2;
+   int  lay2;
    u_int netnum, dir1, dir2;
    u_char first = (u_char)1;
 

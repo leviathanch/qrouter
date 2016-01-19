@@ -337,7 +337,7 @@ u_char
 LefParseEndStatement(FILE *f, char *match)
 {
     char *token;
-    int keyword, words;
+    int keyword;
     char *match_name[2];
 
     match_name[0] = match;
@@ -613,7 +613,7 @@ LefFindLayerNum(char *token)
  */
 
 int
-LefGetMaxLayer()
+LefGetMaxLayer(void)
 {
     int maxlayer = -1;
     LefList lefl;
@@ -646,7 +646,6 @@ double
 LefGetRouteKeepout(int layer)
 {
     LefList lefl;
-    double dist;
 
     lefl = LefFindLayerByNum(layer);
     if (lefl) {
@@ -1742,8 +1741,8 @@ LefReadMacro(f, mname, oscale)
     /* Initial values */
     pinNum = 0;
     has_size = FALSE;
-    lefBBox.x1 = 0.0;
-    lefBBox.y1 = 0.0;
+    lefBBox.x2 = lefBBox.x1 = 0.0;
+    lefBBox.y2 = lefBBox.y1 = 0.0;
 
     while ((token = LefNextToken(f, TRUE)) != NULL)
     {
@@ -1956,11 +1955,11 @@ LefReadLayerSection(f, lname, mode, lefl)
     LefList lefl;		/* pointer to layer info  */
 {
     char *token, *tp;
-    int keyword, typekey, entries, i;
+    int keyword, typekey = -1, entries, i;
     struct seg_ viaArea;
     int curlayer = -1;
     double dvalue, oscale;
-    lefSpacingRule *newrule, *testrule;
+    lefSpacingRule *newrule = NULL, *testrule;
 
     /* These are defined in the order of CLASS_* in lefInt.h */
     static char *layer_type_keys[] = {

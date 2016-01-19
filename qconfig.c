@@ -13,6 +13,7 @@
 
 #define _GNU_SOURCE	// for strcasestr(), see man page
 
+#include <ctype.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -70,7 +71,7 @@ char    *ViaY[MAX_LAYERS];
 /*--------------------------------------------------------------*/
 
 void
-post_config()
+post_config(void)
 {
     int i, h, v;
 
@@ -132,14 +133,13 @@ int read_config(FILE *fconfig, int is_info)
     char carg;
     double darg, darg2, darg3, darg4;
     char sarg[MAX_LINE_LEN];
-    size_t len = 0;
     char   line[MAX_LINE_LEN];
     char  *lineptr;
     STRING dnr;               // Do Not Route nets
     STRING cn;                // critical nets
     STRING strl;
-    GATE   gateinfo;          // gate information, pin location, etc
-    DSEG   grect, drect;
+    GATE   gateinfo = NULL;   // gate information, pin location, etc
+    DSEG   drect;
 
     if (Firstcall) {
 	for (i = 0; i < MAX_LAYERS; i++) {

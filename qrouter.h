@@ -337,7 +337,8 @@ struct routeinfo_ {
 
 #define DRAW_NONE	0x0	// Draw only the background map
 #define DRAW_ROUTES	0x4	// Draw routes on top of background map
-#define DRAW_MASK	0x4
+#define DRAW_UNROUTED   0x8     // Draw unrouted nets on top of background map
+#define DRAW_MASK	0xc
 
 // Mask types (values other than 255 are interpreted as "slack" value)
 #define MASK_MINIMUM	(u_char)0	// No slack
@@ -412,59 +413,33 @@ extern char *gndnet;
 
 /* Function prototypes */
 
-extern int    set_num_channels();
-extern int    allocate_obs_array();
+int    set_num_channels(void);
+int    allocate_obs_array(void);
+int    countlist(NETLIST net);
+int    runqrouter(int argc, char *argv[]);
 
-void   check_variable_pitch(int, int *, int *);
-
-NET    getnettoroute();
-int    dofirststage(u_char graphdebug, int debug_netnum);
-int    dosecondstage(u_char graphdebug, u_char singlestep);
-int    route_net_ripup(NET net, u_char graphdebug);
-
-void   read_lef(char *filename);
 void   read_def(char *filename);
+int    dofirststage(u_char graphdebug, int debug_netnum);
 int    write_def(char *filename);
 
-int    doroute(NET net, u_char stage, u_char graphdebug);
-int    route_setup(struct routeinfo_ *iroute, u_char stage);
-int    next_route_setup(struct routeinfo_ *iroute, u_char stage);
-int    route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
-
-ROUTE  createemptyroute();
-void   emit_routes(char *filename, double oscale, int iscale);
-int    set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
-		u_char stage);
-int    set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
-		SEG bbox, u_char stage);
-
-void   initMask();
-void   createMask(NET net, u_char slack, u_char halo);
-void   fillMask(u_char value);
-
-void   pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale,
-			double invscale, u_char horizontal);
-void   pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
-			double invscale);
-void   pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
-			int gridx, int gridy, double invscale);
-
-void   highlight_starts(POINT glist);
-void   highlight_source();
-void   highlight_dest();
-void   highlight(int, int);
-int    recalc_spacing();
-void   draw_layout();
-
-void   helpmessage();
-
+char  *print_node_name(NODE node);
 void   print_nets(char *filename);
 void   print_routes(char *filename);
 void   print_nlgates(char *filename);
-char  *print_node_name(NODE node);
+void   print_net(NET net);
+void   print_gate(GATE gate);
 
-GATE   DefFindInstance(char *name);
-void   DefHashInstance(GATE gateginfo);
+NET    getnettoroute(int order);
+int    route_net_ripup(NET net, u_char graphdebug);
+int    dosecondstage(u_char graphdebug, u_char singlestep);
+int    doroute(NET net, u_char stage, u_char graphdebug);
+
+
+#ifdef TCL_QROUTER
+void   tcl_printf(FILE *, const char *, ...);
+void   tcl_stdflush(FILE *);
+void   tcl_vprintf(FILE *, const char *, va_list);
+#endif
 
 #define QROUTER_H
 #endif 

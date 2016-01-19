@@ -7,6 +7,7 @@
 /* Beccue, 2003							*/
 /*--------------------------------------------------------------*/
 
+#include <ctype.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
@@ -18,6 +19,8 @@
 #include "node.h"
 #include "maze.h"
 #include "lef.h"
+#include "def.h"
+#include "graphics.h"
 
 int  Pathon = -1;
 int  TotalRoutes = 0;
@@ -59,16 +62,27 @@ char DEFfilename[256];
 
 ScaleRec Scales;	// record of input and output scales
 
+/* Prototypes for some local functions */
+static void initMask(void);
+static void fillMask(u_char value);
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+static ROUTE createemptyroute(void);
+static void emit_routes(char *filename, double oscale, int iscale);
+static void helpmessage(void);
+
+
 /*--------------------------------------------------------------*/
 /* Check track pitch and set the number of channels (may be	*/
 /* called from DefRead)						*/
 /*--------------------------------------------------------------*/
 
-int set_num_channels()
+int set_num_channels(void)
 {
    int i;
 
-   if (NumChannelsX[0] != 0) return;	/* Already been called */
+   if (NumChannelsX[0] != 0) return 0;	/* Already been called */
 
    for (i = 0; i < Num_layers; i++) {
       if (PitchX[i] == 0.0 || PitchY[i] == 0.0) {
@@ -104,11 +118,11 @@ int set_num_channels()
 /* Allocate the Obs[] array (may be called from DefRead)	*/
 /*--------------------------------------------------------------*/
 
-int allocate_obs_array()
+int allocate_obs_array(void)
 {
    int i;
 
-   if (Obs[0] != NULL) return;	/* Already been called */
+   if (Obs[0] != NULL) return 0;	/* Already been called */
 
    for (i = 0; i < Num_layers; i++) {
       Obs[i] = (u_int *)calloc(NumChannelsX[i] * NumChannelsY[i],
@@ -150,17 +164,13 @@ countlist(NETLIST net)
 int
 runqrouter(int argc, char *argv[])
 {
-   int	i, j, result;
-   int length, width;
-   FILE *l, *configFILEptr, *fptr, *infoFILEptr;
-   u_int u;
+   int	i;
+   FILE *configFILEptr, *infoFILEptr;
    static char configdefault[] = CONFIGFILENAME;
    char *configfile = configdefault;
    char *infofile = NULL;
-   char *dotptr, *sptr;
+   char *dotptr;
    char Filename[256];
-   double sreq;
-   NET net;
    u_char readconfig = FALSE;
     
    Scales.iscale = 1;
@@ -319,7 +329,7 @@ runqrouter(int argc, char *argv[])
 /* Free up memory in preparation for reading another DEF file	*/
 /*--------------------------------------------------------------*/
 
-void reinitialize()
+static void reinitialize()
 {
     int i;
     NETLIST nl;
@@ -439,7 +449,7 @@ void reinitialize()
 /* of the layout, components, and nets are known.		*/
 /*--------------------------------------------------------------*/
 
-int post_def_setup()
+static int post_def_setup()
 {
    NET net;
    int i;
@@ -737,8 +747,9 @@ int write_def(char *filename)
 /*	a width.						*/
 /*--------------------------------------------------------------*/
 
-void pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale,
-		double invscale, u_char horizontal)
+static void
+pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale,
+          double invscale, u_char horizontal)
 {
    if (Pathon == 1) {
       Fprintf( stderr, "pathstart():  Major error.  Started a new "
@@ -780,8 +791,9 @@ void pathstart(FILE *cmd, int layer, int x, int y, u_char special, double oscale
 /*   SIDE EFFECTS: 						*/
 /*--------------------------------------------------------------*/
 
-void pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
-		double invscale)
+static void
+pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
+       double invscale)
 {
     if (Pathon <= 0) {
 	Fprintf(stderr, "pathto():  Major error.  Added to a "
@@ -824,8 +836,9 @@ void pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
 /*   SIDE EFFECTS: 						*/
 /*--------------------------------------------------------------*/
 
-void pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
-		int gridx, int gridy, double invscale)
+static void
+pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
+        int gridx, int gridy, double invscale)
 {
     char *s;
     char checkersign = (gridx + gridy + layer) & 0x01;
@@ -1002,6 +1015,113 @@ void print_nlgates( char *filename )
     }
 } /* print_nlgates() */
 
+
+/*--------------------------------------------------------------*/
+/* print_net - print info about the net to stdout               */
+/*								*/
+/*   ARGS: net to print info about				*/
+/*   RETURNS: nothing						*/
+/*   SIDE EFFECTS: 						*/
+/*--------------------------------------------------------------*/
+
+void print_net(NET net) {
+    NODE node;
+    DPOINT tap;
+    int i, first;
+
+    Fprintf(stdout, "Net %d: %s", net->netnum, net->netname);
+    for (node = net->netnodes; node != NULL; node = node->next) {
+        Fprintf(stdout, "\n  Node %d: \n    Taps: ", node->nodenum);
+        for (tap = node->taps, i = 0, first = TRUE;
+             tap != NULL;
+             tap = tap->next, i = (i + 1) % 4, first = FALSE) {
+            Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
+                    (i == 0 ? (first ? "" : "\n        ") : " "),
+                    tap->layer, tap->x, tap->y
+            );
+        }
+        Fprintf(stdout, "\n    Tap extends: ");
+        for (tap = node->extend, i = 0, first = TRUE;
+             tap != NULL;
+             tap = tap->next, i = (i + 1) % 4, first = FALSE) {
+            Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
+                    (i == 0 ? (first ? "" : "\n        ") : " "),
+                    tap->layer, tap->x, tap->y
+            );
+        }
+    }
+    Fprintf(stdout, "\n  bbox: (%d,%d)-(%d,%d)\n",
+            net->xmin, net->ymin, net->xmax, net->ymax
+    );
+}
+
+
+/*--------------------------------------------------------------*/
+/* print_gate - print info about the net to stdout              */
+/*								*/
+/*   ARGS: gate to print info about				*/
+/*   RETURNS: nothing						*/
+/*   SIDE EFFECTS: 						*/
+/*--------------------------------------------------------------*/
+
+void print_gate(GATE gate) {
+    int i, j, first;
+    DSEG seg;
+    NODE node;
+    DPOINT tap;
+
+    Fprintf(stdout, "Gate %s\n", gate->gatename);
+    Fprintf(stdout, "  Loc: (%.2lf, %.2lf), WxH: %.2lfx%.2lf\n",
+            gate->placedX, gate->placedY, gate->width, gate->height
+    );
+    Fprintf(stdout, "  Pins");
+    for (i = 0; i < gate->nodes; i++) {
+        Fprintf(stdout, "\n    Pin %s, net %d\n",
+                gate->node[i], gate->netnum[i]
+        );
+        Fprintf(stdout, "      Segs: ");
+        for (seg = gate->taps[i], j = 0, first = TRUE;
+             seg != NULL;
+             seg = seg->next, j = (j + 1) % 3, first = FALSE) {
+            Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)-(%.2lf,%.2lf)",
+                    (j == 0 ? (first ? "" : "\n        ") : " "),
+                    seg->layer, seg->x1, seg->y1, seg->x2, seg->y2
+            );
+        }
+        if ((node = gate->noderec[i]) != NULL) {
+            Fprintf(stdout, "\n      Taps: ");
+            for (tap = node->taps, j = 0, first = TRUE;
+                 tap != NULL;
+                 tap = tap->next, j = (j + 1) % 4, first = FALSE) {
+                Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
+                        (j == 0 ? (first ? "" : "\n        ") : " "),
+                        tap->layer, tap->x, tap->y
+                );
+            }
+            Fprintf(stdout, "\n      Tap extends: ");
+            for (tap = node->extend, j = 0, first = TRUE;
+                 tap != NULL;
+                 tap = tap->next, j = (j + 1) % 4, first = FALSE) {
+                Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
+                        (j == 0 ? (first ? "" : "\n        ") : " "),
+                        tap->layer, tap->x, tap->y
+                );
+            }
+        }
+    }
+    Fprintf(stdout, "\n  Obstructions: ");
+    for (seg = gate->obs, j = 0, first = TRUE;
+         seg != NULL;
+         seg = seg->next, j = (j + 1) % 3, first = FALSE) {
+        Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)-(%.2lf,%.2lf)",
+                (j == 0 ? (first ? "" : "\n    ") : " "),
+                seg->layer, seg->x1, seg->y1, seg->x2, seg->y2
+        );
+    }
+    Fprintf(stdout, "\n");
+}
+
+
 /*--------------------------------------------------------------*/
 /* getnettoroute - get a net to route				*/
 /*								*/
@@ -1046,7 +1166,7 @@ NET getnettoroute(int order)
 /* Return the number of nets ripped up				*/
 /*--------------------------------------------------------------*/
 
-int ripup_colliding(NET net)
+static int ripup_colliding(NET net)
 {
     NETLIST nl, nl2, fn;
     int ripped;
@@ -1170,9 +1290,9 @@ int route_net_ripup(NET net, u_char graphdebug)
 int
 dosecondstage(u_char graphdebug, u_char singlestep)
 {
-   int failcount, origcount, result, maxtries, lasttries;
+   int failcount, origcount, result, maxtries;
    NET net;
-   NETLIST nl, nl2, fn;
+   NETLIST nl, nl2;
    NETLIST Abandoned;	// Abandoned routes---not even trying any more.
    ROUTE rt, rt2;
    SEG seg;
@@ -1372,7 +1492,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 /* initMask() ---						*/
 /*--------------------------------------------------------------*/
 
-void initMask()
+static void initMask(void)
 {
    RMask = (u_char *)calloc(NumChannelsX[0] * NumChannelsY[0],
 			sizeof(u_char));
@@ -1386,7 +1506,7 @@ void initMask()
 /* Fill mask around the area of a vertical line			*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
 {
    int gx1, gx2, gy1, gy2;
@@ -1435,7 +1555,7 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
 /* Fill mask around the area of a horizontal line		*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
 {
    int gx1, gx2, gy1, gy2;
@@ -1491,7 +1611,7 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
 /* route track for each pass, up to "halo".			*/
 /*--------------------------------------------------------------*/
 
-void createBboxMask(NET net, u_char halo)
+static void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
@@ -1543,9 +1663,9 @@ void createBboxMask(NET net, u_char halo)
 /* best location for the trunk route.				*/
 /*--------------------------------------------------------------*/
 
-int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
+static int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
 {
-    int x, y, i, minidx, sidx, n, o;
+    int x, y, i, minidx = -1, sidx, n;
     int *score, minscore;
 
     score = (int *)malloc((ymax - ymin + 1) * sizeof(int));
@@ -1601,14 +1721,13 @@ int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
 /* congestion analysis.						*/
 /*--------------------------------------------------------------*/
 
-void createMask(NET net, u_char slack, u_char halo)
+static void createMask(NET net, u_char slack, u_char halo)
 {
   NODE n1, n2;
-  DPOINT d1tap, d2tap, dtap;
-  int i, j, orient, l, v;
+  DPOINT dtap;
+  int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
-  int branchx, branchy;
 
   fillMask((u_char)halo);
 
@@ -1787,7 +1906,7 @@ void createMask(NET net, u_char slack, u_char halo)
 /* bad guess about the optimal route positions.			*/
 /*--------------------------------------------------------------*/
 
-void fillMask(u_char value) {
+static void fillMask(u_char value) {
    memset((void *)RMask, (int)value,
 		(size_t)(NumChannelsX[0] * NumChannelsY[0]
 		* sizeof(u_char)));
@@ -1926,7 +2045,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 /* to a single subroutine.					*/
 /*--------------------------------------------------------------*/
 
-void unable_to_route(char *netname, NODE node, unsigned char forced)
+static void unable_to_route(char *netname, NODE node, unsigned char forced)
 {
     if (node)
 	Fprintf(stderr, "Node %s of net %s has no tap points---",
@@ -1946,7 +2065,7 @@ void unable_to_route(char *netname, NODE node, unsigned char forced)
 /*								*/
 /*--------------------------------------------------------------*/
 
-int next_route_setup(struct routeinfo_ *iroute, u_char stage)
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
   NODE node;
@@ -2055,7 +2174,7 @@ int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 /*								*/
 /*--------------------------------------------------------------*/
 
-int route_setup(struct routeinfo_ *iroute, u_char stage)
+static int route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   POINT gpoint;
   int  i, j;
@@ -2274,12 +2393,10 @@ int route_setup(struct routeinfo_ *iroute, u_char stage)
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
+static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
-  SEG  seg;
-  int  i, j, k, o;
-  int  x, y;
+  int  i, o;
   int  pass, maskpass;
   u_int forbid;
   GRIDP best, curpt;
@@ -2308,7 +2425,7 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
        Fprintf(stdout, " (maxcost is %d)\n", iroute->maxcost);
     }
 
-    while (gpoint = iroute->glist) {
+    while ((gpoint = iroute->glist) != NULL) {
 
       iroute->glist = gpoint->next;
 
@@ -2581,7 +2698,7 @@ done:
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-ROUTE createemptyroute()
+static ROUTE createemptyroute(void)
 {
   ROUTE rt;
 
@@ -2592,7 +2709,7 @@ ROUTE createemptyroute()
   rt->next = (ROUTE)NULL;
   return rt;
 
-} /* createemptyroute() */
+} /* createemptyroute(void) */
 
 /*--------------------------------------------------------------*/
 /* cleanup_net --						*/
@@ -2607,11 +2724,11 @@ ROUTE createemptyroute()
 /* the route to the neighboring via.				*/
 /*--------------------------------------------------------------*/
 
-void cleanup_net(NET net)
+static void cleanup_net(NET net)
 {
    SEG segf, segl, seg;
    ROUTE rt, rt2;
-   int ls, lf, ll, layer, lastrlayer, lastlayer;
+   int ls, lf = 0, ll = 0, layer, lastrlayer, lastlayer;
    u_char fcheck, lcheck, fixed;
    u_char xcheck, ycheck; 
 
@@ -2798,18 +2915,17 @@ void cleanup_net(NET net)
 /* stub connection.						*/
 /*--------------------------------------------------------------*/
 
-void
+static void
 emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 {
    SEG seg, saveseg, lastseg, prevseg;
    ROUTE rt;
    u_int dir1, dir2, tdir;
-   int i, layer;
-   int x, y, x2, y2;
+   int layer;
+   int x = 0, y = 0, x2, y2;
    double dc;
-   int lastx, lasty, lastlay;
+   int lastx = -1, lasty = -1, lastlay;
    int horizontal;
-   DPOINT dp1, dp2;
    float offset1, offset2;
    u_char cancel, segtype;
    double invscale = (double)(1.0 / (double)iscale); 
@@ -3641,13 +3757,13 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 /*   AUTHOR and DATE: steve beccue      Mon Aug 11 2003		*/
 /*--------------------------------------------------------------*/
 
-void emit_routes(char *filename, double oscale, int iscale)
+static void emit_routes(char *filename, double oscale, int iscale)
 {
     FILE *Cmd;
     int i, j, numnets, stubroutes;
-    char line[MAX_LINE_LEN + 1], *lptr;
+    char line[MAX_LINE_LEN + 1], *lptr = NULL;
     char netname[MAX_NAME_LEN];
-    NET net;
+    NET net = NULL;
     ROUTE rt;
     char newDEFfile[256];
     FILE *fdef;
@@ -3715,7 +3831,6 @@ void emit_routes(char *filename, double oscale, int iscale)
 
     for (i = 0; i < numnets; i++) {
        if (errcond == TRUE) break;
-       netname[0] == '\0';
        while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
 	  if ((lptr = strchr(line, ';')) != NULL) {
 	     *lptr = '\n';
@@ -3848,7 +3963,7 @@ void emit_routes(char *filename, double oscale, int iscale)
 /*								*/
 /*--------------------------------------------------------------*/
 
-void helpmessage()
+static void helpmessage(void)
 {
     if (Verbose > 0) {
 	Fprintf(stdout, "qrouter - maze router by Tim Edwards\n\n");

@@ -20,8 +20,10 @@ int     writeback_route(ROUTE rt);
 int     writeback_all_routes(NET net);
 NETLIST find_colliding(NET net, int *ripnum);
 void    clear_non_source_targets(NET net, POINT *pushlist);
+void    clear_target_node(NODE node);
 int     count_targets(NET net);
-
+int	set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
+                SEG bbox, u_char stage);
 
 #define MAZE_H
 #endif 

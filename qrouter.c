@@ -515,7 +515,7 @@ static int post_def_setup()
 
    if (Verbose > 1)
       Fprintf(stderr, "Diagnostic: memory block is %d bytes\n",
-		sizeof(u_int) * NumChannelsX[0] * NumChannelsY[0]);
+		(int)sizeof(u_int) * NumChannelsX[0] * NumChannelsY[0]);
 
    /* Be sure to create obstructions from gates first, since we don't	*/
    /* want improperly defined or positioned obstruction layers to over-	*/

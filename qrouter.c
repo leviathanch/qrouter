@@ -2847,10 +2847,16 @@ static void cleanup_net(NET net)
 			      newseg->y2 = seg->y1;
 			      continue;
 			   }
+// This (and the one below it) added Oct. 20, 2014 to cover some
+// pathological condition.  However, it causes errors on other
+// geometries so the cases must be disambiguated.  Code commented
+// out Jan. 26, 2016.
+/*
 			   else if (lastrlayer < lastlayer) {
 			      seg->segtype = ST_WIRE;
 			      seg->x2 = segl->x2;
 			   }
+*/
 			   else {
 			      segl->segtype = ST_WIRE;
 			      segl->x2 = seg->x2;
@@ -2875,10 +2881,12 @@ static void cleanup_net(NET net)
 			      newseg->y2 = seg->y1;
 			      continue;
 			   }
+/*
 			   else if (lastrlayer < lastlayer) {
 			      seg->segtype = ST_WIRE;
 			      seg->y2 = segl->y2;
 			   }
+*/
 			   else {
 			      segl->segtype = ST_WIRE;
 			      segl->y2 = seg->y2;

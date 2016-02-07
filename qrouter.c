@@ -2860,6 +2860,7 @@ static void cleanup_net(NET net)
 			   else {
 			      segl->segtype = ST_WIRE;
 			      segl->x2 = seg->x2;
+			      segl->layer = ll;
 			   }
 			   fixed = TRUE;
 			   break;
@@ -2890,6 +2891,7 @@ static void cleanup_net(NET net)
 			   else {
 			      segl->segtype = ST_WIRE;
 			      segl->y2 = seg->y2;
+			      segl->layer = ll;
 			   }
 			   fixed = TRUE;
 			   break;

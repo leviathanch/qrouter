@@ -2747,7 +2747,7 @@ static void cleanup_net(NET net)
 
 	    segf = rt->segments;
 	    if (segf == NULL) continue;
-	    lastlayer = -1;
+	    lastlayer = (segf->segtype == ST_VIA) ? -1 : segf->layer;
 	    for (segl = segf->next; segl && segl->next; segl = segl->next)
 		if (segl->segtype != ST_VIA) lastlayer = segl->layer;
 
@@ -2801,8 +2801,12 @@ static void cleanup_net(NET net)
 			      newseg->y2 = seg->y1;
 			      continue;
 			   }
+			   // Change via to wire route, connect it to seg,
+			   // and make sure it has the same layer type as
+			   // the following route.
 			   segf->segtype = ST_WIRE;
 			   segf->x1 = seg->x1;
+			   segf->layer = segf->next->layer;
 			   fixed = TRUE;
 			   break;
 			}
@@ -2823,8 +2827,12 @@ static void cleanup_net(NET net)
 			      newseg->y2 = seg->y1;
 			      continue;
 			   }
+			   // Change via to wire route, connect it to seg,
+			   // and make sure it has the same layer type as
+			   // the following route.
 			   segf->segtype = ST_WIRE;
 			   segf->y1 = seg->y1;
+			   segf->layer = segf->next->layer;
 			   fixed = TRUE;
 			   break;
 			}
@@ -2847,21 +2855,12 @@ static void cleanup_net(NET net)
 			      newseg->y2 = seg->y1;
 			      continue;
 			   }
-// This (and the one below it) added Oct. 20, 2014 to cover some
-// pathological condition.  However, it causes errors on other
-// geometries so the cases must be disambiguated.  Code commented
-// out Jan. 26, 2016.
-/*
-			   else if (lastrlayer < lastlayer) {
-			      seg->segtype = ST_WIRE;
-			      seg->x2 = segl->x2;
-			   }
-*/
-			   else {
-			      segl->segtype = ST_WIRE;
-			      segl->x2 = seg->x2;
-			      segl->layer = ll;
-			   }
+			   // Change via to wire route, connect it to seg,
+			   // and make sure it has the same layer type as
+			   // the previous route.
+			   segl->segtype = ST_WIRE;
+			   segl->x2 = seg->x2;
+			   segl->layer = lastlayer;
 			   fixed = TRUE;
 			   break;
 			}
@@ -2882,17 +2881,12 @@ static void cleanup_net(NET net)
 			      newseg->y2 = seg->y1;
 			      continue;
 			   }
-/*
-			   else if (lastrlayer < lastlayer) {
-			      seg->segtype = ST_WIRE;
-			      seg->y2 = segl->y2;
-			   }
-*/
-			   else {
-			      segl->segtype = ST_WIRE;
-			      segl->y2 = seg->y2;
-			      segl->layer = ll;
-			   }
+			   // Change via to wire route, connect it to seg,
+			   // and make sure it has the same layer type as
+			   // the previous route.
+			   segl->segtype = ST_WIRE;
+			   segl->y2 = seg->y2;
+			   segl->layer = lastlayer;
 			   fixed = TRUE;
 			   break;
 			}

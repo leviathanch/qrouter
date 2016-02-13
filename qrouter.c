@@ -274,6 +274,7 @@ runqrouter(int argc, char *argv[])
 
       /* Print information about route layers, and exit */
       for (i = 0; i < Num_layers; i++) {
+	 double pitch, width;
 	 int vnum, hnum;
 	 int o = LefGetRouteOrientation(i);
 	 char *layername = LefGetRouteName(i);
@@ -283,10 +284,12 @@ runqrouter(int argc, char *argv[])
 	 if (hnum > 1 && vnum == 1) vnum++;
 		
 	 if (layername != NULL) {
+	    pitch = (o == 1) ? PitchY[i] : PitchX[i],
+	    width = LefGetRouteWidth(i);
+	    if (pitch == 0.0 || width == 0.0) continue;
 	    fprintf(infoFILEptr, "%s %g %g %g %s",
-		layername,
-		(o == 1) ? PitchY[i] : PitchX[i],
-		LefGetRouteOffset(i), LefGetRouteWidth(i),
+		layername, pitch,
+		LefGetRouteOffset(i), width,
 		(o == 1) ? "horizontal" : "vertical");
 	    if (o == 1 && vnum > 1)
 	       fprintf(infoFILEptr, " %d", vnum);
@@ -295,6 +298,7 @@ runqrouter(int argc, char *argv[])
 	    fprintf(infoFILEptr, "\n");
 	 }
       }
+
       fclose(infoFILEptr);
       return 1;
    }

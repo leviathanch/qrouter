@@ -771,7 +771,10 @@ LefGetRouteSpacing(int layer)
     lefl = LefFindLayerByNum(layer);
     if (lefl) {
 	if (lefl->lefClass == CLASS_ROUTE) {
-	    return lefl->info.route.spacing->spacing;
+	    if (lefl->info.route.spacing)
+		return lefl->info.route.spacing->spacing;
+	    else
+		return 0.0;
 	}
     }
     return MIN(PitchX[layer], PitchY[layer]) / 2.0;

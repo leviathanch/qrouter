@@ -516,6 +516,146 @@ count_reachable_taps()
 		}
 	    }
 	    if (node->numtaps == 0) {
+		/* Node wasn't cleanly within tap geometry when centered */
+		/* on a grid point.  But if the via can be offset and is */
+		/* cleanly within the tap geometry, then allow it.	 */
+
+		double dist, mindist;
+		int dir, tapx, tapy, tapl;
+
+		/* Initialize mindist to a large value */
+		mindist = PitchX[Num_layers - 1] + PitchY[Num_layers - 1];
+		dir = 0;	/* Indicates no solution found */
+
+		for (ds = g->taps[i]; ds; ds = ds->next) {
+		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
+		    deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 1);
+
+		    gridx = (int)((ds->x1 - Xlowerbound) / PitchX[ds->layer]) - 1;
+		    while (1) {
+			dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
+			if (dx > ds->x2 || gridx >= NumChannelsX[ds->layer]) break;
+
+			if (((dx - ds->x1 + EPS) > -deltax) &&
+				((ds->x2 - dx + EPS) > -deltax)) {
+			    gridy = (int)((ds->y1 - Ylowerbound)
+					/ PitchY[ds->layer]) - 1;
+
+			    while (1) {
+				dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
+				if (dy > ds->y2 || gridy >= NumChannelsY[ds->layer])
+				    break;
+
+				// Check that the grid position is inside the
+				// tap rectangle.  However, if the point above
+				// the grid is blocked, then a via cannot be
+				// placed here, so skip it.
+
+				if (((ds->layer == Num_layers - 1) ||
+					!(Obs[ds->layer + 1][OGRID(gridx, gridy,
+					ds->layer + 1)] & NO_NET)) &&
+					((dy - ds->y1 + EPS) > -deltay) &&
+					((ds->y2 - dy + EPS) > -deltay)) {
+
+				    // Grid point is inside tap geometry.
+				    // Since it did not pass the simple insideness
+				    // test previously, it can be assumed that
+				    // one of the edges is closer to the grid point
+				    // than 1/2 via width.  Find that edge and use
+				    // it to determine the offset.
+
+				    // Check right edge
+				    if ((ds->x2 - dx + EPS) < deltax) {
+					dist = deltax - ds->x2 + dx;
+					// Confirm other edges
+					if ((dx - dist - deltax + EPS > ds->x1) &&
+					(dy - deltay + EPS > ds->y1) &&
+					(dy + deltay - EPS < ds->y2)) {
+					    if (dist < fabs(mindist)) {
+						mindist = dist;
+						dir = STUBROUTE_EW;
+						tapx = gridx;
+						tapy = gridy;
+						tapl = ds->layer;
+					    }
+					}
+				    }
+				    // Check left edge
+				    if ((dx - ds->x1 + EPS) < deltax) {
+					dist = deltax - dx + ds->x1;
+					// Confirm other edges
+					if ((dx + dist + deltax - EPS < ds->x2) &&
+					(dy - deltay + EPS > ds->y1) &&
+					(dy + deltay - EPS < ds->y2)) {
+					    if (dist < fabs(mindist)) {
+						mindist = -dist;
+						dir = STUBROUTE_EW;
+						tapx = gridx;
+						tapy = gridy;
+						tapl = ds->layer;
+					    }
+					}
+				    }
+				    // Check top edge
+				    if ((ds->y2 - dy + EPS) < deltay) {
+					dist = deltay - ds->y2 + dy;
+					// Confirm other edges
+					if ((dx - deltax + EPS > ds->x1) &&
+					(dx + deltax - EPS < ds->x2) &&
+					(dy - dist - deltay + EPS > ds->y1)) {
+					    if (dist < fabs(mindist)) {
+						mindist = -dist;
+						dir = STUBROUTE_NS;
+						tapx = gridx;
+						tapy = gridy;
+						tapl = ds->layer;
+					    }
+					}
+				    }
+				    // Check bottom edge
+				    if ((dy - ds->y1 + EPS) < deltay) {
+					dist = deltay - dy + ds->y1;
+					// Confirm other edges
+					if ((dx - deltax + EPS > ds->x1) &&
+					(dx + deltax - EPS < ds->x2) &&
+					(dy + dist + deltay - EPS < ds->y2)) {
+					    if (dist < fabs(mindist)) {
+						mindist = dist;
+						dir = STUBROUTE_NS;
+						tapx = gridx;
+						tapy = gridy;
+						tapl = ds->layer;
+					    }
+					}
+				    }
+				}
+				gridy++;
+			    }
+			}
+			gridx++;
+		    }
+		}
+
+		/* Was a solution found? */
+		if (dir != 0) {
+		    // Grid position is clear for placing a via
+
+		    Fprintf(stderr, "Tap position (%d, %d) appears to be"
+				" technically routable with an offset, so"
+				" it is being forced routable.\n",
+				tapx, tapy);
+
+		    Obs[tapl][OGRID(tapx, tapy, tapl)] =
+				(Obs[tapl][OGRID(tapx, tapy,
+				tapl)] & BLOCKED_MASK)
+				| dir | (u_int)node->netnum;
+		    Nodeloc[tapl][OGRID(tapx, tapy, tapl)] = node;
+		    Nodesav[tapl][OGRID(tapx, tapy, tapl)] = node;
+		    Stub[tapl][OGRID(tapx, tapy, tapl)] = dist;
+		    node->numtaps++;
+		}
+	    }
+	    if (node->numtaps == 0) {
 		Fprintf(stderr, "Qrouter will not be able to completely"
 			" route this net.\n");
 	    }
@@ -1198,14 +1338,20 @@ void create_obstructions_inside_nodes(void)
 			     int orignet = Obs[ds->layer][OGRID(gridx,
 					gridy, ds->layer)];
 
-			     if ((orignet & ROUTED_NET_MASK) == (u_int)node->netnum) {
+			     if ((orignet & ROUTED_NET_MASK & ~ROUTED_NET)
+					== (u_int)node->netnum) {
 
-				// Duplicate tap point.   Don't re-process it. (?)
-				gridy++;
-				continue;
+				// Duplicate tap point, or pre-existing
+				// route.   Don't re-process it if it is
+				// a duplicate.
+				if (Nodeloc[ds->layer][OGRID(gridx,
+					gridy, ds->layer)] != NULL) {
+				    gridy++;
+				    continue;
+				}
 			     }
 
-			     if (!(orignet & NO_NET) &&
+			     else if (!(orignet & NO_NET) &&
 					((orignet & ROUTED_NET_MASK) != (u_int)0)) {
 
 				// Net was assigned to other net, but is inside
@@ -1219,8 +1365,11 @@ void create_obstructions_inside_nodes(void)
 				// processing.
 
 				disable_gridpos(gridx, gridy, ds->layer);
+				gridy++;
+				continue;
 			     }
-			     else if (!(orignet & NO_NET)) {
+
+			     if (!(orignet & NO_NET)) {
 
 				// A grid point that is within 1/2 route width
 				// of a tap rectangle corner can violate metal
@@ -1920,6 +2069,12 @@ void create_obstructions_outside_nodes(void)
 				  // restriction will stand until an example
 				  // comes along that requires the detailed
 				  // search.
+
+				  // Such an example has come along, leading to
+				  // an additional relaxation allowing an offset
+				  // if the neighboring channel does not have a
+				  // node record.  This will probably need
+				  // revisiting.
 				
 				  if ((k & (STUBROUTE_X | OFFSET_TAP)) != 0)
 				     disable_gridpos(gridx, gridy, ds->layer);
@@ -1953,7 +2108,7 @@ void create_obstructions_outside_nodes(void)
 				           if ((ds->layer < Num_layers - 1) &&
 						(gridx > 0) &&
 						(Obs[ds->layer + 1][OGRID(
-						gridx - 1, gridy, ds->layer + 1)]
+						gridx + 1, gridy, ds->layer + 1)]
 						& OBSTRUCT_MASK))
 					      block_route(gridx, gridy, ds->layer, UP);
 					}
@@ -1979,7 +2134,7 @@ void create_obstructions_outside_nodes(void)
 				           if ((ds->layer < Num_layers - 1) &&
 						gridx < (NumChannelsX[ds->layer] - 1)
 						&& (Obs[ds->layer + 1][OGRID(
-						gridx + 1, gridy, ds->layer + 1)]
+						gridx - 1, gridy, ds->layer + 1)]
 						& OBSTRUCT_MASK))
 					      block_route(gridx, gridy, ds->layer, UP);
 					}

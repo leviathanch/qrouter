@@ -444,11 +444,12 @@ count_reachable_taps()
 
     for (l = 0; l < Num_layers; l++) {
 	for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
-	    node = Nodeloc[l][j];
+	    node = Nodeinfo[l][j].nodeloc;
 	    if (node != NULL) {
 
 		// Redundant check;  if Obs has NO_NET set, then
-		// Nodeloc for that position should already be NULL
+		// Nodeinfo.nodeloc for that position should already
+		// be NULL
 
 		if (!(Obs[l][j] & NO_NET))
 		    node->numtaps++;
@@ -487,8 +488,8 @@ count_reachable_taps()
 					((ds->y2 - dy + EPS) > deltay)) {
 
 				    if ((ds->layer == Num_layers - 1) ||
-					  !(Obs[ds->layer + 1][OGRID(gridx, gridy,
-					  ds->layer + 1)] & NO_NET)) {
+						!(OBSVAL(gridx, gridy, ds->layer + 1)
+						& NO_NET)) {
 
 					// Grid position is clear for placing a via
 
@@ -497,14 +498,12 @@ count_reachable_taps()
 						" is being forced routable.\n",
 						dx, dy);
 
-					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] =
-						(Obs[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] & BLOCKED_MASK)
+					OBSVAL(gridx, gridy, ds->layer) =
+						(OBSVAL(gridx, gridy, ds->layer)
+						& BLOCKED_MASK)
 						| (u_int)node->netnum;
-					Nodeloc[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
-					Nodesav[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
+					NODELOC(gridx, gridy, ds->layer) = node;
+					NODESAV(gridx, gridy, ds->layer) = node;
 					node->numtaps++;
 				    }
 				}
@@ -552,8 +551,8 @@ count_reachable_taps()
 				// placed here, so skip it.
 
 				if (((ds->layer == Num_layers - 1) ||
-					!(Obs[ds->layer + 1][OGRID(gridx, gridy,
-					ds->layer + 1)] & NO_NET)) &&
+					!(OBSVAL(gridx, gridy, ds->layer + 1)
+					& NO_NET)) &&
 					((dy - ds->y1 + EPS) > -deltay) &&
 					((ds->y2 - dy + EPS) > -deltay)) {
 
@@ -645,13 +644,12 @@ count_reachable_taps()
 				" it is being forced routable.\n",
 				tapx, tapy);
 
-		    Obs[tapl][OGRID(tapx, tapy, tapl)] =
-				(Obs[tapl][OGRID(tapx, tapy,
-				tapl)] & BLOCKED_MASK)
+		    OBSVAL(tapx, tapy, tapl) =
+				(OBSVAL(tapx, tapy, tapl) & BLOCKED_MASK)
 				| dir | (u_int)node->netnum;
-		    Nodeloc[tapl][OGRID(tapx, tapy, tapl)] = node;
-		    Nodesav[tapl][OGRID(tapx, tapy, tapl)] = node;
-		    Stub[tapl][OGRID(tapx, tapy, tapl)] = dist;
+		    NODELOC(tapx, tapy, tapl) = node;
+		    NODESAV(tapx, tapy, tapl) = node;
+		    STUBVAL(tapx, tapy, tapl) = dist;
 		    node->numtaps++;
 		}
 	    }
@@ -766,23 +764,23 @@ void create_obstructions_from_variable_pitch(void)
 
 	       // If the grid position itself is a node, don't restrict
 	       // routing based on variable pitch.
-	       if (Nodeloc[l][OGRID(x, y, l)] != NULL) continue;
+	       if (NODELOC(x, y, l) != NULL) continue;
 
 	       // If there is a node in an adjacent grid then allow
 	       // routing from that direction.
 
-	       if ((x > 0) && Nodeloc[l][OGRID(x - 1, y, l)] != NULL)
-		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_W;
-	       else if ((y > 0) && Nodeloc[l][OGRID(x , y - 1, l)] != NULL)
-		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_S;
+	       if ((x > 0) && NODELOC(x - 1, y, l) != NULL)
+		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_W;
+	       else if ((y > 0) && NODELOC(x , y - 1, l) != NULL)
+		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_S;
 	       else if ((x < NumChannelsX[l] - 1)
-			&& Nodeloc[l][OGRID(x + 1, y, l)] != NULL)
-		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_E;
+			&& NODELOC(x + 1, y, l) != NULL)
+		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_E;
 	       else if ((y < NumChannelsY[l] - 1)
-			&& Nodeloc[l][OGRID(x, y + 1, l)] != NULL)
-		  Obs[l][OGRID(x, y, l)] = BLOCKED_MASK & ~BLOCKED_N;
+			&& NODELOC(x, y + 1, l) != NULL)
+		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_N;
 	       else
-		  Obs[l][OGRID(x, y, l)] = NO_NET;
+		  OBSVAL(x, y, l) = NO_NET;
 	    }
 	 }
       }
@@ -793,7 +791,7 @@ void create_obstructions_from_variable_pitch(void)
 /* disable_gridpos() ---					*/
 /*	Render the position at (x, y, lay) unroutable by	*/
 /*	setting its Obs[] entry to NO_NET and removing it from	*/
-/*	the Nodeloc and Nodesav records.			*/
+/*	the Nodeinfo.nodeloc and Nodeinfo.nodesav records.	*/
 /*--------------------------------------------------------------*/
 
 static void
@@ -802,17 +800,18 @@ disable_gridpos(int x, int y, int lay)
     int apos = OGRID(x, y, lay);
 
     Obs[lay][apos] = (u_int)(NO_NET | OBSTRUCT_MASK);
-    Nodeloc[lay][apos] = NULL;
-    Nodesav[lay][apos] = NULL;
-    Stub[lay][apos] = 0.0;
+    Nodeinfo[lay][apos].nodeloc = NULL;
+    Nodeinfo[lay][apos].nodesav = NULL;
+    Nodeinfo[lay][apos].stub = 0.0;
 }
 
 /*--------------------------------------------------------------*/
 /* count_pinlayers()---						*/
-/*	Check which layers have non-NULL Nodeloc, Nodesav, and	*/
-/* 	Stub entries.  Then set "Pinlayers" and free all the	*/
-/*	unused layers.  This saves a lot of memory, especially	*/
-/*	when the number of routing layers becomes large.	*/ 
+/*	Check which layers have non-NULL Nodeinfo.nodeloc,	*/
+/*	Nodeinfo.nodesav, and Nodeinfo.stub entries.  Then set	*/
+/*	"Pinlayers" and free all the unused layers.  This saves	*/
+/*	a lot of memory, especially when the number of routing	*/
+/*	layers becomes large.					*/ 
 /*--------------------------------------------------------------*/
 
 void
@@ -823,7 +822,7 @@ count_pinlayers(void)
    Pinlayers = 0;
    for (l = 0; l < Num_layers; l++) {
       for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
-	 if (Nodesav[l][j] != NULL) {
+	 if (Nodeinfo[l][j].nodesav != NULL) {
 	    Pinlayers = l + 1;
 	    break;
 	 }
@@ -831,12 +830,8 @@ count_pinlayers(void)
    }
 
    for (l = Pinlayers; l < Num_layers; l++) {
-      free(Stub[l]);
-      free(Nodeloc[l]);
-      free(Nodesav[l]);
-      Stub[l] = NULL;
-      Nodeloc[l] = NULL;
-      Nodesav[l] = NULL;
+      free(Nodeinfo[l]);
+      Nodeinfo[l] = NULL;
    }
 }
 
@@ -856,8 +851,8 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
     u_int *obsptr;
     float dist;
 
-    obsptr = &(Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]);
-    dist = Obsinfo[ds->layer][OGRID(gridx, gridy, ds->layer)];
+    obsptr = &(OBSVAL(gridx, gridy, ds->layer));
+    dist = OBSINFO(gridx, gridy, ds->layer);
 
     // Grid point is inside obstruction + halo.
     *obsptr |= NO_NET;
@@ -873,7 +868,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
        if (dy < ds->y1) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_N)) == 0) {
 	     if ((dist == 0) || ((ds->y1 - dy) < dist))
-		Obsinfo[ds->layer][OGRID(gridx, gridy, ds->layer)] = ds->y1 - dy;
+		OBSINFO(gridx, gridy, ds->layer) = ds->y1 - dy;
 	     *obsptr |= OBSTRUCT_N;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
@@ -881,7 +876,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
        else if (dy > ds->y2) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_S)) == 0) {
 	     if ((dist == 0) || ((dy - ds->y2) < dist))
-		Obsinfo[ds->layer][OGRID(gridx, gridy, ds->layer)] = dy - ds->y2;
+		OBSINFO(gridx, gridy, ds->layer) = dy - ds->y2;
 	     *obsptr |= OBSTRUCT_S;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
@@ -889,7 +884,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
        if (dx < ds->x1) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_E)) == 0) {
 	     if ((dist == 0) || ((ds->x1 - dx) < dist))
-		Obsinfo[ds->layer][OGRID(gridx, gridy, ds->layer)] = ds->x1 - dx;
+		OBSINFO(gridx, gridy, ds->layer) = ds->x1 - dx;
              *obsptr |= OBSTRUCT_E;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
@@ -897,7 +892,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
        else if (dx > ds->x2) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_W)) == 0) {
 	     if ((dist == 0) || ((dx - ds->x2) < dist))
-		Obsinfo[ds->layer][OGRID(gridx, gridy, ds->layer)] = dx - ds->x2;
+		OBSINFO(gridx, gridy, ds->layer) = dx - ds->x2;
 	     *obsptr |= OBSTRUCT_W;
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
@@ -1256,8 +1251,8 @@ void expand_tap_geometry(void)
 /*  (net terminal), which may have multiple unconnected		*/
 /*  positions.							*/
 /*								*/
-/*  Also fills in the Nodeloc[] grid with the node number,	*/
-/*  which causes the router to put a premium on			*/
+/*  Also fills in the Nodeinfo.nodeloc[] grid with the node	*/
+/*  number, which causes the router to put a premium on		*/
 /*  routing other nets over or under this position, to		*/
 /*  discourage boxing in a pin position and making it 		*/
 /*  unroutable.							*/
@@ -1335,8 +1330,7 @@ void create_obstructions_inside_nodes(void)
 			 // Area inside defined pin geometry
 
 			 if (dy > ds->y1 && gridy >= 0) {
-			     int orignet = Obs[ds->layer][OGRID(gridx,
-					gridy, ds->layer)];
+			     int orignet = OBSVAL(gridx, gridy, ds->layer);
 
 			     if ((orignet & ROUTED_NET_MASK & ~ROUTED_NET)
 					== (u_int)node->netnum) {
@@ -1344,8 +1338,7 @@ void create_obstructions_inside_nodes(void)
 				// Duplicate tap point, or pre-existing
 				// route.   Don't re-process it if it is
 				// a duplicate.
-				if (Nodeloc[ds->layer][OGRID(gridx,
-					gridy, ds->layer)] != NULL) {
+				if (NODELOC(gridx, gridy, ds->layer) != NULL) {
 				    gridy++;
 				    continue;
 				}
@@ -1442,15 +1435,12 @@ void create_obstructions_inside_nodes(void)
 				   }
 				}
 
-			        Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+			        OBSVAL(gridx, gridy, ds->layer)
+			        	= (OBSVAL(gridx, gridy, ds->layer)
 					   & BLOCKED_MASK) | (u_int)node->netnum | dir;
-			        Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			        Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			        Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= dist;
+			        NODELOC(gridx, gridy, ds->layer) = node;
+			        NODESAV(gridx, gridy, ds->layer) = node;
+			        STUBVAL(gridx, gridy, ds->layer) = dist;
 
 			     }
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
@@ -1461,18 +1451,13 @@ void create_obstructions_inside_nodes(void)
 			     // Check that we have not created a PINOBSTRUCT
 			     // route directly over this point.
 			     if (ds->layer < Num_layers - 1) {
-			        k = Obs[ds->layer + 1][OGRID(gridx, gridy,
-					ds->layer + 1)];
+			        k = OBSVAL(gridx, gridy, ds->layer + 1);
 			        if (k & PINOBSTRUCTMASK) {
 			           if ((k & ROUTED_NET_MASK) != (u_int)node->netnum) {
-				       Obs[ds->layer + 1][OGRID(gridx, gridy,
-						ds->layer + 1)] = NO_NET;
-				       Nodeloc[ds->layer + 1][OGRID(gridx, gridy,
-						ds->layer + 1)] = (NODE)NULL;
-				       Nodesav[ds->layer + 1][OGRID(gridx, gridy,
-						ds->layer + 1)] = (NODE)NULL;
-				       Stub[ds->layer + 1][OGRID(gridx, gridy,
-						ds->layer + 1)] = (float)0.0;
+				       OBSVAL(gridx, gridy, ds->layer + 1) = NO_NET;
+				       NODELOC(gridx, gridy, ds->layer + 1) = (NODE)NULL;
+				       NODESAV(gridx, gridy, ds->layer + 1) = (NODE)NULL;
+				       STUBVAL(gridx, gridy, ds->layer + 1) = (float)0.0;
 				   }
 				}
 			     }
@@ -1496,8 +1481,8 @@ void create_obstructions_inside_nodes(void)
 /*  (net terminal), which may have multiple unconnected		*/
 /*  positions.							*/
 /*								*/
-/*  Also fills in the Nodeloc[] grid with the node number,	*/
-/*  which causes the router to put a premium on			*/
+/*  Also fills in the Nodeinfo.nodeloc[] grid with the node	*/
+/*  number, which causes the router to put a premium on		*/
 /*  routing other nets over or under this position, to		*/
 /*  discourage boxing in a pin position and making it 		*/
 /*  unroutable.							*/
@@ -1598,8 +1583,7 @@ void create_obstructions_outside_nodes(void)
 			 // an offset tap, where possible.
 
 			 if (dy > ds->y1 && gridy >= 0) {
-			     int orignet = Obs[ds->layer][OGRID(gridx,
-					gridy, ds->layer)];
+			     int orignet = OBSVAL(gridx, gridy, ds->layer);
 
 			     if ((orignet & ROUTED_NET_MASK) == (u_int)node->netnum) {
 
@@ -1634,47 +1618,40 @@ void create_obstructions_outside_nodes(void)
 				// The Obsinfo[] array tells where an obstruction is,
 				// if there was only one obstruction in one direction
 				// blocking the grid point.  If so, then we set the
-				// Stub[] distance to move the tap away from the
-				// obstruction to resolve the DRC error.
+				// Nodeinfo.stub[] distance to move the tap away from
+				// the obstruction to resolve the DRC error.
 
 				// Make sure we have marked this as a node.
-			        Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			        Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-			        Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-			        	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+			        NODELOC(gridx, gridy, ds->layer) = node;
+			        NODESAV(gridx, gridy, ds->layer) = node;
+			        OBSVAL(gridx, gridy, ds->layer)
+			        	= (OBSVAL(gridx, gridy, ds->layer)
 					   & BLOCKED_MASK) | (u_int)node->netnum;
 
 				if (orignet & OBSTRUCT_N) {
-			           offd = -(sdisty - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)]);
+			           offd = -(sdisty - OBSINFO(gridx, gridy, ds->layer));
 				   if (offd >= -offmaxy[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_NS | OFFSET_TAP);
+			              STUBVAL(gridx, gridy, ds->layer) = offd;
+			              OBSVAL(gridx, gridy, ds->layer) |=
+						(STUBROUTE_NS | OFFSET_TAP);
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
 
 				      if ((ds->layer < Num_layers - 1) &&
 						(gridy > 0) &&
-						(Obs[ds->layer + 1][OGRID(gridx,
-						gridy - 1, ds->layer + 1)]
+						(OBSVAL(gridx, gridy - 1, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					block_route(gridx, gridy, ds->layer, UP);
 				   }
 				   else maxerr = 1;
 				}
 				else if (orignet & OBSTRUCT_S) {
-				   offd = sdisty - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)];
+				   offd = sdisty - OBSINFO(gridx, gridy, ds->layer);
 				   if (offd <= offmaxy[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_NS | OFFSET_TAP);
+			              STUBVAL(gridx, gridy, ds->layer) = offd;
+			              OBSVAL(gridx, gridy, ds->layer) |=
+						(STUBROUTE_NS | OFFSET_TAP);
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
@@ -1682,42 +1659,36 @@ void create_obstructions_outside_nodes(void)
 				      if ((ds->layer < Num_layers - 1) &&
 						(gridy < NumChannelsY[ds->layer + 1]
 						- 1) &&
-						(Obs[ds->layer + 1][OGRID(gridx,
-						gridy + 1, ds->layer + 1)]
+						(OBSVAL(gridx, gridy + 1, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					block_route(gridx, gridy, ds->layer, UP);
 				   }
 				   else maxerr = 1;
 				}
 				else if (orignet & OBSTRUCT_E) {
-				   offd = -(sdistx - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)]);
+				   offd = -(sdistx - OBSINFO(gridx, gridy, ds->layer));
 				   if (offd >= -offmaxx[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_EW | OFFSET_TAP);
+			              STUBVAL(gridx, gridy, ds->layer) = offd;
+			              OBSVAL(gridx, gridy, ds->layer) |=
+						(STUBROUTE_EW | OFFSET_TAP);
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
 
 				      if ((ds->layer < Num_layers - 1) &&
 						(gridx > 0) &&
-						(Obs[ds->layer + 1][OGRID(gridx - 1,
-						gridy, ds->layer + 1)]
+						(OBSVAL(gridx - 1, gridy, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					block_route(gridx, gridy, ds->layer, UP);
 				   }
 				   else maxerr = 1;
 				}
 				else if (orignet & OBSTRUCT_W) {
-				   offd = sdistx - Obsinfo[ds->layer]
-					[OGRID(gridx, gridy, ds->layer)];
+				   offd = sdistx - OBSINFO(gridx, gridy, ds->layer);
 				   if (offd <= offmaxx[ds->layer]) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= offd;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= (STUBROUTE_EW | OFFSET_TAP);
+			              STUBVAL(gridx, gridy, ds->layer) = offd;
+			              OBSVAL(gridx, gridy, ds->layer) |=
+						(STUBROUTE_EW | OFFSET_TAP);
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
@@ -1725,8 +1696,7 @@ void create_obstructions_outside_nodes(void)
 				      if ((ds->layer < Num_layers - 1) &&
 						(gridx < NumChannelsX[ds->layer]
 						- 1) &&
-						(Obs[ds->layer + 1][OGRID(gridx + 1,
-						gridy, ds->layer + 1)]
+						(OBSVAL(gridx + 1, gridy, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					block_route(gridx, gridy, ds->layer, UP);
 				   }
@@ -1787,10 +1757,9 @@ void create_obstructions_outside_nodes(void)
 
 			    n2 = NULL;
 			    if (ds->layer > 0)
-			       n2 = Nodeloc[ds->layer - 1][OGRID(gridx, gridy,
-					ds->layer - 1)];
+			       n2 = NODELOC(gridx, gridy, ds->layer - 1);
 			    if (n2 == NULL)
-			       n2 = Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)];
+			       n2 = NODELOC(gridx, gridy, ds->layer);
 
 			    else {
 			       // Watch out for the case where a tap crosses
@@ -1798,14 +1767,14 @@ void create_obstructions_outside_nodes(void)
 			       // on top as if it is not there!
 
 			       NODE n3;
-			       n3 = Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)];
+			       n3 = NODELOC(gridx, gridy, ds->layer);
 			       if (n3 != NULL && n3 != node) n2 = n3;
 			    }
 
 			    // Ignore my own node.
 			    if (n2 == node) n2 = NULL;
 
-			    k = Obs[ds->layer][OGRID(gridx, gridy, ds->layer)];
+			    k = OBSVAL(gridx, gridy, ds->layer);
 
 			    // In case of a port that is inaccessible from a grid
 			    // point, or not completely overlapping it, the
@@ -1819,8 +1788,7 @@ void create_obstructions_outside_nodes(void)
 					&& (n2 == NULL)) {
 
 				if ((k & OBSTRUCT_MASK) != 0) {
-				   float sdist = Obsinfo[ds->layer][OGRID(gridx,
-						gridy, ds->layer)];
+				   float sdist = OBSINFO(gridx, gridy, ds->layer);
 
 				   // If the point is marked as close to an
 				   // obstruction, we can declare this an
@@ -1841,9 +1809,8 @@ void create_obstructions_outside_nodes(void)
 
 				            if ((ds->layer < Num_layers - 1) &&
 							(gridx > 0) &&
-							(Obs[ds->layer + 1][OGRID(
-							gridx - 1, gridy,
-							ds->layer + 1)]
+							(OBSVAL(gridx - 1, gridy,
+							ds->layer + 1)
 							& OBSTRUCT_MASK))
 					       block_route(gridx, gridy, ds->layer, UP);
 					 }
@@ -1857,9 +1824,8 @@ void create_obstructions_outside_nodes(void)
 				            if ((ds->layer < Num_layers - 1) &&
 							gridx <
 							(NumChannelsX[ds->layer] - 1)
-							&& (Obs[ds->layer + 1][OGRID(
-							gridx + 1, gridy,
-							ds->layer + 1)]
+							&& (OBSVAL(gridx + 1, gridy,
+							ds->layer + 1)
 							& OBSTRUCT_MASK))
 					       block_route(gridx, gridy, ds->layer, UP);
 					 }
@@ -1876,9 +1842,8 @@ void create_obstructions_outside_nodes(void)
 				            if ((ds->layer < Num_layers - 1) &&
 							gridy < 
 							(NumChannelsY[ds->layer] - 1)
-							&& (Obs[ds->layer + 1][OGRID(
-							gridx, gridy - 1,
-							ds->layer + 1)]
+							&& (OBSVAL(gridx, gridy - 1,
+							ds->layer + 1)
 							& OBSTRUCT_MASK))
 					       block_route(gridx, gridy, ds->layer, UP);
 					 }
@@ -1891,9 +1856,8 @@ void create_obstructions_outside_nodes(void)
 
 				            if ((ds->layer < Num_layers - 1) &&
 							(gridy > 0) &&
-							(Obs[ds->layer + 1][OGRID(
-							gridx, gridy + 1,
-							ds->layer + 1)]
+							(OBSVAL(gridx, gridy + 1,
+							ds->layer + 1)
 							& OBSTRUCT_MASK))
 					       block_route(gridx, gridy, ds->layer, UP);
 					 }
@@ -2019,27 +1983,23 @@ void create_obstructions_outside_nodes(void)
 				   }
 
 				if ((k < Numnets) && (dir != STUBROUTE_X)) {
-				   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-				   	= (Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+				   OBSVAL(gridx, gridy, ds->layer)
+				   	= (OBSVAL(gridx, gridy, ds->layer)
 					  & BLOCKED_MASK) | (u_int)g->netnum[i] | dir; 
-				   Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
-				   Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= node;
+				   NODELOC(gridx, gridy, ds->layer) = node;
+				   NODESAV(gridx, gridy, ds->layer) = node;
 				}
-				else if ((Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+				else if ((OBSVAL(gridx, gridy, ds->layer)
 					& NO_NET) != 0) {
 				   // Keep showing an obstruction, but add the
 				   // direction info and log the stub distance.
-				   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					|= dir;
+				   OBSVAL(gridx, gridy, ds->layer) |= dir;
 				}
 				else {
-				   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
+				   OBSVAL(gridx, gridy, ds->layer)
 					|= (dir | (g->netnum[i] & ROUTED_NET_MASK));
 				}
-				Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					= dist;
+				STUBVAL(gridx, gridy, ds->layer) = dist;
 			    }
 			    else if (epass == 0) {
 
@@ -2078,8 +2038,7 @@ void create_obstructions_outside_nodes(void)
 				
 				  if ((k & (STUBROUTE_X | OFFSET_TAP)) != 0)
 				     disable_gridpos(gridx, gridy, ds->layer);
-				  else if (Nodesav[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] != NULL) {
+				  else if (NODESAV(gridx, gridy, ds->layer) != NULL) {
 
 				     u_char no_offsets = TRUE;
 				     int offset_net;
@@ -2091,24 +2050,20 @@ void create_obstructions_outside_nodes(void)
 
 				     if ((dx > ds->x2) && (gridx <
 						NumChannelsX[ds->layer] - 1)) {
-					offset_net = Obs[ds->layer][OGRID(gridx + 1,
-						gridy, ds->layer)];
+					offset_net = OBSVAL(gridx + 1, gridy, ds->layer);
 					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 0);
 					   dist = ds->x2 - dx + xdist +
 							LefGetRouteSpacing(ds->layer);
 					   dir = (STUBROUTE_EW | OFFSET_TAP);
-					   Stub[ds->layer][OGRID(gridx, gridy,
-							ds->layer)] = dist;
-					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-							|= dir;
+					   STUBVAL(gridx, gridy, ds->layer) = dist;
+					   OBSVAL(gridx, gridy, ds->layer) |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
 						(gridx > 0) &&
-						(Obs[ds->layer + 1][OGRID(
-						gridx + 1, gridy, ds->layer + 1)]
+						(OBSVAL(gridx + 1, gridy, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					      block_route(gridx, gridy, ds->layer, UP);
 					}
@@ -2117,24 +2072,20 @@ void create_obstructions_outside_nodes(void)
 				     // Check tap to left
 
 				     if ((dx < ds->x1) && (gridx > 0)) {
-					offset_net = Obs[ds->layer][OGRID(gridx - 1,
-						gridy, ds->layer)];
+					offset_net = OBSVAL(gridx - 1, gridy, ds->layer);
 					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 0);
 					   dist = ds->x1 - dx - xdist -
 							LefGetRouteSpacing(ds->layer);
 					   dir = (STUBROUTE_EW | OFFSET_TAP);
-					   Stub[ds->layer][OGRID(gridx, gridy,
-							ds->layer)] = dist;
-					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-							|= dir;
+					   STUBVAL(gridx, gridy, ds->layer) = dist;
+					   OBSVAL(gridx, gridy, ds->layer) |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
-						gridx < (NumChannelsX[ds->layer] - 1)
-						&& (Obs[ds->layer + 1][OGRID(
-						gridx - 1, gridy, ds->layer + 1)]
+						gridx < (NumChannelsX[ds->layer] - 1) &&
+						(OBSVAL(gridx - 1, gridy, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					      block_route(gridx, gridy, ds->layer, UP);
 					}
@@ -2144,24 +2095,20 @@ void create_obstructions_outside_nodes(void)
 
 				     if ((dy > ds->y2) && (gridy <
 						NumChannelsY[ds->layer] - 1)) {
-					offset_net = Obs[ds->layer][OGRID(gridx,
-						gridy + 1, ds->layer)];
+					offset_net = OBSVAL(gridx, gridy + 1, ds->layer);
 					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 1);
 					   dist = ds->y2 - dy + xdist +
 							LefGetRouteSpacing(ds->layer);
 					   dir = (STUBROUTE_NS | OFFSET_TAP);
-					   Stub[ds->layer][OGRID(gridx, gridy,
-							ds->layer)] = dist;
-					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-							|= dir;
+					   STUBVAL(gridx, gridy, ds->layer) = dist;
+					   OBSVAL(gridx, gridy, ds->layer) |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
 						(gridy > 0) &&
-						(Obs[ds->layer + 1][OGRID(
-						gridx, gridy + 1, ds->layer + 1)]
+						(OBSVAL(gridx, gridy + 1, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					      block_route(gridx, gridy, ds->layer, UP);
 					}
@@ -2170,24 +2117,20 @@ void create_obstructions_outside_nodes(void)
 				     // Check tap down
 
 				     if ((dy < ds->y1) && (gridy > 0)) {
-					offset_net = Obs[ds->layer][OGRID(gridx,
-						gridy - 1, ds->layer)];
+					offset_net = OBSVAL(gridx, gridy - 1, ds->layer);
 					if (offset_net == 0 || offset_net == othernet) {
 					   xdist = 0.5 * LefGetViaWidth(ds->layer,
 							ds->layer, 1);
 					   dist = ds->y1 - dy - xdist -
 							LefGetRouteSpacing(ds->layer);
 					   dir = (STUBROUTE_NS | OFFSET_TAP);
-					   Stub[ds->layer][OGRID(gridx, gridy,
-							ds->layer)] = dist;
-					   Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-							|= dir;
+					   STUBVAL(gridx, gridy, ds->layer) = dist;
+					   OBSVAL(gridx, gridy, ds->layer) |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
-						gridx < (NumChannelsX[ds->layer] - 1)
-						&& (Obs[ds->layer + 1][OGRID(
-						gridx, gridy - 1, ds->layer + 1)]
+						gridx < (NumChannelsX[ds->layer] - 1) &&
+						(OBSVAL(gridx, gridy - 1, ds->layer + 1)
 						& OBSTRUCT_MASK))
 					      block_route(gridx, gridy, ds->layer, UP);
 					}
@@ -2220,36 +2163,30 @@ void create_obstructions_outside_nodes(void)
 					ds->y1) && (dy + xdist < ds->y1)) {
 				     if ((dx - xdist < ds->x2) &&
 						(dx + xdist > ds->x1) &&
-						(Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] == 0.0)) {
-					Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = ds->y1 - dy;
-					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-				   		= (Obs[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] & BLOCKED_MASK) |
+						(STUBVAL(gridx, gridy, ds->layer)
+						== 0.0)) {
+					STUBVAL(gridx, gridy, ds->layer) = ds->y1 - dy;
+					OBSVAL(gridx, gridy, ds->layer)
+				   		= (OBSVAL(gridx, gridy, ds->layer)
+						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE_NS;
-					Nodeloc[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
-					Nodesav[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
+					NODELOC(gridx, gridy, ds->layer) = node;
+					NODESAV(gridx, gridy, ds->layer) = node;
 				     }
 				  }
 				  if ((dy - xdist - LefGetRouteSpacing(ds->layer) <
 					ds->y2) && (dy - xdist > ds->y2)) {
 				     if ((dx - xdist < ds->x2) &&
 						(dx + xdist > ds->x1) &&
-						(Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] == 0.0)) {
-					Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = ds->y2 - dy;
-					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-				   		= (Obs[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] & BLOCKED_MASK) |
+						(STUBVAL(gridx, gridy, ds->layer)
+						== 0.0)) {
+					STUBVAL(gridx, gridy, ds->layer) = ds->y2 - dy;
+					OBSVAL(gridx, gridy, ds->layer)
+				   		= (OBSVAL(gridx, gridy, ds->layer)
+						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE_NS;
-					Nodeloc[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
-					Nodesav[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
+					NODELOC(gridx, gridy, ds->layer) = node;
+					NODESAV(gridx, gridy, ds->layer) = node;
 				     }
 				  }
 
@@ -2258,36 +2195,30 @@ void create_obstructions_outside_nodes(void)
 					ds->x1) && (dx + xdist < ds->x1)) {
 				     if ((dy - xdist < ds->y2) &&
 						(dy + xdist > ds->y1) &&
-						(Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] == 0.0)) {
-					Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = ds->x1 - dx;
-					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-				   		= (Obs[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] & BLOCKED_MASK) |
+						(STUBVAL(gridx, gridy, ds->layer)
+						 == 0.0)) {
+					STUBVAL(gridx, gridy, ds->layer) = ds->x1 - dx;
+					OBSVAL(gridx, gridy, ds->layer)
+				   		= (OBSVAL(gridx, gridy, ds->layer)
+						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE_EW;
-					Nodeloc[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
-					Nodesav[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
+					NODELOC(gridx, gridy, ds->layer) = node;
+					NODESAV(gridx, gridy, ds->layer) = node;
 				     }
 				  }
 				  if ((dx - xdist - LefGetRouteSpacing(ds->layer) <
 					ds->x2) && (dx - xdist > ds->x2)) {
 				     if ((dy - xdist < ds->y2) &&
 						(dy + xdist > ds->y1) &&
-						(Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] == 0.0)) {
-					Stub[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = ds->x2 - dx;
-					Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-				   		= (Obs[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] & BLOCKED_MASK) |
+						(STUBVAL(gridx, gridy, ds->layer)
+						== 0.0)) {
+					STUBVAL(gridx, gridy, ds->layer) = ds->x2 - dx;
+					OBSVAL(gridx, gridy, ds->layer)
+				   		= (OBSVAL(gridx, gridy, ds->layer)
+						& BLOCKED_MASK) |
 						node->netnum | STUBROUTE_EW;
-					Nodeloc[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
-					Nodesav[ds->layer][OGRID(gridx, gridy,
-						ds->layer)] = node;
+					NODELOC(gridx, gridy, ds->layer) = node;
+					NODESAV(gridx, gridy, ds->layer) = node;
 				     }
 				  }
 			       }
@@ -2358,7 +2289,7 @@ void tap_to_tap_interactions(void)
 		      /* Is there an offset tap at this position, and	*/
 		      /* does it belong to a net that is != net?	*/
 
-		      orignet = Obs[ds->layer][OGRID(gridx, gridy, ds->layer)];
+		      orignet = OBSVAL(gridx, gridy, ds->layer);
 		      if (orignet & OFFSET_TAP) {
 			 offset = orignet & PINOBSTRUCTMASK;
 			 orignet &= ROUTED_NET_MASK;
@@ -2367,7 +2298,7 @@ void tap_to_tap_interactions(void)
 		            dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
 		            dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
 
-			    dist = Stub[ds->layer][OGRID(gridx, gridy, ds->layer)];
+			    dist = STUBVAL(gridx, gridy, ds->layer);
 
 			    /* "de" is the bounding box of a via placed	  */
 			    /* at (gridx, gridy) and offset as specified. */
@@ -2451,16 +2382,12 @@ make_routable(NODE node)
 			 // Area inside defined pin geometry
 
 			 if (dy > ds->y1 && gridy >= 0) {
-			    int orignet = Obs[ds->layer][OGRID(gridx,
-					gridy, ds->layer)];
+			    int orignet = OBSVAL(gridx, gridy, ds->layer);
 
 			    if (orignet & NO_NET) {
-				Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] =
-					g->netnum[i];
-				Nodeloc[ds->layer][OGRID(gridx, gridy, ds->layer)] =
-					node;
-				Nodesav[ds->layer][OGRID(gridx, gridy, ds->layer)] =
-					node;
+				OBSVAL(gridx, gridy, ds->layer) = g->netnum[i];
+				NODELOC(gridx, gridy, ds->layer) = node;
+				NODESAV(gridx, gridy, ds->layer) = node;
 				return;
 			    }
 			 }
@@ -2541,7 +2468,7 @@ void adjust_stub_lengths(void)
 				gridy >= NumChannelsY[ds->layer]) break;
 		         if (dy >= (ds->y1 - PitchY[ds->layer]) && gridy >= 0) {
 
-			     orignet = Obs[ds->layer][OGRID(gridx, gridy, ds->layer)];
+			     orignet = OBSVAL(gridx, gridy, ds->layer);
 
 			     // Ignore this location if it is assigned to another
 			     // net, or is assigned to NO_NET.
@@ -2565,7 +2492,7 @@ void adjust_stub_lengths(void)
 			     dt.y1 = dy - wy;
 			     dt.y2 = dy + wy;
 
-			     dist = Stub[ds->layer][OGRID(gridx, gridy, ds->layer)];
+			     dist = STUBVAL(gridx, gridy, ds->layer);
 
 			     // adjust the route box according to the stub
 			     // or offset geometry, provided that the stub
@@ -2737,26 +2664,20 @@ void adjust_stub_lengths(void)
 				if ((de.x2 > dt.x2) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
 				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_EW;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.x2 - dx;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
+			              STUBVAL(gridx, gridy, ds->layer) = de.x2 - dx;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_EW
 						&& (dist > 0)) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.x2 - dx;
+			              STUBVAL(gridx, gridy, ds->layer) = de.x2 - dx;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) ==
 						STUBROUTE_NS) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						&= ~STUBROUTE_NS;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_EW;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.x2 - dx;
+			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_NS;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
+			              STUBVAL(gridx, gridy, ds->layer) = de.x2 - dx;
 				      errbox = FALSE;
 				   }
 				}
@@ -2764,26 +2685,20 @@ void adjust_stub_lengths(void)
 				else if ((de.x1 < dt.x1) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
 				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_EW;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.x1 - dx;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
+			              STUBVAL(gridx, gridy, ds->layer) = de.x1 - dx;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_EW
 						&& (dist < 0)) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.x1 - dx;
+			              STUBVAL(gridx, gridy, ds->layer) = de.x1 - dx;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) ==
 						STUBROUTE_NS) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						&= ~STUBROUTE_NS;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_EW;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.x1 - dx;
+			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_NS;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
+			              STUBVAL(gridx, gridy, ds->layer) = de.x1 - dx;
 				      errbox = FALSE;
 				   }
 				}
@@ -2791,26 +2706,20 @@ void adjust_stub_lengths(void)
 				else if ((de.y2 > dt.y2) && (de.x1 < ds->x2) &&
 					(de.x2 > ds->x1)) {
 				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_NS;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.y2 - dy;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
+			              STUBVAL(gridx, gridy, ds->layer) = de.y2 - dy;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_NS
 						&& (dist > 0)) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.y2 - dy;
+			              STUBVAL(gridx, gridy, ds->layer) = de.y2 - dy;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) ==
 						STUBROUTE_EW) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						&= ~STUBROUTE_EW;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_NS;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.y2 - dy;
+			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_EW;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
+			              STUBVAL(gridx, gridy, ds->layer) = de.y2 - dy;
 				      errbox = FALSE;
 				   }
 				}
@@ -2818,26 +2727,20 @@ void adjust_stub_lengths(void)
 				else if ((de.y1 < dt.y1) && (de.x1 < ds->x2) &&
 					(de.x2 > ds->x1)) {
 				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_NS;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.y1 - dy;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
+			              STUBVAL(gridx, gridy, ds->layer) = de.y1 - dy;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_NS
 						&& (dist < 0)) {
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.y1 - dy;
+			              STUBVAL(gridx, gridy, ds->layer) = de.y1 - dy;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & PINOBSTRUCTMASK) ==
 						STUBROUTE_EW) {
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						&= ~STUBROUTE_EW;
-			              Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						|= STUBROUTE_NS;
-			              Stub[ds->layer][OGRID(gridx, gridy, ds->layer)]
-						= de.y1 - dy;
+			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_EW;
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
+			              STUBVAL(gridx, gridy, ds->layer) = de.y1 - dy;
 				      errbox = FALSE;
 				   }
 				}
@@ -2852,8 +2755,7 @@ void adjust_stub_lengths(void)
 
 				if (errbox == TRUE) {
 				   // Unroutable position, so mark it unroutable
-			           Obs[ds->layer][OGRID(gridx, gridy, ds->layer)]
-					|= STUBROUTE_X;
+			           OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_X;
 				}
 			     }
 		         }
@@ -2915,34 +2817,34 @@ block_route(int x, int y, int lay, u_char dir)
 	 break;
    }
    
-   ob = Obs[bl][OGRID(bx, by, bl)];
+   ob = OBSVAL(bx, by, bl);
 
    if ((ob & NO_NET) != 0) return;
 
    switch (dir) {
       case NORTH:
-	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_S;
-	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_N;
+	 OBSVAL(bx, by, bl) |= BLOCKED_S;
+	 OBSVAL(x, y, lay) |= BLOCKED_N;
 	 break;
       case SOUTH:
-	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_N;
-	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_S;
+	 OBSVAL(bx, by, bl) |= BLOCKED_N;
+	 OBSVAL(x, y, lay) |= BLOCKED_S;
 	 break;
       case EAST:
-	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_W;
-	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_E;
+	 OBSVAL(bx, by, bl) |= BLOCKED_W;
+	 OBSVAL(x, y, lay) |= BLOCKED_E;
 	 break;
       case WEST:
-	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_E;
-	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_W;
+	 OBSVAL(bx, by, bl) |= BLOCKED_E;
+	 OBSVAL(x, y, lay) |= BLOCKED_W;
 	 break;
       case UP:
-	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_D;
-	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_U;
+	 OBSVAL(bx, by, bl) |= BLOCKED_D;
+	 OBSVAL(x, y, lay) |= BLOCKED_U;
 	 break;
       case DOWN:
-	 Obs[bl][OGRID(bx, by, bl)] |= BLOCKED_U;
-	 Obs[lay][OGRID(x, y, lay)] |= BLOCKED_D;
+	 OBSVAL(bx, by, bl) |= BLOCKED_U;
+	 OBSVAL(x, y, lay) |= BLOCKED_D;
 	 break;
    }
 }
@@ -3003,7 +2905,7 @@ find_route_blocks()
 		     gridy++;
 		  }
 		  while (dy < ds->y2 + s) {
-		     u = ((Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] &
+		     u = ((OBSVAL(gridx, gridy, ds->layer) &
 				PINOBSTRUCTMASK) == STUBROUTE_EW) ? v : w;
 		     if (dy + EPS < ds->y2 - u)
 			block_route(gridx, gridy, ds->layer, NORTH);
@@ -3036,7 +2938,7 @@ find_route_blocks()
 		     gridy++;
 		  }
 		  while (dy < ds->y2 + s) {
-		     u = ((Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] &
+		     u = ((OBSVAL(gridx, gridy, ds->layer) &
 				PINOBSTRUCTMASK) == STUBROUTE_EW) ? v : w;
 		     if (dy + EPS < ds->y2 - u)
 			block_route(gridx, gridy, ds->layer, NORTH);
@@ -3069,7 +2971,7 @@ find_route_blocks()
 		     gridx++;
 		  }
 		  while (dx < ds->x2 + s) {
-		     u = ((Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] &
+		     u = ((OBSVAL(gridx, gridy, ds->layer) &
 				PINOBSTRUCTMASK) == STUBROUTE_NS) ? v : w;
 		     if (dx + EPS < ds->x2 - u)
 			block_route(gridx, gridy, ds->layer, EAST);
@@ -3102,7 +3004,7 @@ find_route_blocks()
 		     gridx++;
 		  }
 		  while (dx < ds->x2 + s) {
-		     u = ((Obs[ds->layer][OGRID(gridx, gridy, ds->layer)] &
+		     u = ((OBSVAL(gridx, gridy, ds->layer) &
 				PINOBSTRUCTMASK) == STUBROUTE_NS) ? v : w;
 		     if (dx + EPS < ds->x2 - u)
 			block_route(gridx, gridy, ds->layer, EAST);

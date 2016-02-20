@@ -192,6 +192,16 @@ struct route_ {
   u_char flags;         // See below for flags
 };
 
+/* Structure used to hold nodes, saved nodes, and stub/offset info */
+
+typedef struct nodeinfo_ *NODEINFO;
+
+struct nodeinfo_ {
+   NODE  nodesav;
+   NODE  nodeloc;
+   float stub;
+};
+
 /* Definitions for flags in struct route_ */
 
 #define RT_OUTPUT	0x1	// Route has been output
@@ -377,11 +387,16 @@ extern u_char *RMask;
 extern u_int  *Obs[MAX_LAYERS];		// obstructions by layer, y, x
 extern PROUTE *Obs2[MAX_LAYERS]; 	// working copy of Obs 
 extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
-extern float  *Stub[MAX_LAYERS];	// stub route distances to pins
-extern NODE   *Nodeloc[MAX_LAYERS];	// nodes are attached to grid points
-					// for reverse lookup
-extern NODE   *Nodesav[MAX_LAYERS];	// copy of Nodeloc used for restoring
-					// Nodeloc after net rip-up
+extern NODEINFO Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
+					// pointers to node structures.
+
+#define NODESAV(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].nodesav)
+#define NODELOC(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].nodeloc)
+#define STUBVAL(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].stub)
+#define OBSINFO(x, y, l) (Obsinfo[l][OGRID(x, y, l)])
+#define OBSVAL(x, y, l)  (Obs[l][OGRID(x, y, l)])
+#define OBS2VAL(x, y, l) (Obs2[l][OGRID(x, y, l)])
+
 extern DSEG  UserObs;			// user-defined obstruction layers
 
 extern u_char needblock[MAX_LAYERS];

@@ -34,14 +34,12 @@ GATE	PinMacro;	// macro definition for a pin
 GATE    Nlgates;	// gate instance information
 NETLIST FailedNets;	// list of nets that failed to route
 
-u_char *RMask;    	     // mask out best area to route
-u_int  *Obs[MAX_LAYERS];     // net obstructions in layer
-PROUTE *Obs2[MAX_LAYERS];    // used for pt->pt routes on layer
-float  *Stub[MAX_LAYERS];    // used for stub routing to pins
-float  *Obsinfo[MAX_LAYERS]; // temporary array used for detailed obstruction info
-NODE   *Nodeloc[MAX_LAYERS]; // nodes are here. . .
-NODE   *Nodesav[MAX_LAYERS]; // . . . and here (but not to be altered)
-DSEG   UserObs;		     // user-defined obstruction layers
+u_char   *RMask;    	        // mask out best area to route
+u_int    *Obs[MAX_LAYERS];      // net obstructions in layer
+PROUTE   *Obs2[MAX_LAYERS];     // used for pt->pt routes on layer
+float    *Obsinfo[MAX_LAYERS];  // temporary array used for detailed obstruction info
+NODEINFO  Nodeinfo[MAX_LAYERS]; // nodes and stub information is here. . .
+DSEG      UserObs;		// user-defined obstruction layers
 
 u_char needblock[MAX_LAYERS];
 
@@ -348,13 +346,8 @@ static void reinitialize()
     // Free up all of the matrices
 
     for (i = 0; i < Pinlayers; i++) {
-	free(Stub[i]);
-	free(Nodeloc[i]);
-	free(Nodesav[i]);
-
-	Stub[i] = NULL;
-	Nodeloc[i] = NULL;
-	Nodesav[i] = NULL;
+	free(Nodeinfo[i]);
+	Nodeinfo[i] = NULL;
     }
     for (i = 0; i < Num_layers; i++) {
 	free(Obs2[i]);
@@ -492,27 +485,11 @@ static int post_def_setup()
 	 exit(5);
       }
 
-      Stub[i] = (float *)calloc(NumChannelsX[i] * NumChannelsY[i],
-			sizeof(float));
-      if (!Stub[i]) {
+      Nodeinfo[i] = (NODEINFO)calloc(NumChannelsX[i] * NumChannelsY[i],
+			sizeof(struct nodeinfo_));
+      if (!Nodeinfo[i]) {
 	 fprintf( stderr, "Out of memory 6.\n");
 	 exit(6);
-      }
-
-      // Nodeloc is the reverse lookup table for nodes
-
-      Nodeloc[i] = (NODE *)calloc(NumChannelsX[i] * NumChannelsY[i],
-		sizeof(NODE));
-      if (!Nodeloc[i]) {
-         fprintf(stderr, "Out of memory 7.\n");
-         exit(7);
-      }
-
-      Nodesav[i] = (NODE *)calloc(NumChannelsX[i] * NumChannelsY[i],
-		sizeof(NODE));
-      if (!Nodesav[i]) {
-         fprintf(stderr, "Out of memory 8.\n");
-         exit(8);
       }
    }
    Flush(stdout);
@@ -1680,7 +1657,7 @@ static int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
 	score[sidx] = ABSDIFF(ycent, y) * Num_layers;
 	for (x = xmin; x <= xmax; x++) {
 	    for (i = 0; i < Num_layers; i++) {
-		n = Obs[i][OGRID(x, y, i)];
+		n = OBSVAL(x, y, i);
 		if (n & ROUTED_NET) score[sidx]++;
 		if (n & NO_NET) score[sidx]++;
 		if (n & PINOBSTRUCTMASK) score[sidx]++;
@@ -2130,15 +2107,15 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
   if (!result) {
 
-     // Remove nodes of the net from Nodeloc so that they will not be
+     // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
 	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   node = Nodeloc[i][j];
+	   node = Nodeinfo[i][j].nodeloc;
 	   if (node != (NODE)NULL)
 	      if (node->netnum == iroute->net->netnum)
-		 Nodeloc[i][j] = (NODE)NULL;
+		 Nodeinfo[i][j].nodeloc = (NODE)NULL;
         }
      }
 
@@ -2308,15 +2285,15 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   // Check for the possibility that there is already a route to the target
 
   if (!result) {
-     // Remove nodes of the net from Nodeloc so that they will not be
+     // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
 	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   iroute->nsrc = Nodeloc[i][j];
+	   iroute->nsrc = Nodeinfo[i][j].nodeloc;
 	   if (iroute->nsrc != (NODE)NULL)
 	      if (iroute->nsrc->netnum == iroute->net->netnum)
-		 Nodeloc[i][j] = (NODE)NULL;
+		 Nodeinfo[i][j].nodeloc = (NODE)NULL;
         }
      }
 
@@ -2440,7 +2417,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
       if (graphdebug) highlight(curpt.x, curpt.y);
 	
-      Pr = &Obs2[curpt.lay][OGRID(curpt.x, curpt.y, curpt.lay)];
+      Pr = &OBS2VAL(curpt.x, curpt.y, curpt.lay);
 
       // ignore grid positions that have already been processed
       if (Pr->flags & PR_PROCESSED) {
@@ -2517,7 +2494,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
       // 1st optimization:  Direction of route on current layer is preferred.
       o = LefGetRouteOrientation(curpt.lay);
-      forbid = Obs[curpt.lay][OGRID(curpt.x, curpt.y, curpt.lay)] & BLOCKED_MASK;
+      forbid = OBSVAL(curpt.x, curpt.y, curpt.lay) & BLOCKED_MASK;
 
       if (o == 1) {			// horizontal routes---check EAST and WEST first
 	 check_order[0] = (forbid & BLOCKED_E) ? 0 : EAST;
@@ -2764,7 +2741,7 @@ static void cleanup_net(NET net)
 	       fcheck = (lf != layer && lf != layer - 1) ? FALSE : TRUE;
 	       // We're going to remove the contact so it can't be a tap
 	       if ((lf < Pinlayers) &&
-			(Nodesav[lf][OGRID(segf->x1, segf->y1, lf)] != NULL))
+			(NODESAV(segf->x1, segf->y1, lf) != NULL))
 		  fcheck = FALSE;
 	    }
 	    if (segl && (segl->segtype & ST_VIA)) {
@@ -2772,7 +2749,7 @@ static void cleanup_net(NET net)
 	       lcheck = (ll != layer && ll != layer - 1) ? FALSE : TRUE;
 	       // We're going to remove the contact so it can't be a tap
 	       if ((ll < Pinlayers) &&
-			(Nodesav[ll][OGRID(segl->x1, segl->y1, ll)] != NULL))
+			(NODESAV(segl->x1, segl->y1, ll) != NULL))
 		  lcheck = FALSE;
 	    }
 	    if (fcheck == FALSE && lcheck == FALSE) continue;
@@ -2993,24 +2970,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			seg->layer))
 	       layer++;
 
-	    dir1 = Obs[layer][OGRID(seg->x1, seg->y1, layer)];
+	    dir1 = OBSVAL(seg->x1, seg->y1, layer);
 	    dir1 &= PINOBSTRUCTMASK;
 	    if (dir1 && !(seg->segtype & (ST_OFFSET_START | ST_OFFSET_END))) {
 	       if ((special == (u_char)0) && (Verbose > 2))
 		  Fprintf(stdout, "Stub route distance %g to terminal"
 				" at %d %d (%d)\n",
-				Stub[layer][OGRID(seg->x1, seg->y1, layer)],
+				STUBVAL(seg->x1, seg->y1, layer),
 				seg->x1, seg->y1, layer);
 
 	       dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
 	       x = (int)((REPS(dc)) * oscale);
 	       if (dir1 == STUBROUTE_EW)
-		  dc += Stub[layer][OGRID(seg->x1, seg->y1, layer)];
+		  dc += STUBVAL(seg->x1, seg->y1, layer);
 	       x2 = (int)((REPS(dc)) * oscale);
 	       dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
 	       y = (int)((REPS(dc)) * oscale);
 	       if (dir1 == STUBROUTE_NS)
-		  dc += Stub[layer][OGRID(seg->x1, seg->y1, layer)];
+		  dc += STUBVAL(seg->x1, seg->y1, layer);
 	       y2 = (int)((REPS(dc)) * oscale);
 	       if (dir1 == STUBROUTE_EW) {
 		  horizontal = TRUE;
@@ -3028,10 +3005,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  // distinguish routes from taps.
 
 		  if ((x < x2) && (seg->x1 < (NumChannelsX[layer] - 1))) {
-		     tdir = Obs[layer][OGRID(seg->x1 + 1, seg->y1, layer)];
+		     tdir = OBSVAL(seg->x1 + 1, seg->y1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 					(net->netnum | ROUTED_NET)) {
-			if (Stub[layer][OGRID(seg->x1, seg->y1, layer)] +
+			if (STUBVAL(seg->x1, seg->y1, layer) +
 					LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	   dc = Xlowerbound + (double)(seg->x1 + 1)
 					* PitchX[layer];
@@ -3040,10 +3017,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     }
 		  }
 		  else if ((x > x2) && (seg->x1 > 0)) {
-		     tdir = Obs[layer][OGRID(seg->x1 - 1, seg->y1, layer)];
+		     tdir = OBSVAL(seg->x1 - 1, seg->y1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 					(net->netnum | ROUTED_NET)) {
-			if (-Stub[layer][OGRID(seg->x1, seg->y1, layer)] +
+			if (-STUBVAL(seg->x1, seg->y1, layer) +
 					LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	   dc = Xlowerbound + (double)(seg->x1 - 1)
 					* PitchX[layer];
@@ -3088,10 +3065,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		  // distance and resolve the error.
 
 		  if ((y < y2) && (seg->y1 < (NumChannelsY[layer] - 1))) {
-		     tdir = Obs[layer][OGRID(seg->x1, seg->y1 + 1, layer)];
+		     tdir = OBSVAL(seg->x1, seg->y1 + 1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			if (Stub[layer][OGRID(seg->x1, seg->y1, layer)] +
+			if (STUBVAL(seg->x1, seg->y1, layer) +
 					LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	   dc = Ylowerbound + (double)(seg->y1 + 1)
 					* PitchY[layer];
@@ -3100,10 +3077,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     }
 		  }
 		  else if ((y > y2) && (seg->y1 > 0)) {
-		     tdir = Obs[layer][OGRID(seg->x1, seg->y1 - 1, layer)];
+		     tdir = OBSVAL(seg->x1, seg->y1 - 1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			if (-Stub[layer][OGRID(seg->x1, seg->y1, layer)] +
+			if (-STUBVAL(seg->x1, seg->y1, layer) +
 					LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	   dc = Ylowerbound + (double)(seg->y1 - 1)
 					* PitchY[layer];
@@ -3164,16 +3141,14 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    dir2 = 0;
 
 	    if (seg->segtype & ST_OFFSET_START) {
-	       dir1 = Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)] &
-				PINOBSTRUCTMASK;
+	       dir1 = OBSVAL(seg->x1, seg->y1, seg->layer) & PINOBSTRUCTMASK;
 	       if (dir1 == 0 && lastseg) {
-		  dir1 = Obs[lastseg->layer][OGRID(lastseg->x2, lastseg->y2,
-					lastseg->layer)] & PINOBSTRUCTMASK;
-		  offset1 = Stub[lastseg->layer][OGRID(lastseg->x2,
-					lastseg->y2, lastseg->layer)];
+		  dir1 = OBSVAL(lastseg->x2, lastseg->y2, lastseg->layer)
+				& PINOBSTRUCTMASK;
+		  offset1 = STUBVAL(lastseg->x2, lastseg->y2, lastseg->layer);
 	       }
 	       else
-		  offset1 = Stub[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)];
+		  offset1 = STUBVAL(seg->x1, seg->y1, seg->layer);
 
 	       // Offset was calculated for vias;  plain metal routes
 	       // typically will need less offset distance, so subtract off
@@ -3200,17 +3175,14 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	       }
 	    }
 	    if (seg->segtype & ST_OFFSET_END) {
-	       dir2 = Obs[seg->layer][OGRID(seg->x2, seg->y2, seg->layer)] &
-				PINOBSTRUCTMASK;
+	       dir2 = OBSVAL(seg->x2, seg->y2, seg->layer) & PINOBSTRUCTMASK;
 	       if (dir2 == 0 && seg->next) {
-		  dir2 = Obs[seg->next->layer][OGRID(seg->next->x1,
-					seg->next->y1, seg->next->layer)] &
+		  dir2 = OBSVAL(seg->next->x1, seg->next->y1, seg->next->layer) &
 					PINOBSTRUCTMASK;
-		  offset2 = Stub[seg->next->layer][OGRID(seg->next->x1,
-					seg->next->y1, seg->next->layer)];
+		  offset2 = STUBVAL(seg->next->x1, seg->next->y1, seg->next->layer);
 	       }
 	       else
-		  offset2 = Stub[seg->layer][OGRID(seg->x2, seg->y2, seg->layer)];
+		  offset2 = STUBVAL(seg->x2, seg->y2, seg->layer);
 
 	       // Offset was calculated for vias;  plain metal routes
 	       // typically will need less offset distance, so subtract off
@@ -3364,16 +3336,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     // that need position offsets to avoid a DRC spacing error
 
 		     if (viaOffsetX[layer][0] > 0) {
-			if (seg->x1 > 0 && ((tdir = (Obs[layer][OGRID(seg->x1 - 1,
-				seg->y1, layer)] & ROUTED_NET_MASK)) != 
+			if (seg->x1 > 0 && ((tdir = (OBSVAL(seg->x1 - 1,
+				seg->y1, layer) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x + viaOffsetX[layer][0],
 					y, lastx, lasty, seg->x1, seg->y1, invscale);
 			}
 			else if ((seg->x1 < NumChannelsX[layer] - 1)
-				&& ((tdir = (Obs[layer][OGRID(seg->x1 + 1, seg->y1,
-				layer)] & ROUTED_NET_MASK)) != 
+				&& ((tdir = (OBSVAL(seg->x1 + 1, seg->y1, layer)
+				& ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x - viaOffsetX[layer][0],
@@ -3384,16 +3356,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					seg->y1, invscale);
 		     }
 		     else if (viaOffsetY[layer][0] > 0) {
-			if (seg->y1 > 0 && ((tdir = (Obs[layer][OGRID(seg->x1,
-				seg->y1 - 1, layer)] & ROUTED_NET_MASK)) != 
+			if (seg->y1 > 0 && ((tdir = (OBSVAL(seg->x1,
+				seg->y1 - 1, layer) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x, y + viaOffsetY[layer][0],
 					lastx, lasty, seg->x1, seg->y1, invscale);
 			}
 			else if ((seg->y1 < NumChannelsY[layer] - 1)
-				&& ((tdir = (Obs[layer][OGRID(seg->x1, seg->y1 + 1,
-				layer)] & ROUTED_NET_MASK)) != 
+				&& ((tdir = (OBSVAL(seg->x1, seg->y1 + 1,
+				layer) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x, y - viaOffsetY[layer][0],
@@ -3404,16 +3376,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					seg->y1, invscale);
 		     }
 		     else if (viaOffsetX[layer][1] > 0) {
-			if (seg->x1 > 0 && ((tdir = (Obs[layer + 1][OGRID(seg->x1 - 1,
-				seg->y1, layer + 1)] & ROUTED_NET_MASK)) != 
+			if (seg->x1 > 0 && ((tdir = (OBSVAL(seg->x1 - 1,
+				seg->y1, layer + 1) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x + viaOffsetX[layer][1],
 					y, lastx, lasty, seg->x1, seg->y1, invscale);
 			}
 			else if ((seg->x1 < NumChannelsX[layer + 1] - 1)
-				&& ((tdir = (Obs[layer + 1][OGRID(seg->x1 + 1, seg->y1,
-				layer + 1)] & ROUTED_NET_MASK)) != 
+				&& ((tdir = (OBSVAL(seg->x1 + 1, seg->y1,
+				layer + 1) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x - viaOffsetX[layer][1],
@@ -3424,16 +3396,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 					seg->y1, invscale);
 		     }
 		     else if (viaOffsetY[layer][1] > 0) {
-			if (seg->y1 > 0 && ((tdir = (Obs[layer + 1][OGRID(seg->x1,
-				seg->y1 - 1, layer + 1)] & ROUTED_NET_MASK)) != 
+			if (seg->y1 > 0 && ((tdir = (OBSVAL(seg->x1,
+				seg->y1 - 1, layer + 1) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x, y + viaOffsetY[layer][1],
 					lastx, lasty, seg->x1, seg->y1, invscale);
 			}
 			else if ((seg->y1 < NumChannelsY[layer + 1] - 1)
-				&& ((tdir = (Obs[layer][OGRID(seg->x1, seg->y1 + 1,
-				layer + 1)] & ROUTED_NET_MASK)) != 
+				&& ((tdir = (OBSVAL(seg->x1, seg->y1 + 1,
+				layer + 1) & ROUTED_NET_MASK)) != 
 				(net->netnum | ROUTED_NET)) &&
 				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
 			   pathvia(Cmd, layer, x, y - viaOffsetY[layer][1],
@@ -3473,24 +3445,24 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				|| (seg->segtype & ST_WIRE))) {
 	     cancel = FALSE;
 	     layer = seg->layer;
-	     dir2 = Obs[layer][OGRID(seg->x2, seg->y2, layer)];
+	     dir2 = OBSVAL(seg->x2, seg->y2, layer);
 	     dir2 &= PINOBSTRUCTMASK;
 	     if (dir2 && !(seg->segtype & (ST_OFFSET_END | ST_OFFSET_START))) {
 		if ((special == (u_char)0) && (Verbose > 2))
 		   Fprintf(stdout, "Stub route distance %g to terminal"
 				" at %d %d (%d)\n",
-				Stub[layer][OGRID(seg->x2, seg->y2, layer)],
+				STUBVAL(seg->x2, seg->y2, layer),
 				seg->x2, seg->y2, layer);
 
 		dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
 		x = (int)((REPS(dc)) * oscale);
 		if (dir2 == STUBROUTE_EW)
-		   dc += Stub[layer][OGRID(seg->x2, seg->y2, layer)];
+		   dc += STUBVAL(seg->x2, seg->y2, layer);
 		x2 = (int)((REPS(dc)) * oscale);
 		dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
 		y = (int)((REPS(dc)) * oscale);
 		if (dir2 == STUBROUTE_NS)
-		   dc += Stub[layer][OGRID(seg->x2, seg->y2, layer)];
+		   dc += STUBVAL(seg->x2, seg->y2, layer);
 		y2 = (int)((REPS(dc)) * oscale);
 		if (dir2 == STUBROUTE_EW) {
 		   horizontal = TRUE;
@@ -3502,10 +3474,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		   // distance and resolve the error.
 
 		   if ((x < x2) && (seg->x2 < (NumChannelsX[layer] - 1))) {
-		      tdir = Obs[layer][OGRID(seg->x2 + 1, seg->y2, layer)];
+		      tdir = OBSVAL(seg->x2 + 1, seg->y2, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (Stub[layer][OGRID(seg->x2, seg->y2, layer)] +
+			 if (STUBVAL(seg->x1, seg->y2, layer) +
 					LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	    dc = Xlowerbound + (double)(seg->x2 + 1)
 					* PitchX[layer];
@@ -3514,10 +3486,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      }
 		   }
 		   else if ((x > x2) && (seg->x2 > 0)) {
-		      tdir = Obs[layer][OGRID(seg->x2 - 1, seg->y2, layer)];
+		      tdir = OBSVAL(seg->x2 - 1, seg->y2, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (-Stub[layer][OGRID(seg->x2, seg->y2, layer)] +
+			 if (-STUBVAL(seg->x2, seg->y2, layer) +
 					LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	    dc = Xlowerbound + (double)(seg->x2 - 1)
 					* PitchX[layer];
@@ -3562,10 +3534,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		   // distance and resolve the error.
 
 		   if ((y < y2) && (seg->y2 < (NumChannelsY[layer] - 1))) {
-		      tdir = Obs[layer][OGRID(seg->x2, seg->y2 + 1, layer)];
+		      tdir = OBSVAL(seg->x2, seg->y2 + 1, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (Stub[layer][OGRID(seg->x2, seg->y2, layer)] +
+			 if (STUBVAL(seg->x2, seg->y2, layer) +
 					LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	    dc = Ylowerbound + (double)(seg->y2 + 1)
 					* PitchY[layer];
@@ -3574,10 +3546,10 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      }
 		   }
 		   else if ((y > y2) && (seg->y2 > 0)) {
-		      tdir = Obs[layer][OGRID(seg->x2, seg->y2 - 1, layer)];
+		      tdir = OBSVAL(seg->x2, seg->y2 - 1, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (-Stub[layer][OGRID(seg->x2, seg->y2, layer)] +
+			 if (-STUBVAL(seg->x1, seg->y2, layer) +
 					LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	    dc = Ylowerbound + (double)(seg->y2 - 1)
 					* PitchY[layer];
@@ -3673,7 +3645,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
 				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 1) -
 				(prevseg->x1 - seg->x1) *
-				Stub[seg->layer][OGRID(seg->x2, seg->y2, layer)])
+				STUBVAL(seg->x2, seg->y2, seg->layer))
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -3691,7 +3663,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
 				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 0)
 				- (prevseg->y1 - seg->y1) *
-				Stub[seg->layer][OGRID(seg->x2, seg->y2, layer)])
+				STUBVAL(seg->x2, seg->y2, seg->layer))
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -3711,7 +3683,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
 				0.5 * LefGetRouteWidth(prevseg->layer) -
 				(prevseg->x1 - seg->x1) *
-				Stub[seg->layer][OGRID(seg->x2, seg->y2, layer)])
+				STUBVAL(seg->x2, seg->y2, seg->layer))
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -3729,7 +3701,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
 				0.5 * LefGetRouteWidth(prevseg->layer) -
 				(prevseg->y1 - seg->y1) *
-				Stub[seg->layer][OGRID(seg->x2, seg->y2, layer)])
+				STUBVAL(seg->x2, seg->y2, seg->layer))
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;

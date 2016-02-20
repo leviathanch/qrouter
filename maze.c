@@ -154,8 +154,8 @@ int set_powerbus_to_net(int netnum)
        for (lay = 0; lay < Num_layers; lay++)
           for (x = 0; x < NumChannelsX[lay]; x++)
 	     for (y = 0; y < NumChannelsY[lay]; y++)
-		if ((Obs[lay][OGRID(x, y, lay)] & NETNUM_MASK) == netnum) {
-		   Pr = &Obs2[lay][OGRID(x, y, lay)];
+		if ((OBSVAL(x, y, lay) & NETNUM_MASK) == netnum) {
+		   Pr = &OBS2VAL(x, y, lay);
 		   // Skip locations that have been purposefully disabled
 		   if (!(Pr->flags & PR_COST) && (Pr->prdata.net == MAXNETNUM))
 		      continue;
@@ -191,7 +191,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	 lay = ntap->layer;
 	 x = ntap->gridx;
 	 y = ntap->gridy;
-	 Pr = &Obs2[lay][OGRID(x, y, lay)];
+	 Pr = &OBS2VAL(x, y, lay);
 	 if (Pr->flags & PR_TARGET) {
 	    if (Pr->flags & PR_PROCESSED) {
 		Pr->flags &= ~PR_PROCESSED;
@@ -210,7 +210,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    lay = ntap->layer;
 	    x = ntap->gridx;
 	    y = ntap->gridy;
-	    Pr = &Obs2[lay][OGRID(x, y, lay)];
+	    Pr = &OBS2VAL(x, y, lay);
 	    if (Pr->flags & PR_TARGET) {
 		if (Pr->flags & PR_PROCESSED) {
 		    Pr->flags &= ~PR_PROCESSED;
@@ -245,9 +245,9 @@ void clear_target_node(NODE node)
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       if ((lay < Pinlayers) && (Nodeloc[lay][OGRID(x, y, lay)] == (NODE)NULL))
+       if ((lay < Pinlayers) && (NODELOC(x, y, lay) == (NODE)NULL))
 	  continue;
-       Pr = &Obs2[lay][OGRID(x, y, lay)];
+       Pr = &OBS2VAL(x, y, lay);
        Pr->flags = 0;
        Pr->prdata.net = node->netnum;
     }
@@ -258,11 +258,11 @@ void clear_target_node(NODE node)
        y = ntap->gridy;
 
        if (( (lay < Pinlayers)
-             && Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL
-           ) || Nodesav[lay][OGRID(x, y, lay)] != node)
+             && NODESAV(x, y, lay) == (NODE)NULL)
+	     ||	NODESAV(x, y, lay) != node)
        continue;
 	
-       Pr = &Obs2[lay][OGRID(x, y, lay)];
+       Pr = &OBS2VAL(x, y, lay);
        Pr->flags = 0;
        Pr->prdata.net = node->netnum;
     }
@@ -289,7 +289,7 @@ count_targets(NET net)
 	 lay = ntap->layer;
 	 x = ntap->gridx;
 	 y = ntap->gridy;
-	 Pr = &Obs2[lay][OGRID(x, y, lay)];
+	 Pr = &OBS2VAL(x, y, lay);
 	 if (Pr->flags & PR_TARGET) {
 	    count++;
 	    break;
@@ -301,7 +301,7 @@ count_targets(NET net)
 	    lay = ntap->layer;
 	    x = ntap->gridx;
 	    y = ntap->gridy;
-	    Pr = &Obs2[lay][OGRID(x, y, lay)];
+	    Pr = &OBS2VAL(x, y, lay);
 	    if (Pr->flags & PR_TARGET) {
 	       count++;
 	       break;
@@ -370,7 +370,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       Pr = &Obs2[lay][OGRID(x, y, lay)];
+       Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
 	  Fprintf(stderr, "Error:  Tap position %d, %d layer %d not "
 			"marked as source!\n", x, y, lay);
@@ -433,11 +433,11 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
        // Don't process extended areas if they coincide with other nodes.
 
-       if ((lay < Pinlayers) && (Nodesav[lay][OGRID(x, y, lay)] ==
-			(NODE)NULL || Nodesav[lay][OGRID(x, y, lay)] != node))
+       if ((lay < Pinlayers) && (NODESAV(x, y, lay) == (NODE)NULL
+			|| NODESAV(x, y, lay) != node))
 	  continue;
 
-       Pr = &Obs2[lay][OGRID(x, y, lay)];
+       Pr = &OBS2VAL(x, y, lay);
        if (Pr->flags & PR_SOURCE) {
 	  result = 1;				// Node is already connected!
        }
@@ -515,7 +515,7 @@ int disable_node_nets(NODE node)
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       Pr = &Obs2[lay][OGRID(x, y, lay)];
+       Pr = &OBS2VAL(x, y, lay);
        if (Pr->flags & PR_SOURCE || Pr->flags & PR_TARGET || Pr->flags & PR_COST) {
 	  result = 1;
        }
@@ -531,7 +531,7 @@ int disable_node_nets(NODE node)
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       Pr = &Obs2[lay][OGRID(x, y, lay)];
+       Pr = &OBS2VAL(x, y, lay);
        if (Pr->flags & PR_SOURCE || Pr->flags & PR_TARGET || Pr->flags & PR_COST) {
 	  result = 1;
        }
@@ -563,7 +563,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 	    x = seg->x1;
 	    y = seg->y1;
 	    while (1) {
-		Pr = &Obs2[lay][OGRID(x, y, lay)];
+		Pr = &OBS2VAL(x, y, lay);
 		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
 		// Conflicts should not happen (check for this?)
 		// if (Pr->prdata.net != node->netnum) Pr->flags |= PR_CONFLICT;
@@ -591,7 +591,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// If we found another node connected to the route,
 		// then process it, too.
 
-		n2 = (lay >= Pinlayers) ? NULL : Nodeloc[lay][OGRID(x, y, lay)];
+		n2 = (lay >= Pinlayers) ? NULL : NODELOC(x, y, lay);
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
@@ -692,7 +692,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 	    // belong to a different net.
 
 	    while (1) {
-	       orignet = Obs[lay][OGRID(x, y, lay)] & ROUTED_NET_MASK;
+	       orignet = OBSVAL(x, y, lay) & ROUTED_NET_MASK;
 
 	       if (orignet == DRC_BLOCKAGE) {
 
@@ -701,7 +701,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 
 		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
 		     if (x < NumChannelsX[lay] - 1) {
-		        orignet = Obs[lay][OGRID(x + 1, y, lay)] & ROUTED_NET_MASK;
+		        orignet = OBSVAL(x + 1, y, lay) & ROUTED_NET_MASK;
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
@@ -709,7 +709,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        }
 		     }
 		     if (x > 0) {
-		        orignet = Obs[lay][OGRID(x - 1, y, lay)] & ROUTED_NET_MASK;
+		        orignet = OBSVAL(x - 1, y, lay) & ROUTED_NET_MASK;
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
@@ -719,7 +719,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		  }
 		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
 		     if (y < NumChannelsY[lay] - 1) {
-		        orignet = Obs[lay][OGRID(x, y + 1, lay)] & ROUTED_NET_MASK;
+		        orignet = OBSVAL(x, y + 1, lay) & ROUTED_NET_MASK;
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
@@ -727,7 +727,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 			}
 		     }
 		     if (y > 0) {
-		        orignet = Obs[lay][OGRID(x, y - 1, lay)] & ROUTED_NET_MASK;
+		        orignet = OBSVAL(x, y - 1, lay) & ROUTED_NET_MASK;
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
@@ -771,8 +771,8 @@ NETLIST find_colliding(NET net, int *ripnum)
 /* Rip up the entire network located at position x, y, lay.	*/
 /*								*/
 /* If argument "restore" is TRUE, then at each node, restore	*/
-/* the crossover cost by attaching the node back to the Nodeloc	*/
-/* array.							*/
+/* the crossover cost by attaching the node back to the		*/
+/* NODELOC array.						*/
 /*--------------------------------------------------------------*/
 
 u_char ripup_net(NET net, u_char restore)
@@ -792,7 +792,7 @@ u_char ripup_net(NET net, u_char restore)
 	    x = seg->x1;
 	    y = seg->y1;
 	    while (1) {
-	       oldnet = Obs[lay][OGRID(x, y, lay)] & NETNUM_MASK;
+	       oldnet = OBSVAL(x, y, lay) & NETNUM_MASK;
 	       if ((oldnet > 0) && (oldnet < MAXNETNUM)) {
 	          if (oldnet != thisnet) {
 		     Fprintf(stderr, "Error: position %d %d layer %d has net "
@@ -805,17 +805,16 @@ u_char ripup_net(NET net, u_char restore)
 		  // were routed over obstructions to reach off-grid
 		  // taps are returned to obstructions.
 
-	          if ((lay >= Pinlayers) ||
-				Nodesav[lay][OGRID(x, y, lay)] == (NODE)NULL) {
-		     dir = Obs[lay][OGRID(x, y, lay)] & PINOBSTRUCTMASK;
+	          if ((lay >= Pinlayers) || NODESAV(x, y, lay) == (NODE)NULL) {
+		     dir = OBSVAL(x, y, lay) & PINOBSTRUCTMASK;
 		     if (dir == 0)
-		        Obs[lay][OGRID(x, y, lay)] = 0;
+		        OBSVAL(x, y, lay) = 0;
 		     else
-		        Obs[lay][OGRID(x, y, lay)] = NO_NET | dir;
+		        OBSVAL(x, y, lay) = NO_NET | dir;
 		  }
 	          else {
 		     // Clear routed mask bit
-		     Obs[lay][OGRID(x, y, lay)] &= ~ROUTED_NET;
+		     OBSVAL(x, y, lay) &= ~ROUTED_NET;
 		  }
 
 		  // Routes which had blockages added on the sides due
@@ -823,22 +822,22 @@ u_char ripup_net(NET net, u_char restore)
 		  // these flags should be removed.
 
 		  if (needblock[lay] & (ROUTEBLOCKX | VIABLOCKX)) {
-		     if ((x > 0) && ((Obs[lay][OGRID(x - 1, y, lay)] &
+		     if ((x > 0) && ((OBSVAL(x - 1, y, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			Obs[lay][OGRID(x - 1, y, lay)] &= ~DRC_BLOCKAGE;
+			OBSVAL(x - 1, y, lay) &= ~DRC_BLOCKAGE;
 		     else if ((x < NumChannelsX[lay] - 1) &&
-				((Obs[lay][OGRID(x + 1, y, lay)] &
+				((OBSVAL(x + 1, y, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			Obs[lay][OGRID(x + 1, y, lay)] &= ~DRC_BLOCKAGE;
+			OBSVAL(x + 1, y, lay) &= ~DRC_BLOCKAGE;
 		  }
 		  if (needblock[lay] & (ROUTEBLOCKY | VIABLOCKY)) {
-		     if ((y > 0) && ((Obs[lay][OGRID(x, y - 1, lay)] &
+		     if ((y > 0) && ((OBSVAL(x, y - 1, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			Obs[lay][OGRID(x, y - 1, lay)] &= ~DRC_BLOCKAGE;
+			OBSVAL(x, y - 1, lay) &= ~DRC_BLOCKAGE;
 		     else if ((y < NumChannelsY[lay] - 1) &&
-				((Obs[lay][OGRID(x, y + 1, lay)] &
+				((OBSVAL(x, y + 1, lay) &
 				DRC_BLOCKAGE) == DRC_BLOCKAGE))
-			Obs[lay][OGRID(x, y + 1, lay)] &= ~DRC_BLOCKAGE;
+			OBSVAL(x, y + 1, lay) &= ~DRC_BLOCKAGE;
 		  }
 	       }
 
@@ -856,9 +855,9 @@ u_char ripup_net(NET net, u_char restore)
       }
    }
 
-   // For each net node tap, restore the node pointer on Nodeloc so
-   // that crossover costs are again applied to routes over this
-   // node tap.
+   // For each net node tap, restore the node pointer on NODELOC
+   // so that crossover costs are again applied to routes over this node
+   // tap.
 
    if (restore != 0) {
       for (node = net->netnodes; node; node = node->next) {
@@ -867,7 +866,7 @@ u_char ripup_net(NET net, u_char restore)
 	    x = ntap->gridx;
 	    y = ntap->gridy;
 	    if (lay < Pinlayers)
-	        Nodeloc[lay][OGRID(x, y, lay)] = Nodesav[lay][OGRID(x, y, lay)];
+		NODELOC(x, y, lay) = NODESAV(x, y, lay);
 	 }
       }
    }
@@ -941,14 +940,14 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  break;
     }
 
-    Pr = &Obs2[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)];
+    Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
        netnum = Pr->prdata.net;
        if (stage && (netnum < MAXNETNUM)) {
 	  if ((newpt.lay < Pinlayers) &&
-		Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
+		NODESAV(newpt.x, newpt.y, newpt.lay) != NULL)
 	     return 0;			// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
@@ -969,7 +968,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
        }
        else if (stage && (netnum == DRC_BLOCKAGE)) {
 	  if ((newpt.lay < Pinlayers) &&
-		Nodesav[newpt.lay][OGRID(newpt.x, newpt.y, newpt.lay)] != NULL)
+		NODESAV(newpt.x, newpt.y, newpt.lay) != NULL)
 	     return 0;			// But cannot route over terminals!
 
 	  // Position does not contain the net number, so we have to
@@ -980,8 +979,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
 	  if (needblock[newpt.lay] & (ROUTEBLOCKX | VIABLOCKX)) {
 	     if (newpt.x < NumChannelsX[newpt.lay] - 1) {
-	        netnum = Obs[newpt.lay][OGRID(newpt.x + 1, newpt.y, newpt.lay)] &
-			ROUTED_NET_MASK;
+	        netnum = OBSVAL(newpt.x + 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
 		   if ((netnum != 0) && (netnum != CurNet->netnum))
@@ -993,8 +991,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	     }
 
 	     if (newpt.x > 0) {
-	        netnum = Obs[newpt.lay][OGRID(newpt.x - 1, newpt.y, newpt.lay)] &
-			ROUTED_NET_MASK;
+	        netnum = OBSVAL(newpt.x - 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
 		   if ((netnum != 0) && (netnum != CurNet->netnum))
@@ -1007,8 +1004,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  } 
 	  if (needblock[newpt.lay] & (ROUTEBLOCKY | VIABLOCKY)) {
 	     if (newpt.y < NumChannelsY[newpt.lay] - 1) {
-	        netnum = Obs[newpt.lay][OGRID(newpt.x, newpt.y + 1, newpt.lay)] &
-			ROUTED_NET_MASK;
+	        netnum = OBSVAL(newpt.x, newpt.y + 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
 		   if ((netnum != 0) && (netnum != CurNet->netnum))
@@ -1020,8 +1016,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	     }
 
 	     if (newpt.y > 0) {
-	        netnum = Obs[newpt.lay][OGRID(newpt.x, newpt.y - 1, newpt.lay)] &
-			ROUTED_NET_MASK;
+	        netnum = OBSVAL(newpt.x, newpt.y - 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
 		   if ((netnum != 0) && (netnum != CurNet->netnum))
@@ -1051,9 +1046,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     // so that routing over it could block it entirely.
 
     if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
-	if ((node = Nodeloc[newpt.lay - 1][OGRID(newpt.x, newpt.y, newpt.lay - 1)])
-			!= (NODE)NULL) {
-	    Pt = &Obs2[newpt.lay - 1][OGRID(newpt.x, newpt.y, newpt.lay - 1)];
+	if ((node = NODELOC(newpt.x, newpt.y, newpt.lay - 1)) != (NODE)NULL) {
+	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay - 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
 		if (node->taps && (node->taps->next == NULL))
 		   thiscost += BlockCost;	// Cost to block out a tap
@@ -1076,9 +1070,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	}
     }
     if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
-	if ((node = Nodeloc[newpt.lay + 1][OGRID(newpt.x, newpt.y, newpt.lay + 1)])
-			!= (NODE)NULL) {
-	    Pt = &Obs2[newpt.lay + 1][OGRID(newpt.x, newpt.y, newpt.lay + 1)];
+	if ((node = NODELOC(newpt.x, newpt.y, newpt.lay + 1)) != (NODE)NULL) {
+	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay + 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
 		if (node->taps && (node->taps->next == NULL))
 		   thiscost += BlockCost;	// Cost to block out a tap
@@ -1150,30 +1143,22 @@ void writeback_segment(SEG seg, int netnum)
    u_int sobs;
 
    if (seg->segtype == ST_VIA) {
-      Obs[seg->layer + 1][OGRID(seg->x1, seg->y1, seg->layer + 1)] = netnum;
+      OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum;
       if (needblock[seg->layer + 1] & VIABLOCKX) {
 	 if ((seg->x1 < (NumChannelsX[seg->layer + 1] - 1)) &&
-		(Obs[seg->layer + 1][OGRID(seg->x1 + 1, seg->y1, seg->layer + 1)]
-		& NETNUM_MASK) == 0)
- 	    Obs[seg->layer + 1][OGRID(seg->x1 + 1, seg->y1, seg->layer + 1)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) & NETNUM_MASK) == 0)
+ 	    OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) = DRC_BLOCKAGE;
 	 if ((seg->x1 > 0) &&
-		(Obs[seg->layer + 1][OGRID(seg->x1 - 1, seg->y1, seg->layer + 1)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer + 1][OGRID(seg->x1 - 1, seg->y1, seg->layer + 1)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) = DRC_BLOCKAGE;
       }
       if (needblock[seg->layer + 1] & VIABLOCKY) {
 	 if ((seg->y1 < (NumChannelsY[seg->layer + 1] - 1)) &&
-		(Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 + 1, seg->layer + 1)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 + 1, seg->layer + 1)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) = DRC_BLOCKAGE;
 	 if ((seg->y1 > 0) &&
-		(Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 - 1, seg->layer + 1)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 - 1, seg->layer + 1)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) = DRC_BLOCKAGE;
       }
 
       // If position itself is an offset route, then make the route position
@@ -1182,53 +1167,41 @@ void writeback_segment(SEG seg, int netnum)
       // distance is enough to cause a DRC violation.)
 
       layer = (seg->layer == 0) ? 0 : seg->layer - 1;
-      sobs = Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)];
+      sobs = OBSVAL(seg->x1, seg->y1, seg->layer);
       if (sobs & OFFSET_TAP) {
-	 dist = Stub[layer][OGRID(seg->x1, seg->y1, seg->layer)];
+	 dist = STUBVAL(seg->x1, seg->y1, seg->layer);
 	 if (sobs & STUBROUTE_EW) {
 	    if ((dist > 0) && (seg->x1 < (NumChannelsX[seg->layer] - 1))) {
-	       Obs[seg->layer][OGRID(seg->x1 + 1, seg->y1, seg->layer)] |=
-			DRC_BLOCKAGE;
-	       Obs[seg->layer + 1][OGRID(seg->x1 + 1, seg->y1, seg->layer + 1)] |=
-				DRC_BLOCKAGE;
+	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer) |= DRC_BLOCKAGE;
+	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
 	    }
 	    if ((dist < 0) && (seg->x1 > 0)) {
-	       Obs[seg->layer][OGRID(seg->x1 - 1, seg->y1, seg->layer)] |=
-			DRC_BLOCKAGE;
-	       Obs[seg->layer + 1][OGRID(seg->x1 - 1, seg->y1, seg->layer + 1)] |=
-				DRC_BLOCKAGE;
+	       OBSVAL(seg->x1 - 1, seg->y1, seg->layer) |= DRC_BLOCKAGE;
+	       OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
 	    }
 	 }
 	 else if (sobs & STUBROUTE_NS) {
 	    if ((dist > 0) && (seg->y1 < (NumChannelsY[seg->layer] - 1))) {
-	       Obs[seg->layer][OGRID(seg->x1, seg->y1 + 1, seg->layer)] |=
-			DRC_BLOCKAGE;
-	       Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 + 1, seg->layer + 1)] |=
-				DRC_BLOCKAGE;
+	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer) |= DRC_BLOCKAGE;
+	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) |= DRC_BLOCKAGE;
 	    }
 	    if ((dist < 0) && (seg->y1 > 0)) {
-	       Obs[seg->layer][OGRID(seg->x1, seg->y1 - 1, seg->layer)] |=
-			DRC_BLOCKAGE;
-	       Obs[seg->layer + 1][OGRID(seg->x1, seg->y1 - 1, seg->layer + 1)] |=
-				DRC_BLOCKAGE;
+	       OBSVAL(seg->x1, seg->y1 - 1, seg->layer) |= DRC_BLOCKAGE;
+	       OBSVAL(seg->x1, seg->y1 - 1, seg->layer + 1) |= DRC_BLOCKAGE;
 	    }
 	 }
       }
    }
 
    for (i = seg->x1; ; i += (seg->x2 > seg->x1) ? 1 : -1) {
-      Obs[seg->layer][OGRID(i, seg->y1, seg->layer)] = netnum;
+      OBSVAL(i, seg->y1, seg->layer) = netnum;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
          if ((seg->y1 < (NumChannelsY[seg->layer] - 1)) &&
-		(Obs[seg->layer][OGRID(i, seg->y1 + 1, seg->layer)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer][OGRID(i, seg->y1 + 1, seg->layer)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(i, seg->y1 + 1, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(i, seg->y1 + 1, seg->layer) = DRC_BLOCKAGE;
 	 if ((seg->y1 > 0) &&
-		(Obs[seg->layer][OGRID(i, seg->y1 - 1, seg->layer)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer][OGRID(i, seg->y1 - 1, seg->layer)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(i, seg->y1 - 1, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(i, seg->y1 - 1, seg->layer) = DRC_BLOCKAGE;
       }
 
       // Check position on each side for an offset tap on a different net, and
@@ -1240,25 +1213,23 @@ void writeback_segment(SEG seg, int netnum)
 
       layer = (seg->layer == 0) ? 0 : seg->layer - 1;
       if (seg->y1 < (NumChannelsY[layer] - 1)) {
-	 sobs = Obs[layer][OGRID(i, seg->y1 + 1, layer)];
+	 sobs = OBSVAL(i, seg->y1 + 1, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
 	    if (sobs & STUBROUTE_NS) {
-	       dist = Stub[layer][OGRID(i, seg->y1 + 1, layer)];
+	       dist = STUBVAL(i, seg->y1 + 1, layer);
 	       if (dist < 0) {
-		  Obs[layer][OGRID(i, seg->y1 + 1, layer)] |=
-			DRC_BLOCKAGE;
+		  OBSVAL(i, seg->y1 + 1, layer) |= DRC_BLOCKAGE;
 	       }
 	    }
 	 }
       }
       if (seg->y1 > 0) {
-	 sobs = Obs[layer][OGRID(i, seg->y1 - 1, layer)];
+	 sobs = OBSVAL(i, seg->y1 - 1, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
 	    if (sobs & STUBROUTE_NS) {
-	       dist = Stub[layer][OGRID(i, seg->y1 - 1, layer)];
+	       dist = STUBVAL(i, seg->y1 - 1, layer);
 	       if (dist > 0) {
-		  Obs[layer][OGRID(i, seg->y1 - 1, layer)] |=
-			DRC_BLOCKAGE;
+		  OBSVAL(i, seg->y1 - 1, layer) |= DRC_BLOCKAGE;
 	       }
 	    }
 	 }
@@ -1266,18 +1237,14 @@ void writeback_segment(SEG seg, int netnum)
       if (i == seg->x2) break;
    }
    for (i = seg->y1; ; i += (seg->y2 > seg->y1) ? 1 : -1) {
-      Obs[seg->layer][OGRID(seg->x1, i, seg->layer)] = netnum;
+      OBSVAL(seg->x1, i, seg->layer) = netnum;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
 	 if ((seg->x1 < (NumChannelsX[seg->layer] - 1)) &&
-		(Obs[seg->layer][OGRID(seg->x1 + 1, i, seg->layer)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer][OGRID(seg->x1 + 1, i, seg->layer)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(seg->x1 + 1, i, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x1 + 1, i, seg->layer) = DRC_BLOCKAGE;
 	 if ((seg->x1 > 0) &&
-		(Obs[seg->layer][OGRID(seg->x1 - 1, i, seg->layer)]
-		& NETNUM_MASK) == 0)
-	    Obs[seg->layer][OGRID(seg->x1 - 1, i, seg->layer)] =
-			DRC_BLOCKAGE;
+		(OBSVAL(seg->x1 - 1, i, seg->layer) & NETNUM_MASK) == 0)
+	    OBSVAL(seg->x1 - 1, i, seg->layer) = DRC_BLOCKAGE;
       }
 
       // Check position on each side for an offset tap on a different net, and
@@ -1285,25 +1252,23 @@ void writeback_segment(SEG seg, int netnum)
 
       layer = (seg->layer == 0) ? 0 : seg->layer - 1;
       if (seg->x1 < (NumChannelsX[layer] - 1)) {
-	 sobs = Obs[layer][OGRID(seg->x1 + 1, i, layer)];
+	 sobs = OBSVAL(seg->x1 + 1, i, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
 	    if (sobs & STUBROUTE_EW) {
-	       dist = Stub[layer][OGRID(seg->x1 + 1, i, layer)];
+	       dist = STUBVAL(seg->x1 + 1, i, layer);
 	       if (dist < 0) {
-		  Obs[layer][OGRID(seg->x1 + 1, i, layer)] |=
-			DRC_BLOCKAGE;
+		  OBSVAL(seg->x1 + 1, i, layer) |= DRC_BLOCKAGE;
 	       }
 	    }
 	 }
       }
       if (seg->x1 > 0) {
-	 sobs = Obs[layer][OGRID(seg->x1 - 1, i, layer)];
+	 sobs = OBSVAL(seg->x1 - 1, i, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
 	    if (sobs & STUBROUTE_EW) {
-	       dist = Stub[layer][OGRID(seg->x1 - 1, i, layer)];
+	       dist = STUBVAL(seg->x1 - 1, i, layer);
 	       if (dist > 0) {
-		  Obs[layer][OGRID(seg->x1 - 1, i, layer)] |=
-			DRC_BLOCKAGE;
+		  OBSVAL(seg->x1 - 1, i, layer) |= DRC_BLOCKAGE;
 	       }
 	    }
 	 }
@@ -1346,7 +1311,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
    netnum = rt->netnum;
 
-   Pr = &Obs2[ept->lay][OGRID(ept->x, ept->y, ept->lay)];
+   Pr = &OBS2VAL(ept->x, ept->y, ept->lay);
    if (!(Pr->flags & PR_COST)) {
       Fprintf(stderr, "commit_proute(): impossible - terminal is not routable!\n");
       return -1;
@@ -1364,7 +1329,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
    while (1) {
 
-      Pr = &Obs2[lrend->layer][OGRID(lrend->x1, lrend->y1, lrend->layer)];
+      Pr = &OBS2VAL(lrend->x1, lrend->y1, lrend->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
       if (dmask == PR_PRED_NONE) break;
 
@@ -1443,7 +1408,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       // lowest cost, and make sure the position below that
 	       // is available.
 	       dx = cx + 1;	// Check to the right
-	       pri = &Obs2[cl][OGRID(dx, cy, cl)];
+	       pri = &OBS2VAL(dx, cy, cl);
 	       pflags = pri->flags;
 	       cost = pri->prdata.cost;
 	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
@@ -1454,7 +1419,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       if (pflags & PR_COST) {
 		  pflags &= ~PR_COST;
 		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &Obs2[dl][OGRID(dx, cy, dl)];
+	             pri2 = &OBS2VAL(dx, cy, dl);
 		     p2flags = pri2->flags;
 		     if (p2flags & PR_COST) {
 			p2flags &= ~PR_COST;
@@ -1475,7 +1440,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		  }
 	       }
 	       dx = cx - 1;	// Check to the left
-	       pri = &Obs2[cl][OGRID(dx, cy, cl)];
+	       pri = &OBS2VAL(dx, cy, cl);
 	       pflags = pri->flags;
 	       cost = pri->prdata.cost;
 	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
@@ -1486,7 +1451,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       if (pflags & PR_COST) {
 		  pflags &= ~PR_COST;
 		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &Obs2[dl][OGRID(dx, cy, dl)];
+	             pri2 = &OBS2VAL(dx, cy, dl);
 		     p2flags = pri2->flags;
 		     if (p2flags & PR_COST) {
 			p2flags &= ~PR_COST;
@@ -1508,7 +1473,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       }
 
 	       dy = cy + 1;	// Check north
-	       pri = &Obs2[cl][OGRID(cx, dy, cl)];
+	       pri = &OBS2VAL(cx, dy, cl);
 	       pflags = pri->flags;
 	       cost = pri->prdata.cost;
 	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
@@ -1519,7 +1484,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       if (pflags & PR_COST) {
 		  pflags &= ~PR_COST;
 		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &Obs2[dl][OGRID(cx, dy, dl)];
+	             pri2 = &OBS2VAL(cx, dy, dl);
 		     p2flags = pri2->flags;
 		     if (p2flags & PR_COST) {
 			p2flags &= ~PR_COST;
@@ -1541,7 +1506,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       }
 
 	       dy = cy - 1;	// Check south
-	       pri = &Obs2[cl][OGRID(cx, dy, cl)];
+	       pri = &OBS2VAL(cx, dy, cl);
 	       pflags = pri->flags;
 	       cost = pri->prdata.cost;
 	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
@@ -1552,7 +1517,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       if (pflags & PR_COST) {
 		  pflags &= ~PR_COST;
 		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &Obs2[dl][OGRID(cx, dy, dl)];
+	             pri2 = &OBS2VAL(cx, dy, dl);
 		     p2flags = pri2->flags;
 		     if (p2flags & PR_COST) {
 		        p2flags &= ~PR_COST;
@@ -1578,14 +1543,14 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       // then try to move the first contact instead.
 
 	       if (mincost < MAXRT) {
-	          pri = &Obs2[cl][OGRID(minx, miny, cl)];
+	          pri = &OBS2VAL(minx, miny, cl);
 
 		  newlr = (POINT)malloc(sizeof(struct point_));
 		  newlr->x1 = minx;
 		  newlr->y1 = miny;
 		  newlr->layer = cl;
 
-	          pri2 = &Obs2[dl][OGRID(minx, miny, dl)];
+	          pri2 = &OBS2VAL(minx, miny, dl);
 
 		  newlr2 = (POINT)malloc(sizeof(struct point_));
 		  newlr2->x1 = minx;
@@ -1626,13 +1591,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          dl = lrprev->layer;
 
 	          dx = cx + 1;	// Check to the right
-	          pri = &Obs2[cl][OGRID(dx, cy, cl)];
+	          pri = &OBS2VAL(dx, cy, cl);
 	          pflags = pri->flags;
 		  if (pflags & PR_COST) {
 		     pflags &= ~PR_COST;
 		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
 				pri->prdata.cost < mincost) {
-	                pri2 = &Obs2[dl][OGRID(dx, cy, dl)];
+	                pri2 = &OBS2VAL(dx, cy, dl);
 		        p2flags = pri2->flags;
 			if (p2flags & PR_COST) {
 			   p2flags &= ~PR_COST;
@@ -1647,13 +1612,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          }
 
 	          dx = cx - 1;	// Check to the left
-	          pri = &Obs2[cl][OGRID(dx, cy, cl)];
+	          pri = &OBS2VAL(dx, cy, cl);
 	          pflags = pri->flags;
 		  if (pflags & PR_COST) {
 		     pflags &= ~PR_COST;
 		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
 				pri->prdata.cost < mincost) {
-	                pri2 = &Obs2[dl][OGRID(dx, cy, dl)];
+	                pri2 = &OBS2VAL(dx, cy, dl);
 		        p2flags = pri2->flags;
 			if (p2flags & PR_COST) {
 			   p2flags &= ~PR_COST;
@@ -1668,13 +1633,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          }
 
 	          dy = cy + 1;	// Check north
-	          pri = &Obs2[cl][OGRID(cx, dy, cl)];
+	          pri = &OBS2VAL(cx, dy, cl);
 	          pflags = pri->flags;
 		  if (pflags & PR_COST) {
 		     pflags &= ~PR_COST;
 		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
 				pri->prdata.cost < mincost) {
-	                pri2 = &Obs2[dl][OGRID(cx, dy, dl)];
+	                pri2 = &OBS2VAL(cx, dy, dl);
 		        p2flags = pri2->flags;
 			if (p2flags & PR_COST) {
 			   p2flags &= ~PR_COST;
@@ -1689,13 +1654,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          }
 
 	          dy = cy - 1;	// Check south
-	          pri = &Obs2[cl][OGRID(cx, dy, cl)];
+	          pri = &OBS2VAL(cx, dy, cl);
 	          pflags = pri->flags;
 		  if (pflags & PR_COST) {
 		     pflags &= ~PR_COST;
 		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
 				pri->prdata.cost < mincost) {
-	                pri2 = &Obs2[dl][OGRID(cx, dy, dl)];
+	                pri2 = &OBS2VAL(cx, dy, dl);
 		        p2flags = pri2->flags;
 			if (p2flags & PR_COST) {
 			   p2flags &= ~PR_COST;
@@ -1725,9 +1690,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     // endpoint along the source or target, and the
 		     // original endpoint position is not needed.
 
-	             pri = &Obs2[cl][OGRID(minx, miny, cl)];
-	             pri2 = &Obs2[lrcur->layer][OGRID(lrcur->x1,
-					lrcur->y1, lrcur->layer)];
+	             pri = &OBS2VAL(minx, miny, cl);
+	             pri2 = &OBS2VAL(lrcur->x1, lrcur->y1, lrcur->layer);
 		     if ((((pri->flags & PR_SOURCE) && (pri2->flags & PR_SOURCE)) ||
 			 ((pri->flags & PR_TARGET) && (pri2->flags & PR_TARGET)))
                          && (lrcur == lrtop)
@@ -1865,8 +1829,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
       lay2 = (seg->segtype & ST_VIA) ? seg->layer + 1 : seg->layer;
 
-      netobs1 = Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)];
-      netobs2 = Obs[lay2][OGRID(seg->x2, seg->y2, lay2)];
+      netobs1 = OBSVAL(seg->x1, seg->y1, seg->layer);
+      netobs2 = OBSVAL(seg->x2, seg->y2, lay2);
 
       dir1 = netobs1 & PINOBSTRUCTMASK;
       dir2 = netobs2 & PINOBSTRUCTMASK;
@@ -1897,15 +1861,15 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	    // This also applies to vias at the beginning of a route
 	    // if the path goes down instead of up (can happen on pins,
 	    // in particular)
-	    Obs[lay2][OGRID(seg->x1, seg->y1, lay2)] |= dir2;
+	    OBSVAL(seg->x1, seg->y1, lay2) |= dir2;
 	 }
       }
 
       // Keep stub information on obstructions that have been routed
       // over, so that in the rip-up stage, we can return them to obstructions.
 
-      Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)] |= dir1;
-      Obs[lay2][OGRID(seg->x2, seg->y2, lay2)] |= dir2;
+      OBSVAL(seg->x1, seg->y1, seg->layer) |= dir1;
+      OBSVAL(seg->x2, seg->y2, lay2) |= dir2;
 
       // An offset route end on the previous segment, if it is a via, needs
       // to carry over to this one, if it is a wire route.
@@ -1944,11 +1908,11 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       if (lrprev == NULL) {
 
          if (dir2 && (stage == (u_char)0)) {
-	    Obs[lay2][OGRID(seg->x2, seg->y2, lay2)] |= dir2;
+	    OBSVAL(seg->x2, seg->y2, lay2) |= dir2;
          }
 	 else if (dir1 && (seg->segtype & ST_VIA)) {
 	    // This also applies to vias at the end of a route
-	    Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)] |= dir1;
+	    OBSVAL(seg->x1, seg->y1, seg->layer) |= dir1;
 	 }
 
 	 // Before returning, set *ept to the endpoint
@@ -2007,23 +1971,23 @@ int writeback_route(ROUTE rt)
 
       lay2 = (seg->segtype & ST_VIA) ? seg->layer + 1 : seg->layer;
 
-      dir1 = Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)] & PINOBSTRUCTMASK;
-      dir2 = Obs[lay2][OGRID(seg->x2, seg->y2, lay2)] & PINOBSTRUCTMASK;
+      dir1 = OBSVAL(seg->x1, seg->y1, seg->layer) & PINOBSTRUCTMASK;
+      dir2 = OBSVAL(seg->x2, seg->y2, lay2) & PINOBSTRUCTMASK;
 
       writeback_segment(seg, netnum);
 
       if (first) {
 	 first = (u_char)0;
 	 if (dir1)
-	    Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)] |= dir1;
+	    OBSVAL(seg->x1, seg->y1, seg->layer) |= dir1;
 	 else if (dir2)
-	    Obs[lay2][OGRID(seg->x2, seg->y2, lay2)] |= dir2;
+	    OBSVAL(seg->x2, seg->y2, lay2) |= dir2;
       }
       else if (!seg->next) {
 	 if (dir1)
-	    Obs[seg->layer][OGRID(seg->x1, seg->y1, seg->layer)] |= dir1;
+	    OBSVAL(seg->x1, seg->y1, seg->layer) |= dir1;
 	 else if (dir2)
-	    Obs[lay2][OGRID(seg->x2, seg->y2, lay2)] |= dir2;
+	    OBSVAL(seg->x2, seg->y2, lay2) |= dir2;
       }
    }
    return TRUE;

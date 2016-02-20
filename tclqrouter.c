@@ -2200,7 +2200,7 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 
 	for (x = net->xmin; x < net->xmax; x++)
 	    for (y = net->ymin; y < net->ymax; y++)
-		Congestion[OGRID(x, y, 0)] += density;
+		CONGEST(x, y) += density;
     }
 
     // Use instance bounding boxes to estimate average congestion
@@ -2234,7 +2234,7 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 	cavg = 0.0;
 	for (x = bbox.x1; x <= bbox.x2; x++) {
 	    for (y = bbox.y1; y <= bbox.y2; y++) {
-		cavg += Congestion[OGRID(x, y, 0)];
+		cavg += CONGEST(x, y);
 	    }
 	}
 	cavg /= (bbox.x2 - bbox.x1 + 1);

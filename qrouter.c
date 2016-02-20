@@ -1512,7 +1512,7 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
 
    for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++)
-	 RMask[OGRID(i, j, 0)] = (u_char)0;
+	 RMASK(i, j) = (u_char)0;
 
    for (v = 1; v < halo; v++) {
       if (gx1 > 0) gx1--;
@@ -1527,8 +1527,8 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
       }
       for (i = gx1; i <= gx2; i++)
          for (j = gy1; j <= gy2; j++) {
-	    m = RMask[OGRID(i, j, 0)];
-	    if (m > v) RMask[OGRID(i, j, 0)] = (u_char)v;
+	    m = RMASK(i, j);
+	    if (m > v) RMASK(i, j) = (u_char)v;
 	 }
    }
 }
@@ -1561,7 +1561,7 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
 
    for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++)
-	 RMask[OGRID(i, j, 0)] = (u_char)0;
+	 RMASK(i, j) = (u_char)0;
 
    for (v = 1; v < halo; v++) {
       if (gy1 > 0) gy1--;
@@ -1576,8 +1576,8 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
       }
       for (i = gx1; i <= gx2; i++)
          for (j = gy1; j <= gy2; j++) {
-	    m = RMask[OGRID(i, j, 0)];
-	    if (m > v) RMask[OGRID(i, j, 0)] = (u_char)v;
+	    m = RMASK(i, j);
+	    if (m > v) RMASK(i, j) = (u_char)v;
 	 }
    }
 }
@@ -1607,32 +1607,32 @@ static void createBboxMask(NET net, u_char halo)
   
     for (gx1 = xmin; gx1 <= xmax; gx1++)
 	for (gy1 = ymin; gy1 <= ymax; gy1++)
-	    RMask[OGRID(gx1, gy1, 0)] = (u_char)0;
+	    RMASK(gx1, gy1) = (u_char)0;
 
     for (i = 1; i <= halo; i++) {
 	gx1 = xmin - i;
 	if (gx1 >= 0 && gx1 < NumChannelsX[0])
            for (j = ymin - i; j <= ymax + i; j++)
 	      if (j >= 0 && j < NumChannelsY[0])
-		 RMask[OGRID(gx1, j, 0)] = (u_char)i;
+		 RMASK(gx1, j) = (u_char)i;
 
 	gx2 = xmax + i;
 	if (gx2 >= 0 && gx2 < NumChannelsX[0])
            for (j = ymin - i; j <= ymax + i; j++)
 	      if (j >= 0 && j < NumChannelsY[0])
-		 RMask[OGRID(gx2, j, 0)] = (u_char)i;
+		 RMASK(gx2, j) = (u_char)i;
 
 	gy1 = ymin - i;
 	if (gy1 >= 0 && gy1 < NumChannelsY[0])
            for (j = xmin - i; j <= xmax + i; j++)
 	      if (j >= 0 && j < NumChannelsX[0])
-		 RMask[OGRID(j, gy1, 0)] = (u_char)i;
+		 RMASK(j, gy1) = (u_char)i;
 
 	gy2 = ymax + i;
 	if (gy2 >= 0 && gy2 < NumChannelsY[0])
            for (j = xmin - i; j <= xmax + i; j++)
 	      if (j >= 0 && j < NumChannelsX[0])
-		 RMask[OGRID(j, gy2, 0)] = (u_char)i;
+		 RMASK(j, gy2) = (u_char)i;
      }
 }
 
@@ -1736,7 +1736,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	if (i < 0 || i >= NumChannelsX[0]) continue;
 	for (j = ycent - slack; j <= ycent + slack; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
-	   RMask[OGRID(i, j, 0)] = (u_char)0;
+	   RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -1746,18 +1746,18 @@ static void createMask(NET net, u_char slack, u_char halo)
         for (j = xmin - slack - i; j <= xmax + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsX[0]) continue;
 	   if (gy1 >= 0)
-	      RMask[OGRID(j, gy1, 0)] = (u_char)i;
+	      RMASK(j, gy1) = (u_char)i;
 	   if (gy2 < NumChannelsY[0])
-	      RMask[OGRID(j, gy2, 0)] = (u_char)i;
+	      RMASK(j, gy2) = (u_char)i;
 	}
 	gx1 = xmin - slack - i;
 	gx2 = xmax + slack + i;
         for (j = ycent - slack - i; j <= ycent + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   if (gx1 >= 0)
-	      RMask[OGRID(gx1, j, 0)] = (u_char)i;
+	      RMASK(gx1, j) = (u_char)i;
 	   if (gx2 < NumChannelsX[0])
-	      RMask[OGRID(gx2, j, 0)] = (u_char)i;
+	      RMASK(gx2, j) = (u_char)i;
 	}
      }
   }
@@ -1770,7 +1770,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	if (i < 0 || i >= NumChannelsX[0]) continue;
 	for (j = ymin - slack; j <= ymax + slack; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
-	   RMask[OGRID(i, j, 0)] = (u_char)0;
+	   RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -1780,18 +1780,18 @@ static void createMask(NET net, u_char slack, u_char halo)
         for (j = ymin - slack - i; j <= ymax + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   if (gx1 >= 0)
-	      RMask[OGRID(gx1, j, 0)] = (u_char)i;
+	      RMASK(gx1, j) = (u_char)i;
 	   if (gx2 < NumChannelsX[0])
-	      RMask[OGRID(gx2, j, 0)] = (u_char)i;
+	      RMASK(gx2, j) = (u_char)i;
 	}
 	gy1 = ymin - slack - i;
 	gy2 = ymax + slack + i;
         for (j = xcent - slack - i; j <= xcent + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsX[0]) continue;
 	   if (gy1 >= 0)
-	      RMask[OGRID(j, gy1, 0)] = (u_char)i;
+	      RMASK(j, gy1) = (u_char)i;
 	   if (gy2 < NumChannelsY[0])
-	      RMask[OGRID(j, gy2, 0)] = (u_char)i;
+	      RMASK(j, gy2) = (u_char)i;
 	}
      }
   }
@@ -1867,9 +1867,9 @@ static void createMask(NET net, u_char slack, u_char halo)
   // Allow routes at all tap and extension points
   for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
      for (dtap = n1->taps; dtap != NULL; dtap = dtap->next)
-	RMask[OGRID(dtap->gridx, dtap->gridy, 0)] = (u_char)0;
+	RMASK(dtap->gridx, dtap->gridy) = (u_char)0;
      for (dtap = n1->extend; dtap != NULL; dtap = dtap->next)
-	RMask[OGRID(dtap->gridx, dtap->gridy, 0)] = (u_char)0;
+	RMASK(dtap->gridx, dtap->gridy) = (u_char)0;
   }
 
   if (Verbose > 2) {
@@ -2471,7 +2471,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 // is not under the current route mask, which identifies a narrow
 	 // "best route" solution.
 
-	 if (RMask[OGRID(curpt.x, curpt.y, 0)] > (u_char)maskpass) {
+	 if (RMASK(curpt.x, curpt.y) > (u_char)maskpass) {
 	    gpoint->next = gunproc;
 	    gunproc = gpoint;
 	    continue;

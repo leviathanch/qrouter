@@ -61,7 +61,7 @@ void highlight(int x, int y) {
     // If Obs2[] at x, y is a source or dest, don't highlight
     // Do this only for layer 0;  it doesn't have to be rigorous. 
     for (i = 0; i < Num_layers; i++) {
-	Pr = &Obs2[i][OGRID(x, y, i)];
+	Pr = &OBS2VAL(x, y, i);
 	if (Pr->flags & (PR_SOURCE | PR_TARGET)) return;
     }
 
@@ -100,7 +100,7 @@ void highlight_source() {
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    xspc = (x + 1) * spacing - hspc;
 	    for (y = 0; y < NumChannelsY[i]; y++) {
-		Pr = &Obs2[i][OGRID(x, y, i)];
+		Pr = &OBS2VAL(x, y, i);
 		if (Pr->flags & PR_SOURCE) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, win, gc, xspc, yspc,
@@ -136,7 +136,7 @@ void highlight_dest() {
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    xspc = (x + 1) * spacing - hspc;
 	    for (y = 0; y < NumChannelsY[i]; y++) {
-		Pr = &Obs2[i][OGRID(x, y, i)];
+		Pr = &OBS2VAL(x, y, i);
 		if (Pr->flags & PR_TARGET) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, win, gc, xspc, yspc,
@@ -191,7 +191,7 @@ void highlight_mask(void) {
     for (x = 0; x < NumChannelsX[0]; x++) {
 	xspc = (x + 1) * spacing - hspc;
 	for (y = 0; y < NumChannelsY[0]; y++) {
-	    XSetForeground(dpy, gc, brownvector[RMask[OGRID(x, y, 0)]]);
+	    XSetForeground(dpy, gc, brownvector[RMASK(x, y)]);
 	    yspc = height - (y + 1) * spacing - hspc;
 	    XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
 	}
@@ -217,7 +217,7 @@ map_obstruction()
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    xspc = (x + 1) * spacing - hspc;
 	    for (y = 0; y < NumChannelsY[i]; y++) {
-		if (Obs[i][OGRID(x, y, i)] & NO_NET) {
+		if (OBSVAL(x, y, i) & NO_NET) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
 				spacing, spacing);
@@ -232,7 +232,7 @@ map_obstruction()
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    xspc = (x + 1) * spacing - hspc;
 	    for (y = 0; y < NumChannelsY[i]; y++) {
-		if (Nodeinfo[i][OGRID(x, y, i)].nodesav != NULL) {
+		if (NODESAV(x, y, i) != NULL) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
 				spacing, spacing);
@@ -264,12 +264,12 @@ map_congestion()
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    for (y = 0; y < NumChannelsY[i]; y++) {
 		value = (u_char)0;
-		n = Obs[i][OGRID(x, y, i)];
+		n = OBSVAL(x, y, i);
 		if (n & ROUTED_NET) value++;
 		if (n & BLOCKED_MASK) value++;
 		if (n & NO_NET) value++;
 		if (n & PINOBSTRUCTMASK) value++;
-		Congestion[OGRID(x, y, 0)] += value;
+		CONGEST(x, y) += value;
 	    }
 	}
     }
@@ -277,7 +277,7 @@ map_congestion()
     maxval = 0;
     for (x = 0; x < NumChannelsX[0]; x++) {
 	for (y = 0; y < NumChannelsY[0]; y++) {
-	    value = Congestion[OGRID(x, y, 0)];
+	    value = CONGEST(x, y);
 	    if (value > maxval) maxval = value;
 	}
     }
@@ -287,7 +287,7 @@ map_congestion()
     for (x = 0; x < NumChannelsX[0]; x++) {
 	xspc = (x + 1) * spacing - hspc;
 	for (y = 0; y < NumChannelsY[0]; y++) {
-	    XSetForeground(dpy, gc, bluevector[norm * Congestion[OGRID(x, y, 0)]]);
+	    XSetForeground(dpy, gc, bluevector[norm * CONGEST(x, y)]);
 	    yspc = height - (y + 1) * spacing - hspc;
 	    XFillRectangle(dpy, buffer, gc, xspc, yspc, spacing, spacing);
 	}
@@ -331,13 +331,13 @@ map_estimate()
 
 	for (x = net->xmin; x < net->xmax; x++)
 	    for (y = net->ymin; y < net->ymax; y++)
-		Congestion[OGRID(x, y, 0)] += density;
+		CONGEST(x, y) += density;
     }
 
     maxval = 0.0;
     for (x = 0; x < NumChannelsX[0]; x++) {
 	for (y = 0; y < NumChannelsY[0]; y++) {
-	    density = Congestion[OGRID(x, y, 0)];
+	    density = CONGEST(x, y);
 	    if (density > maxval) maxval = density;
 	}
     }
@@ -347,7 +347,7 @@ map_estimate()
     for (x = 0; x < NumChannelsX[0]; x++) {
 	xspc = (x + 1) * spacing - hspc;
 	for (y = 0; y < NumChannelsY[0]; y++) {
-	    value = (int)(norm * Congestion[OGRID(x, y, 0)]);
+	    value = (int)(norm * CONGEST(x, y));
 	    XSetForeground(dpy, gc, bluevector[value]);
 	    yspc = height - (y + 1) * spacing - hspc;
 	    XFillRectangle(dpy, buffer, gc, xspc, yspc, spacing, spacing);

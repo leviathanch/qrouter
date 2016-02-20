@@ -397,6 +397,9 @@ extern NODEINFO Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
 #define OBSVAL(x, y, l)  (Obs[l][OGRID(x, y, l)])
 #define OBS2VAL(x, y, l) (Obs2[l][OGRID(x, y, l)])
 
+#define RMASK(x, y)      (RMask[OGRID(x, y, 0)])
+#define CONGEST(x, y)	 (Congestion[OGRID(x, y, 0)])
+
 extern DSEG  UserObs;			// user-defined obstruction layers
 
 extern u_char needblock[MAX_LAYERS];

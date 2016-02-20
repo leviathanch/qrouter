@@ -19,8 +19,6 @@ void   draw_net(NET net, u_char single, int *lastlayer);
 void   draw_layout(void);
 
 int    GUI_init(Tcl_Interp *interp);
-int    QuitCallback(ClientData clientData, Tcl_Interp *interp,
-                    int objc, Tcl_Obj *CONST objv[]);
 void   expose(Tk_Window tkwind);
 int    redraw(ClientData clientData, Tcl_Interp *interp, int objc,
               Tcl_Obj *CONST objv[]);

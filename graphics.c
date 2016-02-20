@@ -671,15 +671,6 @@ int GUI_init(Tcl_Interp *interp)
 
 /*----------------------------------------------------------------*/
 
-int QuitCallback(ClientData clientData, Tcl_Interp *interp,
-	int objc, Tcl_Obj *objv[])
-{
-   exit(0);
-   return TCL_OK;	// Statement not reached
-}
-
-/*----------------------------------------------------------------*/
-
 static void
 load_font(XFontStruct **font_info)
 {

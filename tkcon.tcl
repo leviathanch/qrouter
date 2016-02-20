@@ -238,18 +238,18 @@ proc ::tkcon::Init {} {
 	    if {![interp issafe]} {cd [file dirname [info script]]}
 	    set envHome		PREF_FOLDER
 	    set rcfile		tkcon.cfg
-	    set histfile	tkcon.hst
+	    set histfile	qrouter_tkcon.hst
 	    catch {console hide}
 	}
 	windows		{
 	    set envHome		HOME
 	    set rcfile		tkcon.cfg
-	    set histfile	tkcon.hst
+	    set histfile	qrouter_tkcon.hst
 	}
 	unix		{
 	    set envHome		HOME
 	    set rcfile		.tkconrc
-	    set histfile	.tkcon_history
+	    set histfile	.qrouter_tkcon_hst
 	}
     }
     if {[info exists env($envHome)]} {

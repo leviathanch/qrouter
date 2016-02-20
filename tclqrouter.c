@@ -118,6 +118,9 @@ static int qrouter_verbose(
 static int qrouter_print(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_quit(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 
 static cmdstruct qrouter_commands[] =
 {
@@ -147,7 +150,7 @@ static cmdstruct qrouter_commands[] =
    {"verbose", qrouter_verbose},
    {"redraw", redraw},
    {"print", qrouter_print},
-   {"quit", QuitCallback},
+   {"quit", qrouter_quit},
    {"", NULL}  /* sentinel */
 };
 
@@ -601,6 +604,30 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
 }
 
 /*------------------------------------------------------*/
+/* Command: qrouter_quit				*/
+/*							*/
+/* Call tkcon's exit routine, which will make sure	*/
+/* the history file is updated before final exit.	*/
+/*------------------------------------------------------*/
+
+int
+qrouter_quit(ClientData clientData, Tcl_Interp *interp,
+	int objc, Tcl_Obj *CONST objv[])
+{
+    if (objc != 1) {
+	Tcl_WrongNumArgs(interp, 1, objv, "(no arguments)");
+	return TCL_ERROR;
+    }
+
+    if (consoleinterp == interp)
+	Tcl_Exit(TCL_OK);
+    else
+	Tcl_Eval(interp, "catch {tkcon eval exit}\n");
+
+    return TCL_OK;       /* Not reached */
+}
+
+/*------------------------------------------------------*/
 /* Command "map"					*/
 /*							*/
 /* Specify what to draw in the graphics window		*/
@@ -876,6 +903,24 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	if ((net != NULL) && (net->netnodes != NULL)) {
 	    result = doroute(net, (u_char)0, dodebug);
 	    failcount = (result == 0) ? 0 : 1;
+
+	    /* Remove from FailedNets list if routing	*/
+	    /* was successful				*/
+
+	    if (result == 0 && FailedNets != NULL) {
+		NETLIST fnet, lnet = NULL;
+		for (fnet = FailedNets; fnet != NULL; fnet = fnet->next) {
+		    if (fnet->net == net) {
+			if (lnet == NULL)
+			    FailedNets = fnet->next;
+			else
+			    lnet->next = fnet->next;
+			free(fnet);
+			break;
+		    }
+		    lnet = fnet;
+		}
+	    }
 	}
     }
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));

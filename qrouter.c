@@ -1270,6 +1270,7 @@ int route_net_ripup(NET net, u_char graphdebug)
     }
     if (result != 0)
 	result = ripup_colliding(net);
+
     return result;
 }
 

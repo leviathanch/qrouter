@@ -2386,6 +2386,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
   u_char first = (u_char)1;
   u_char check_order[6];
   u_char max_reached;
+  u_char conflict;
+  u_char predecessor;
   PROUTE *Pr;
 
   best.cost = MAXRT;
@@ -2496,21 +2498,25 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       o = LefGetRouteOrientation(curpt.lay);
       forbid = OBSVAL(curpt.x, curpt.y, curpt.lay) & BLOCKED_MASK;
 
-      if (o == 1) {			// horizontal routes---check EAST and WEST first
-	 check_order[0] = (forbid & BLOCKED_E) ? 0 : EAST;
-	 check_order[1] = (forbid & BLOCKED_W) ? 0 : WEST;
-	 check_order[2] = (forbid & BLOCKED_U) ? 0 : UP;
-	 check_order[3] = (forbid & BLOCKED_D) ? 0 : DOWN;
-	 check_order[4] = (forbid & BLOCKED_N) ? 0 : NORTH;
-	 check_order[5] = (forbid & BLOCKED_S) ? 0 : SOUTH;
+      // To reach otherwise unreachable taps, allow searching on blocked
+      // paths but with a high cost.
+      conflict = (forceRoutable) ? PR_CONFLICT : PR_NO_EVAL;
+
+      if (o == 1) {		// horizontal routes---check EAST and WEST first
+	 check_order[0] = EAST  | ((forbid & BLOCKED_E) ? conflict : 0);
+	 check_order[1] = WEST  | ((forbid & BLOCKED_W) ? conflict : 0);
+	 check_order[2] = UP    | ((forbid & BLOCKED_U) ? conflict : 0);
+	 check_order[3] = DOWN  | ((forbid & BLOCKED_D) ? conflict : 0);
+	 check_order[4] = NORTH | ((forbid & BLOCKED_N) ? conflict : 0);
+	 check_order[5] = SOUTH | ((forbid & BLOCKED_S) ? conflict : 0);
       }
-      else {				// vertical routes---check NORTH and SOUTH first
-	 check_order[0] = (forbid & BLOCKED_N) ? 0 : NORTH;
-	 check_order[1] = (forbid & BLOCKED_S) ? 0 : SOUTH;
-	 check_order[2] = (forbid & BLOCKED_U) ? 0 : UP;
-	 check_order[3] = (forbid & BLOCKED_D) ? 0 : DOWN;
-	 check_order[4] = (forbid & BLOCKED_E) ? 0 : EAST;
-	 check_order[5] = (forbid & BLOCKED_W) ? 0 : WEST;
+      else {			// vertical routes---check NORTH and SOUTH first
+	 check_order[0] = NORTH | ((forbid & BLOCKED_N) ? conflict : 0);
+	 check_order[1] = SOUTH | ((forbid & BLOCKED_S) ? conflict : 0);
+	 check_order[2] = UP    | ((forbid & BLOCKED_U) ? conflict : 0);
+	 check_order[3] = DOWN  | ((forbid & BLOCKED_D) ? conflict : 0);
+	 check_order[4] = EAST  | ((forbid & BLOCKED_E) ? conflict : 0);
+	 check_order[5] = WEST  | ((forbid & BLOCKED_W) ? conflict : 0);
       }
 
       // Check order is from 0 (1st priority) to 5 (last priority).  However, this
@@ -2519,10 +2525,14 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       // on the stack in reverse order (5 to 0).
 
       for (i = 5; i >= 0; i--) {
+	 predecessor = 0;
 	 switch (check_order[i]) {
+	    case EAST | PR_CONFLICT:
+	       predecessor = PR_CONFLICT;
 	    case EAST:
+	       predecessor |= PR_PRED_W;
                if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
-         	  if ((result = eval_pt(&curpt, PR_PRED_W, stage)) == 1) {
+         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
          	     gpoint = (POINT)malloc(sizeof(struct point_));
          	     gpoint->x1 = curpt.x + 1;
          	     gpoint->y1 = curpt.y;
@@ -2533,9 +2543,12 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
                }
 	       break;
 
+	    case WEST | PR_CONFLICT:
+	       predecessor = PR_CONFLICT;
 	    case WEST:
+	       predecessor |= PR_PRED_E;
                if ((curpt.x - 1) >= 0) {
-         	  if ((result = eval_pt(&curpt, PR_PRED_E, stage)) == 1) {
+         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
          	     gpoint = (POINT)malloc(sizeof(struct point_));
          	     gpoint->x1 = curpt.x - 1;
          	     gpoint->y1 = curpt.y;
@@ -2546,9 +2559,12 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
                }
 	       break;
          
+	    case SOUTH | PR_CONFLICT:
+	       predecessor = PR_CONFLICT;
 	    case SOUTH:
+	       predecessor |= PR_PRED_N;
                if ((curpt.y - 1) >= 0) {
-         	  if ((result = eval_pt(&curpt, PR_PRED_N, stage)) == 1) {
+         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
          	     gpoint = (POINT)malloc(sizeof(struct point_));
          	     gpoint->x1 = curpt.x;
          	     gpoint->y1 = curpt.y - 1;
@@ -2559,9 +2575,12 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
                }
 	       break;
 
+	    case NORTH | PR_CONFLICT:
+	       predecessor = PR_CONFLICT;
 	    case NORTH:
+	       predecessor |= PR_PRED_S;
                if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
-         	  if ((result = eval_pt(&curpt, PR_PRED_S, stage)) == 1) {
+         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
          	     gpoint = (POINT)malloc(sizeof(struct point_));
          	     gpoint->x1 = curpt.x;
          	     gpoint->y1 = curpt.y + 1;
@@ -2572,9 +2591,12 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
                }
 	       break;
       
+	    case DOWN | PR_CONFLICT:
+	       predecessor = PR_CONFLICT;
 	    case DOWN:
+	       predecessor |= PR_PRED_U;
                if (curpt.lay > 0) {
-         	  if ((result = eval_pt(&curpt, PR_PRED_U, stage)) == 1) {
+         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
          	     gpoint = (POINT)malloc(sizeof(struct point_));
          	     gpoint->x1 = curpt.x;
          	     gpoint->y1 = curpt.y;
@@ -2585,9 +2607,12 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
                }
 	       break;
          
+	    case UP | PR_CONFLICT:
+	       predecessor = PR_CONFLICT;
 	    case UP:
+	       predecessor |= PR_PRED_D;
                if (curpt.lay < (Num_layers - 1)) {
-         	  if ((result = eval_pt(&curpt, PR_PRED_D, stage)) == 1) {
+         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
          	     gpoint = (POINT)malloc(sizeof(struct point_));
          	     gpoint->x1 = curpt.x;
          	     gpoint->y1 = curpt.y;

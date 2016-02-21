@@ -919,6 +919,11 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
     newpt = *ept;
 
+    if (flags & PR_CONFLICT) {
+	thiscost = ConflictCost * 10;
+	flags &= ~PR_CONFLICT;
+    }
+
     switch (flags) {
        case PR_PRED_N:
 	  newpt.y--;

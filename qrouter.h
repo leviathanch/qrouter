@@ -115,6 +115,7 @@ struct proute_ {        // partial route
 #define PR_PRED_D	0x06		// Predecessor is down
 
 #define PR_PROCESSED	0x08		// Tag to avoid visiting more than once
+#define PR_NO_EVAL	0x08		// Used only for making calls to eval_pt()
 #define PR_CONFLICT	0x10		// Two nets collide here during stage 2
 #define PR_SOURCE	0x20		// This is a source node
 #define PR_TARGET	0x40		// This is a target node

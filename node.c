@@ -1582,7 +1582,8 @@ void create_obstructions_outside_nodes(void)
 			 // allowing terminal connections to be made using
 			 // an offset tap, where possible.
 
-			 if (dy > ds->y1 && gridy >= 0) {
+			 if ((dy >= ds->y1 && gridy >= 0) && (dx >= ds->x1)
+					&& (dy <= ds->y2) && (dx <= ds->x2)) {
 			     int orignet = OBSVAL(gridx, gridy, ds->layer);
 
 			     if ((orignet & ROUTED_NET_MASK) == (u_int)node->netnum) {

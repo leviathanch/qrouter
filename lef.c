@@ -717,22 +717,48 @@ LefGetRouteOffset(int layer)
  * because the center can be on a half-grid position; so,
  * return half the value obtained.
  *
- * To-do:  Differentiate between X and Y vias when doing
- * checkerboard via patterning.
+ * This routine always uses a horizontally oriented via if
+ * available.  See the specific LefGetXYViaWidth() routine
+ * for differentiation between via orientations.
  *------------------------------------------------------------
  */
 
 double
 LefGetViaWidth(int base, int layer, int dir)
 {
+   return LefGetXYViaWidth(base, layer, dir, 0);
+}
+
+/*
+ *------------------------------------------------------------
+ * The base routing used by LefGetViaWidth(), with an
+ * additional argument that specifies which via orientation
+ * to use, if an alternative orientation is available.  This
+ * is necessary for doing checkerboard via patterning and
+ * for certain standard cells with ports that do not always
+ * fit one orientation of via.
+ *------------------------------------------------------------
+ */
+
+double
+LefGetXYViaWidth(int base, int layer, int dir, int orient)
+{
     DSEG lrect;
     LefList lefl;
     double width;
+    char **viatable;
 
-    lefl = LefFindLayer(ViaX[base]);
+    viatable = (orient == 1) ? ViaY : ViaX;
+
+    lefl = LefFindLayer(*(viatable + base));
+    if (!lefl) {
+	viatable = (orient == 1) ? ViaX : ViaY;
+	lefl = LefFindLayer(*(viatable + base));
+	viatable = (orient == 1) ? ViaY : ViaX;
+    }
     if (!lefl) {
 	if (base == Num_layers)
-	    lefl = LefFindLayer(ViaX[base - 1]);
+	    lefl = LefFindLayer(*(viatable + base - 1));
     }
     if (lefl) {
 	if (lefl->lefClass == CLASS_VIA) {

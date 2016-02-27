@@ -913,11 +913,16 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     int thiscost = 0;
     int netnum;
     NODE node;
+    NODEINFO nodeptr;
     NETLIST nl;
     PROUTE *Pr, *Pt;
     GRIDP newpt;
 
     newpt = *ept;
+
+    // ConflictCost is passed in flags if "force" option is set
+    // and this route crosses a prohibited boundary.  This allows
+    // the prohibited move but gives it a high cost.
 
     if (flags & PR_CONFLICT) {
 	thiscost = ConflictCost * 10;
@@ -946,13 +951,14 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     }
 
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
+    nodeptr = (newpt.lay < Pinlayers) ?
+		NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
        netnum = Pr->prdata.net;
        if (stage && (netnum < MAXNETNUM)) {
-	  if ((newpt.lay < Pinlayers) &&
-		NODESAV(newpt.x, newpt.y, newpt.lay) != NULL)
+	  if ((newpt.lay < Pinlayers) && (nodeptr->nodesav != NULL))
 	     return 0;			// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
@@ -969,11 +975,10 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
 	  Pr->flags |= (PR_CONFLICT | PR_COST);
 	  Pr->prdata.cost = MAXRT;
-	  thiscost = ConflictCost;
+	  thiscost += ConflictCost;
        }
        else if (stage && (netnum == DRC_BLOCKAGE)) {
-	  if ((newpt.lay < Pinlayers) &&
-		NODESAV(newpt.x, newpt.y, newpt.lay) != NULL)
+	  if ((newpt.lay < Pinlayers) && (nodeptr->nodesav != NULL))
 	     return 0;			// But cannot route over terminals!
 
 	  // Position does not contain the net number, so we have to
@@ -1040,7 +1045,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
 	  Pr->flags |= (PR_CONFLICT | PR_COST);
 	  Pr->prdata.cost = MAXRT;
-	  thiscost = ConflictCost;
+	  thiscost += ConflictCost;
        }
        else
           return 0;		// Position is not routeable
@@ -1093,6 +1098,14 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
     // Add the cost to the cost of the original position
     thiscost += ept->cost;
+
+    // Routes that reach nodes are given a cost based on the "quality"
+    // of the node location:  higher cost given to stub routes and
+    // offset positions.
+
+    if (nodeptr != NULL) {
+       thiscost += (int)(fabsf(nodeptr->stub) * (float)OffsetCost);
+    }
    
     // Replace node information if cost is minimum
 
@@ -1882,20 +1895,29 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       if (lseg && ((lseg->segtype & (ST_VIA | ST_OFFSET_END)) ==
 			(ST_VIA | ST_OFFSET_END)))
 	 if (seg->segtype != ST_VIA)
-	    seg->segtype |= ST_OFFSET_START;
+	    if (((seg->x1 == seg->x2) && (dir1 & STUBROUTE_NS)) ||
+		((seg->y1 == seg->y2) && (dir1 & STUBROUTE_EW)))
+	       seg->segtype |= ST_OFFSET_START;
 
       // Check if the route ends are offset.  If so, add flags.  The segment
       // entries are integer grid points, so offsets need to be made when
-      // the location is output.
+      // the location is output.  This is only for offsets that are in the
+      // same direction as the route, to make sure that the route reaches
+      // the offset via, and does not extend past it.
 
       if (dir1 & OFFSET_TAP) {
-	 seg->segtype |= ST_OFFSET_START;
+	 if (((seg->x1 == seg->x2) && (dir1 & STUBROUTE_NS)) ||
+		((seg->y1 == seg->y2) && (dir1 & STUBROUTE_EW)))
+	    seg->segtype |= ST_OFFSET_START;
 
 	 // An offset on a via needs to be applied to the previous route
-	 // segment as well, if that route is a wire.
+	 // segment as well, if that route is a wire, and the offset is
+	 // in the same direction as the wire.
 
 	 if (lseg && (seg->segtype & ST_VIA) && !(lseg->segtype & ST_VIA))
-	    lseg->segtype |= ST_OFFSET_END;
+	    if (((lseg->x1 == lseg->x2) && (dir2 & STUBROUTE_NS)) ||
+		((lseg->y1 == lseg->y2) && (dir2 & STUBROUTE_EW)))
+	       lseg->segtype |= ST_OFFSET_END;
       }
 
       if (dir2 & OFFSET_TAP) seg->segtype |= ST_OFFSET_END;

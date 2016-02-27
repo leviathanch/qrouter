@@ -1471,6 +1471,81 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 }
 
 /*--------------------------------------------------------------*/
+/* 3rd stage routing (cleanup).  Rip up each net in turn and	*/
+/* reroute it.  With all of the crossover costs gone, routes	*/
+/* should be much better than the 1st stage.  Any route that	*/
+/* existed before it got ripped up should by definition be	*/
+/* routable.							*/
+/*--------------------------------------------------------------*/
+
+int dothirdstage(u_char graphdebug, int debug_netnum)
+{
+   int i, failcount, remaining, result;
+   NET net;
+   NETLIST nl;
+
+   // Clear the lists of failed routes, in case first
+   // stage is being called more than once.
+
+   if (debug_netnum <= 0) {
+      while (FailedNets) {
+         nl = FailedNets->next;
+         free(FailedNets);
+         FailedNets = nl;
+      }
+   }
+
+   // Now find and route all the nets
+
+   remaining = Numnets;
+ 
+   for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
+
+      net = getnettoroute(i);
+      if ((net != NULL) && (net->netnodes != NULL)) {
+	 ripup_net(net, (u_char)0);
+	 result = doroute(net, (u_char)0, graphdebug);
+	 if (result == 0) {
+	    remaining--;
+	    if (Verbose > 0)
+	       Fprintf(stdout, "Finished routing net %s\n", net->netname);
+	    Fprintf(stdout, "Nets remaining: %d\n", remaining);
+	 }
+	 else {
+	    if (Verbose > 0)
+	       Fprintf(stdout, "Failed to route net %s\n", net->netname);
+	 }
+      }
+      else {
+	 if (net && (Verbose > 0)) {
+	    Fprintf(stdout, "Nothing to do for net %s\n", net->netname);
+	 }
+	 remaining--;
+      }
+      if (debug_netnum >= 0) break;
+   }
+   failcount = countlist(FailedNets);
+   if (debug_netnum >= 0) return failcount;
+
+   if (Verbose > 0) {
+      Flush(stdout);
+      Fprintf(stdout, "\n----------------------------------------------\n");
+      Fprintf(stdout, "Progress: ");
+      Fprintf(stdout, "Stage 3 total routes completed: %d\n", TotalRoutes);
+   }
+   if (FailedNets == (NETLIST)NULL)
+      Fprintf(stdout, "No failed routes!\n");
+   else {
+      if (FailedNets != (NETLIST)NULL)
+          Fprintf(stdout, "Failed net routes: %d\n", failcount);
+   }
+   if (Verbose > 0)
+      Fprintf(stdout, "----------------------------------------------\n");
+
+   return failcount;
+}
+
+/*--------------------------------------------------------------*/
 /* initMask() ---						*/
 /*--------------------------------------------------------------*/
 

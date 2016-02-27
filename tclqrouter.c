@@ -55,6 +55,9 @@ static int qrouter_stage1(
 static int qrouter_stage2(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_stage3(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_writedef(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -128,6 +131,7 @@ static cmdstruct qrouter_commands[] =
    {"start", qrouter_start},
    {"stage1", qrouter_stage1},
    {"stage2", qrouter_stage2},
+   {"stage3", qrouter_stage3},
    {"write_def", qrouter_writedef},
    {"read_def", qrouter_readdef},
    {"read_lef", qrouter_readlef},
@@ -1095,6 +1099,169 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 }
 
 /*------------------------------------------------------*/
+/* Command "stage3"					*/
+/*							*/
+/* Execute stage3 routing.  This works through the	*/
+/* entire netlist, ripping up each route in turn and	*/
+/* re-routing it.  					*/
+/*							*/
+/* The interpreter result is set to the number of	*/
+/* failed routes at the end of the first stage.		*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*  stage3 debug	Draw the area being searched in	*/
+/*			real-time.  This slows down the	*/
+/*			algorithm and is intended only	*/
+/*			for diagnostic use.		*/
+/*  stage3 step		Single-step stage three.	*/
+/*  stage3 mask none	Don't limit the search area	*/
+/*  stage3 mask auto	Select the mask automatically	*/
+/*  stage3 mask bbox	Use the net bbox as a mask	*/
+/*  stage3 mask <value> Set the mask size to <value>,	*/
+/*			an integer typ. 0 and up.	*/
+/*  stage3 route <net>	Route net named <net> only.	*/
+/*							*/
+/*  stage3 force	Force a terminal to be routable	*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
+               int objc, Tcl_Obj *CONST objv[])
+{
+    u_char dodebug;
+    u_char dostep;
+    int i, idx, idx2, val, result, failcount = 0;
+    NET net = NULL;
+
+    static char *subCmds[] = {
+	"debug", "mask", "route", "force", "step", NULL
+    };
+    enum SubIdx {
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx
+    };
+   
+    static char *maskSubCmds[] = {
+	"none", "auto", "bbox", NULL
+    };
+    enum maskSubIdx {
+	NoneIdx, AutoIdx, BboxIdx
+    };
+
+    // Command defaults
+
+    dodebug = FALSE;
+    dostep = FALSE;
+    maskMode = MASK_AUTO;	// Mask mode is auto unless specified
+    forceRoutable = FALSE;	// Don't force unless specified
+
+    if (objc >= 2) {
+	for (i = 1; i < objc; i++) {
+
+	    if ((result = Tcl_GetIndexFromObj(interp, objv[i],
+			(CONST84 char **)subCmds, "option", 0, &idx))
+			!= TCL_OK)
+		return result;
+
+	    switch (idx) {
+		case DebugIdx:
+		    dodebug = TRUE;
+		    break;
+
+		case StepIdx:
+		    dostep = TRUE;
+		    break;
+
+		case ForceIdx:
+		    forceRoutable = TRUE;
+		    break;
+	
+		case RouteIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "route ?net?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    net = LookupNet(Tcl_GetString(objv[i]));
+		    if (net == NULL) {
+			Tcl_SetResult(interp, "No such net", NULL);
+			return TCL_ERROR;
+		    }
+		    break;
+
+		case MaskIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "mask ?type?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    if ((result = Tcl_GetIndexFromObj(interp, objv[i],
+				(CONST84 char **)maskSubCmds, "type", 0,
+				&idx2)) != TCL_OK) {
+			Tcl_ResetResult(interp);
+			result = Tcl_GetIntFromObj(interp, objv[i], &val);
+			if (result != TCL_OK) return result;
+			else if (val < 0 || val > 200) {
+			    Tcl_SetResult(interp, "Bad mask value", NULL);
+			    return TCL_ERROR;
+			}
+			maskMode = (u_char)val;
+		    }
+		    else {
+			switch(idx2) {
+			    case NoneIdx:
+				maskMode = MASK_NONE;
+				break;
+			    case AutoIdx:
+				maskMode = MASK_AUTO;
+				break;
+			    case BboxIdx:
+				maskMode = MASK_BBOX;
+				break;
+			}
+		    }
+		    break;
+	    }
+	}
+    }
+
+    if (dostep == FALSE) stepnet = -1;
+    else stepnet++;
+
+    if (net == NULL)
+	failcount = dothirdstage(dodebug, stepnet);
+    else {
+	if ((net != NULL) && (net->netnodes != NULL)) {
+	    result = doroute(net, (u_char)0, dodebug);
+	    failcount = (result == 0) ? 0 : 1;
+
+	    /* Remove from FailedNets list if routing	*/
+	    /* was successful				*/
+
+	    if (result == 0 && FailedNets != NULL) {
+		NETLIST fnet, lnet = NULL;
+		for (fnet = FailedNets; fnet != NULL; fnet = fnet->next) {
+		    if (fnet->net == net) {
+			if (lnet == NULL)
+			    FailedNets = fnet->next;
+			else
+			    lnet->next = fnet->next;
+			free(fnet);
+			break;
+		    }
+		    lnet = fnet;
+		}
+	    }
+	}
+    }
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
+
+    if (stepnet >= (Numnets - 1)) stepnet = -1;
+
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
 /* Command "remove"					*/
 /*							*/
 /*   Remove a net or nets, or all nets, from the	*/
@@ -2031,6 +2198,7 @@ qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
 /*	cost jog					*/
 /*	cost crossover					*/
 /*	cost block					*/
+/*	cost offset					*/
 /*	cost conflict					*/
 /*------------------------------------------------------*/
 
@@ -2042,10 +2210,10 @@ qrouter_cost(ClientData clientData, Tcl_Interp *interp,
 
     static char *subCmds[] = {
 	"segment", "via", "jog", "crossover",
-	"block", "conflict", NULL
+	"block", "offset", "conflict", NULL
     };
     enum SubIdx {
-	SegIdx, ViaIdx, JogIdx, XOverIdx, BlockIdx, ConflictIdx
+	SegIdx, ViaIdx, JogIdx, XOverIdx, BlockIdx, OffsetIdx, ConflictIdx
     };
    
     value = 0;
@@ -2053,7 +2221,9 @@ qrouter_cost(ClientData clientData, Tcl_Interp *interp,
 	result = Tcl_GetIntFromObj(interp, objv[2], &value);
 	if (result != TCL_OK) return result;
 
-	if (value <= 0) {
+	// Disallow negative costs.
+
+	if (value < 0) {
 	    Tcl_SetResult(interp, "Bad cost value", NULL);
 	    return TCL_ERROR;
 	}
@@ -2066,6 +2236,20 @@ qrouter_cost(ClientData clientData, Tcl_Interp *interp,
     if ((result = Tcl_GetIndexFromObj(interp, objv[1],
 		(CONST84 char **)subCmds, "option", 0, &idx)) != TCL_OK)
 	return result;
+
+    switch (idx) {
+	case SegIdx:
+	case ViaIdx:
+	case ConflictIdx:
+
+	// Segment, via, and conflict costs must not be zero or
+	// bad things happen.
+
+	    if (value <= 0) {
+		Tcl_SetResult(interp, "Bad cost value", NULL);
+		return TCL_ERROR;
+	    }
+    }
 
     switch (idx) {
 	case SegIdx:
@@ -2094,6 +2278,13 @@ qrouter_cost(ClientData clientData, Tcl_Interp *interp,
 		Tcl_SetObjResult(interp, Tcl_NewIntObj(XverCost));
 	    else
 		XverCost = value;
+	    break;
+
+	case OffsetIdx:
+	    if (objc == 2)
+		Tcl_SetObjResult(interp, Tcl_NewIntObj(OffsetCost));
+	    else
+		OffsetCost = value;
 	    break;
 
 	case BlockIdx:

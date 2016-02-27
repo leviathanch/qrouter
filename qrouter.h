@@ -391,6 +391,7 @@ extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
 extern NODEINFO Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
 					// pointers to node structures.
 
+#define NODEIPTR(x, y, l) (&(Nodeinfo[l][OGRID(x, y, l)]))
 #define NODESAV(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].nodesav)
 #define NODELOC(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].nodeloc)
 #define STUBVAL(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].stub)
@@ -438,7 +439,6 @@ int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 
 void   read_def(char *filename);
-int    dofirststage(u_char graphdebug, int debug_netnum);
 int    write_def(char *filename);
 
 char  *print_node_name(NODE node);
@@ -448,11 +448,13 @@ void   print_nlgates(char *filename);
 void   print_net(NET net);
 void   print_gate(GATE gate);
 
+int    dofirststage(u_char graphdebug, int debug_netnum);
+int    dosecondstage(u_char graphdebug, u_char singlestep);
+int    dothirdstage(u_char graphdebug, int debug_netnum);
+
+int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
 int    route_net_ripup(NET net, u_char graphdebug);
-int    dosecondstage(u_char graphdebug, u_char singlestep);
-int    doroute(NET net, u_char stage, u_char graphdebug);
-
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

@@ -55,6 +55,7 @@ int     JogCost = 10;              // Cost of 1 grid off-direction jog
 int     XverCost = 4;              // Cost of a crossover
 int     BlockCost = 25;            // Cost of a crossover when node has
 				   // only one tap point
+int	OffsetCost = 50;	   // Cost per micron of a node offset
 int 	ConflictCost = 50;	   // Cost of shorting another route
 				   // during the rip-up and reroute stage
 
@@ -291,6 +292,9 @@ int read_config(FILE *fconfig, int is_info)
 	    OK = 1; XverCost = iarg;
 	}
 
+	if ((i = sscanf(lineptr, "route offset cost %d", &iarg)) == 1) {
+	    OK = 1; OffsetCost = iarg;
+	}
 	if ((i = sscanf(lineptr, "route block cost %d", &iarg)) == 1) {
 	    OK = 1; BlockCost = iarg;
 	}

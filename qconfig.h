@@ -35,6 +35,7 @@ extern int     ViaCost;
 extern int     JogCost;
 extern int     XverCost;
 extern int     BlockCost;
+extern int     OffsetCost;
 extern int     ConflictCost;
 
 extern char    *ViaX[MAX_LAYERS];

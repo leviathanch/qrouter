@@ -1420,6 +1420,7 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
                 int objc, Tcl_Obj *CONST objv[])
 {
     char *LEFfile;
+    int mscale;
 
     if (objc != 2) {
 	Tcl_SetResult(interp, "No LEF filename specified!", NULL);
@@ -1427,7 +1428,9 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
     }
     LEFfile = Tcl_GetString(objv[1]);
 
-    LefRead(LEFfile);
+    mscale = LefRead(LEFfile);
+    if (Scales.mscale < mscale) Scales.mscale = mscale;
+ 
     post_config();
 
     return QrouterTagCallback(interp, objc, objv);

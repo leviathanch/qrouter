@@ -2267,15 +2267,17 @@ LefReadLayerSection(f, lname, mode, lefl)
  *------------------------------------------------------------
  */
 
-enum lef_sections {LEF_VERSION = 0, LEF_NAMESCASESENSITIVE,
-	LEF_PROPERTYDEFS, LEF_UNITS, LEF_SECTION_LAYER,
-	LEF_SECTION_VIA, LEF_SECTION_VIARULE,
+enum lef_sections {LEF_VERSION = 0,
+	LEF_BUSBITCHARS, LEF_DIVIDERCHAR, LEF_MANUFACTURINGGRID,
+	LEF_USEMINSPACING, LEF_CLEARANCEMEASURE,
+	LEF_NAMESCASESENSITIVE, LEF_PROPERTYDEFS, LEF_UNITS,
+	LEF_SECTION_LAYER, LEF_SECTION_VIA, LEF_SECTION_VIARULE,
 	LEF_SECTION_SPACING, LEF_SECTION_SITE, LEF_PROPERTY,
 	LEF_NOISETABLE, LEF_CORRECTIONTABLE, LEF_IRDROP,
 	LEF_ARRAY, LEF_SECTION_TIMING, LEF_EXTENSION, LEF_MACRO,
 	LEF_END};
 
-void
+int
 LefRead(inName)
     char *inName;
 {
@@ -2284,14 +2286,20 @@ LefRead(inName)
     char *token;
     char tsave[128];
     int keyword, layer;
+    int oprecis = 100;	// = 1 / manufacturing grid (microns)
     float oscale;
-    double xydiff;
+    double xydiff, ogrid;
     LefList lefl;
     DSEG grect;
     GATE gateginfo;
 
     static char *sections[] = {
 	"VERSION",
+	"BUSBITCHARS",
+	"DIVIDERCHAR",
+	"MANUFACTURINGGRID",
+	"USEMINSPACING",
+	"CLEARANCEMEASURE",
 	"NAMESCASESENSITIVE",
 	"PROPERTYDEFINITIONS",
 	"UNITS",
@@ -2323,7 +2331,7 @@ LefRead(inName)
     {
 	Fprintf(stderr, "Cannot open input file: ");
 	perror(filename);
-	return;
+	return 0;
     }
 
     if (Verbose > 0) {
@@ -2345,9 +2353,17 @@ LefRead(inName)
 	switch (keyword)
 	{
 	    case LEF_VERSION:
+	    case LEF_BUSBITCHARS:
+	    case LEF_DIVIDERCHAR:
+	    case LEF_CLEARANCEMEASURE:
+	    case LEF_USEMINSPACING:
+	    case LEF_NAMESCASESENSITIVE:
 		LefEndStatement(f);
 		break;
-	    case LEF_NAMESCASESENSITIVE:
+	    case LEF_MANUFACTURINGGRID:
+		token = LefNextToken(f, TRUE);
+		if (sscanf(token, "%lg", &ogrid) == 1)
+		    oprecis = (int)((1.0 / ogrid) + 0.5);
 		LefEndStatement(f);
 		break;
 	    case LEF_PROPERTYDEFS:
@@ -2551,4 +2567,5 @@ LefRead(inName)
 	    }
 	}
     }
+    return oprecis;
 }

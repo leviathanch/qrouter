@@ -172,6 +172,7 @@ runqrouter(int argc, char *argv[])
    u_char readconfig = FALSE;
     
    Scales.iscale = 1;
+   Scales.mscale = 100;
    Filename[0] = 0;
    DEFfilename[0] = 0;
 
@@ -597,6 +598,8 @@ static int post_def_setup()
 
 void read_def(char *filename)
 {
+   double oscale, precis;
+
    if ((filename == NULL) && (DEFfilename[0] == '\0')) {
       Fprintf(stderr, "No DEF file specified, nothing to read.\n");
       return;
@@ -607,7 +610,19 @@ void read_def(char *filename)
    }
    else reinitialize();
 
-   Scales.oscale = (double)((float)Scales.iscale * DefRead(DEFfilename));
+   oscale = (double)DefRead(DEFfilename);
+   precis = Scales.mscale / oscale;	// from LEF manufacturing grid
+   if (precis < 1.0) precis = 1.0;
+   precis *= (double)Scales.iscale;	// user-defined extra scaling
+
+   Scales.iscale = (int)(precis + 0.5);
+   Scales.oscale = (double)(Scales.iscale * oscale);
+
+   if (Verbose > 0)
+      Fprintf(stdout, "Output scale = microns / %g, precision %g\n",
+		Scales.oscale / (double)Scales.iscale,
+		1.0 / (double)Scales.iscale);
+
    post_def_setup();
 }
 

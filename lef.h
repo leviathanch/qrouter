@@ -138,7 +138,7 @@ int    LefGetMaxLayer(void);
 GATE   LefFindInstance(char *name);
 void   LefHashCell(GATE gateginfo);
 
-void   LefRead(char *inName);
+int    LefRead(char *inName);
 
 void LefError(char *fmt, ...);	/* Variable argument procedure requires */
 				/* parameter list.			*/

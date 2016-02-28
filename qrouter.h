@@ -78,6 +78,7 @@ typedef unsigned long  u_long;
 
 typedef struct scalerec_ {
    int    iscale;
+   int	  mscale;
    double oscale;
 } ScaleRec;
 

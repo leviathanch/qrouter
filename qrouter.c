@@ -2797,14 +2797,14 @@ done:
 
 static ROUTE createemptyroute(void)
 {
-  ROUTE rt;
+   ROUTE rt;
 
-  rt = (ROUTE)calloc(1, sizeof(struct route_));
-  rt->netnum = 0;
-  rt->segments = (SEG)NULL;
-  rt->flags = (u_char)0;
-  rt->next = (ROUTE)NULL;
-  return rt;
+   rt = (ROUTE)calloc(1, sizeof(struct route_));
+   rt->netnum = 0;
+   rt->segments = (SEG)NULL;
+   rt->flags = (u_char)0;
+   rt->next = (ROUTE)NULL;
+   return rt;
 
 } /* createemptyroute(void) */
 
@@ -2825,175 +2825,212 @@ static void cleanup_net(NET net)
 {
    SEG segf, segl, seg;
    ROUTE rt, rt2;
-   int ls, lf = 0, ll = 0, layer, lastrlayer, lastlayer;
-   u_char fcheck, lcheck, fixed;
-   u_char xcheck, ycheck; 
+   int lf, ll, lf2, ll2;
+   u_char fcheck, lcheck;
+   u_char xcheckf, ycheckf, xcheckl, ycheckl; 
 
-   for (layer = 0; layer < Num_layers; layer++) {
-      xcheck = needblock[layer] & VIABLOCKX;
-      ycheck = needblock[layer] & VIABLOCKY;
+   lf = ll = lf2 = ll2 = -1;
 
-      if (xcheck || ycheck) {
-	 for (rt = net->routes; rt; rt = rt->next) {
-	    fixed = FALSE;
-	    fcheck = lcheck = FALSE;
+   for (rt = net->routes; rt; rt = rt->next) {
+      fcheck = lcheck = FALSE;
 
-	    /* This problem will only show up on route endpoints */
-	    // segf is the first segment of the route.
-	    // segl is the last segment of the route.
+      // This problem will only show up on route endpoints.
+      // segf is the first segment of the route.
+      // segl is the last segment of the route.
+      // lf is the layer at the route start (layer first)
+      // lf2 is the layer of the second segment.
+      // ll is the layer at the route end (layer last)
+      // ll2 is the layer of the next-to-last segment
 
-	    segf = rt->segments;
-	    if (segf == NULL) continue;
-	    lastlayer = (segf->segtype == ST_VIA) ? -1 : segf->layer;
-	    for (segl = segf->next; segl && segl->next; segl = segl->next)
-		if (segl->segtype != ST_VIA) lastlayer = segl->layer;
+      segf = rt->segments;
+      if (segf == NULL) continue;
+      if ((segf->next != NULL) && (segf->segtype == ST_VIA)) {
+	 if (segf->next->layer > segf->layer) {
+	    lf = segf->layer;
+	    lf2 = segf->layer + 1;
+	 }
+	 else {
+	    lf = segf->layer + 1;
+	    lf2 = segf->layer;
+	 }
+         // Set flag fcheck indicating that segf needs checking
+	 fcheck = TRUE;
 
-	    // Set flag fcheck if segf needs checking, and set flag
-	    // lcheck if segl needs checking.
+	 // We're going to remove the contact so it can't be a tap
+	 if ((lf < Pinlayers) && (NODESAV(segf->x1, segf->y1, lf) != NULL))
+	    fcheck = FALSE;
+      }
+      xcheckf = needblock[lf] & VIABLOCKX;
+      ycheckf = needblock[lf] & VIABLOCKY;
+      if (!xcheckf && !ycheckf) fcheck = FALSE;
 
-	    if (segf->segtype & ST_VIA) {
-	       lf = segf->layer;
-	       fcheck = (lf != layer && lf != layer - 1) ? FALSE : TRUE;
-	       // We're going to remove the contact so it can't be a tap
-	       if ((lf < Pinlayers) &&
-			(NODESAV(segf->x1, segf->y1, lf) != NULL))
-		  fcheck = FALSE;
-	    }
-	    if (segl && (segl->segtype & ST_VIA)) {
-	       ll = segl->layer;
-	       lcheck = (ll != layer && ll != layer - 1) ? FALSE : TRUE;
-	       // We're going to remove the contact so it can't be a tap
-	       if ((ll < Pinlayers) &&
-			(NODESAV(segl->x1, segl->y1, ll) != NULL))
-		  lcheck = FALSE;
-	    }
-	    if (fcheck == FALSE && lcheck == FALSE) continue;
+      // Move to the next-to-last segment
+      for (segl = segf->next; segl && segl->next; segl = segl->next);
 
-	    // For each route rt2 that is not rt, look at every via
-	    // and see if it is adjacent to segf or segl.
+      if (segl && (segl->next != NULL) && (segl->next->segtype == ST_VIA)) {
+	 if (segl->next->layer < segl->layer) {
+	    ll = segl->next->layer;
+	    ll2 = segl->next->layer + 1;
+	 }
+	 else {
+	    ll = segl->next->layer + 1;
+	    ll2 = segl->next->layer;
+	 }
+	 // Move segl to the last segment
+	 segl = segl->next;
+	 // Set flag lcheck indicating that segl needs checking.
+	 lcheck = TRUE;
 
-	    for (rt2 = net->routes; rt2; rt2 = rt2->next) {
-	       if (rt2 == rt) continue;
+	 // We're going to remove the contact so it can't be a tap
+	 if ((ll < Pinlayers) && (NODESAV(segl->x1, segl->y1, ll) != NULL))
+	    lcheck = FALSE;
+      }
+      xcheckl = needblock[ll] & VIABLOCKX;
+      ycheckl = needblock[ll] & VIABLOCKY;
+      if (!xcheckl && !ycheckl) lcheck = FALSE;
 
-	       lastrlayer = -1;
-	       for (seg = rt2->segments; seg; seg = seg->next) {
-		  if (seg->segtype & ST_VIA) {
-		     ls = seg->layer;
-		     if (ls != layer && ls != layer - 1) continue;
-		     if (fcheck) {
-			if ((ABSDIFF(seg->x1, segf->x1) == 1) &&
-				(seg->y1 == segf->y1) && xcheck) {
-			   if (ls != lf) {
-			      // NOTE:  This is still an error, and we should
-			      // deal with it by creating a special net.
-			      SEG newseg;
-			      newseg = (SEG)malloc(sizeof(struct seg_));
-			      rt->segments = newseg;
-			      newseg->next = segf;
-			      newseg->layer = ll;
-			      newseg->segtype = ST_WIRE;
-			      newseg->x1 = segf->x1;
-			      newseg->y1 = segf->y1;
-			      newseg->x2 = seg->x1; 
-			      newseg->y2 = seg->y1;
-			      continue;
-			   }
+      // For each route rt2 that is not rt, look at every via
+      // and see if it is adjacent to segf or segl.
+
+      for (rt2 = net->routes; rt2; rt2 = rt2->next) {
+
+         if ((fcheck == FALSE) && (lcheck == FALSE)) break;
+         if (rt2 == rt) continue;
+
+         for (seg = rt2->segments; seg; seg = seg->next) {
+	    if (seg->segtype & ST_VIA) {
+	       if (fcheck) {
+		  if ((seg->layer == lf) || ((seg->layer + 1) == lf)) {
+		     if (xcheckf && (seg->y1 == segf->y1) &&
+				(ABSDIFF(seg->x1, segf->x1) == 1)) {
+			fcheck = FALSE;
+			if (seg->layer != segf->layer) {
+
+			   // Adjacent vias are different types.
+			   // Deal with it by creating a route between
+			   // the vias on their shared layer.  This
+			   // will later be made into a special net to
+			   // avoid notch DRC errors.
+
+			   SEG newseg;
+			   newseg = (SEG)malloc(sizeof(struct seg_));
+			   rt->segments = newseg;
+			   newseg->next = segf;
+			   newseg->layer = lf;
+			   newseg->segtype = ST_WIRE;
+			   newseg->x1 = segf->x1;
+			   newseg->y1 = segf->y1;
+			   newseg->x2 = seg->x1; 
+			   newseg->y2 = seg->y1;
+			}
+			else {
 			   // Change via to wire route, connect it to seg,
 			   // and make sure it has the same layer type as
 			   // the following route.
 			   segf->segtype = ST_WIRE;
 			   segf->x1 = seg->x1;
-			   segf->layer = segf->next->layer;
-			   fixed = TRUE;
-			   break;
-			}
-			else if ((ABSDIFF(seg->y1, segf->y1) == 1) &&
-				(seg->x1 == segf->x1) && ycheck) {
-			   if (ls != lf) {
-			      // NOTE:  This is still an error, and we should
-			      // deal with it by creating a special net.
-			      SEG newseg;
-			      newseg = (SEG)malloc(sizeof(struct seg_));
-			      rt->segments = newseg;
-			      newseg->next = segf;
-			      newseg->layer = ll;
-			      newseg->segtype = ST_WIRE;
-			      newseg->x1 = segf->x1;
-			      newseg->y1 = segf->y1;
-			      newseg->x2 = seg->x1; 
-			      newseg->y2 = seg->y1;
-			      continue;
-			   }
+			   segf->layer = lf2;
+		        }
+		     }
+		     else if (ycheckf && (seg->x1 == segf->x1) &&
+				(ABSDIFF(seg->y1, segf->y1) == 1)) {
+			fcheck = FALSE;
+			if (seg->layer != segf->layer) {
+			   // Adjacent vias are different types.
+			   // Deal with it by creating a route between
+			   // the vias on their shared layer.  This
+			   // will later be made into a special net to
+			   // avoid notch DRC errors.
+
+			   SEG newseg;
+			   newseg = (SEG)malloc(sizeof(struct seg_));
+			   rt->segments = newseg;
+			   newseg->next = segf;
+			   newseg->layer = lf;
+			   newseg->segtype = ST_WIRE;
+			   newseg->x1 = segf->x1;
+			   newseg->y1 = segf->y1;
+			   newseg->x2 = seg->x1; 
+			   newseg->y2 = seg->y1;
+		        }
+		        else {
 			   // Change via to wire route, connect it to seg,
 			   // and make sure it has the same layer type as
 			   // the following route.
 			   segf->segtype = ST_WIRE;
 			   segf->y1 = seg->y1;
-			   segf->layer = segf->next->layer;
-			   fixed = TRUE;
-			   break;
+			   segf->layer = lf2;
 			}
 		     }
-		     if (lcheck) {
-			if ((ABSDIFF(seg->x1, segl->x1) == 1) &&
-				(seg->y1 == segl->y1) && xcheck) {
-			   if (ls != ll) {
-			      // NOTE:  This is still an error, and we should
-			      // deal with it by creating a special net.
-			      SEG newseg;
-			      newseg = (SEG)malloc(sizeof(struct seg_));
-			      segl->next = newseg;
-			      newseg->next = NULL;
-			      newseg->layer = ll;
-			      newseg->segtype = ST_WIRE;
-			      newseg->x1 = segl->x1;
-			      newseg->y1 = segl->y1;
-			      newseg->x2 = seg->x1; 
-			      newseg->y2 = seg->y1;
-			      continue;
-			   }
+		  }
+	       }
+
+               if (lcheck) {
+		  if ((seg->layer == ll) || ((seg->layer + 1) == ll)) {
+		     if (xcheckl && (seg->y1 == segl->y1) &&
+				(ABSDIFF(seg->x1, segl->x1) == 1)) {
+			lcheck = FALSE;
+			if (seg->layer != segl->layer) {
+
+			   // Adjacent vias are different types.
+			   // Deal with it by creating a route between
+			   // the vias on their shared layer.  This
+			   // will later be made into a special net to
+			   // avoid notch DRC errors.
+
+			   SEG newseg;
+			   newseg = (SEG)malloc(sizeof(struct seg_));
+			   segl->next = newseg;
+			   newseg->next = NULL;
+			   newseg->layer = ll;
+			   newseg->segtype = ST_WIRE;
+			   newseg->x1 = segl->x1;
+			   newseg->y1 = segl->y1;
+			   newseg->x2 = seg->x1; 
+			   newseg->y2 = seg->y1;
+			}
+			else {
 			   // Change via to wire route, connect it to seg,
 			   // and make sure it has the same layer type as
 			   // the previous route.
 			   segl->segtype = ST_WIRE;
 			   segl->x2 = seg->x2;
-			   segl->layer = lastlayer;
-			   fixed = TRUE;
-			   break;
+			   segl->layer = ll2;
 			}
-			else if ((ABSDIFF(seg->y1, segl->y1) == 1) &&
-				(seg->x1 == segl->x1) && ycheck) {
-			   if (ls != ll) {
-			      // NOTE:  This is still an error, and we should
-			      // deal with it by creating a special net.
-			      SEG newseg;
-			      newseg = (SEG)malloc(sizeof(struct seg_));
-			      segl->next = newseg;
-			      newseg->next = NULL;
-			      newseg->layer = ll;
-			      newseg->segtype = ST_WIRE;
-			      newseg->x1 = segl->x1;
-			      newseg->y1 = segl->y1;
-			      newseg->x2 = seg->x1; 
-			      newseg->y2 = seg->y1;
-			      continue;
-			   }
+		     }
+		     else if (ycheckl && (seg->x1 == segl->x1) &&
+				(ABSDIFF(seg->y1, segl->y1) == 1)) {
+			lcheck = FALSE;
+			if (seg->layer != segl->layer) {
+
+			   // Adjacent vias are different types.
+			   // Deal with it by creating a route between
+			   // the vias on their shared layer.  This
+			   // will later be made into a special net to
+			   // avoid notch DRC errors.
+
+			   SEG newseg;
+			   newseg = (SEG)malloc(sizeof(struct seg_));
+			   segl->next = newseg;
+			   newseg->next = NULL;
+			   newseg->layer = ll;
+			   newseg->segtype = ST_WIRE;
+			   newseg->x1 = segl->x1;
+			   newseg->y1 = segl->y1;
+			   newseg->x2 = seg->x1; 
+			   newseg->y2 = seg->y1;
+			}
+			else {
 			   // Change via to wire route, connect it to seg,
 			   // and make sure it has the same layer type as
 			   // the previous route.
 			   segl->segtype = ST_WIRE;
 			   segl->y2 = seg->y2;
-			   segl->layer = lastlayer;
-			   fixed = TRUE;
-			   break;
+			   segl->layer = ll2;
 			}
 		     }
 		  }
-		  else {
-		     lastrlayer = seg->layer;
-		  }
 	       }
-	       if (fixed) break;
 	    }
 	 }
       }
@@ -3864,6 +3901,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
     char newDEFfile[256];
     FILE *fdef;
     u_char errcond = FALSE;
+    u_char need_cleanup = FALSE;
 
     fdef = fopen(filename, "r");
     if (fdef == NULL) {
@@ -3924,6 +3962,13 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	Fprintf(stderr, "emit_routes():  DEF file has %d nets, but we want"
 		" to write %d\n", numnets, Numnets);
     }
+
+    // Quick check to see if cleanup_nets can be avoided
+    for (i = 0; i < Num_layers; i++)
+       if (needblock[i] & (VIABLOCKX | VIABLOCKY))
+	  break;
+
+    if (i != Num_layers) need_cleanup = TRUE;
 
     for (i = 0; i < numnets; i++) {
        if (errcond == TRUE) break;
@@ -3990,7 +4035,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	  /* Add last net terminal, without the semicolon */
 	  fputs(line, Cmd);
 
-	  cleanup_net(net);
+	  if (need_cleanup) cleanup_net(net);
 	  emit_routed_net(Cmd, net, (u_char)0, oscale, iscale);
 	  fprintf(Cmd, ";\n");
        }

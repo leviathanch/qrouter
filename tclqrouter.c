@@ -1421,6 +1421,7 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
 {
     char *LEFfile;
     int mscale;
+    int i;
 
     if (objc != 2) {
 	Tcl_SetResult(interp, "No LEF filename specified!", NULL);
@@ -1431,6 +1432,14 @@ qrouter_readlef(ClientData clientData, Tcl_Interp *interp,
     mscale = LefRead(LEFfile);
     if (Scales.mscale < mscale) Scales.mscale = mscale;
  
+    for (i = 0; i < Num_layers; i++) {
+
+       /* Set Vert and PitchX from route info */
+
+       Vert[i] = (1 - LefGetRouteOrientation(i));
+       PitchX[i] = LefGetRoutePitch(i);
+    }
+
     post_config();
 
     return QrouterTagCallback(interp, objc, objv);

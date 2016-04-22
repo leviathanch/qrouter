@@ -1473,8 +1473,10 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			   gate->noderec[i] = (NODE)calloc(1, sizeof(struct node_));
 			   gate->noderec[i]->netnum = GND_NET;
 			}
-			else
+			else {
 			   gate->netnum[i] = 0;		/* Until we read NETS */
+			   gate->noderec[i] = NULL;
+			}
 
 			/* Make a copy of the gate nodes and adjust for	*/
 			/* instance position				*/

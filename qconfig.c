@@ -101,15 +101,21 @@ post_config(void)
     else if (v == -1) v = h;
 
     for (i = 0; i < Num_layers; i++) {
-       if (PitchX[i] != 0.0 && PitchX[i] != PitchX[v])
+       if (PitchX[i] != 0.0 && PitchX[i] != PitchX[v]) {
 	  Fprintf(stderr, "Multiple vertical route layers at different"
-		" pitches.  I cannot handle this!  Using pitch %g\n",
-		PitchX[v]);
+		" pitches.  Using smaller pitch %g, will route on"
+		" 1-of-N tracks if necessary.\n",
+		PitchX[i]);
+	  PitchX[v] = PitchX[i];
+       }
        PitchX[i] = PitchX[v];
-       if (PitchY[i] != 0.0 && PitchY[i] != PitchY[h])
+       if (PitchY[i] != 0.0 && PitchY[i] != PitchY[h]) {
 	  Fprintf(stderr, "Multiple horizontal route layers at different"
-		" pitches.  I cannot handle this!  Using pitch %g\n",
-		PitchY[h]);
+		" pitches.  Using smaller pitch %g, will route on"
+		" 1-of-N tracks if necessary.\n",
+		PitchY[i]);
+	  PitchY[h] = PitchY[i];
+       }
        PitchY[i] = PitchY[h];
     }
 

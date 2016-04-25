@@ -884,7 +884,10 @@ u_char ripup_net(NET net, u_char restore)
       free(rt);
    }
 
-   return TRUE;
+   // If this was a specialnet (numnodes set to 0), then routes are
+   // considered fixed obstructions and cannot be removed.
+
+   return (net->numnodes == 0) ? FALSE : TRUE;
 }
 
 /*--------------------------------------------------------------*/

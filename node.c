@@ -951,6 +951,51 @@ static double get_route_clear(int lay, DSEG rect) {
 }
 
 /*--------------------------------------------------------------*/
+/* Truncate gates to the set of tracks.  Warn about any gates	*/
+/* with nodes that are clipped entirely outside the routing	*/
+/* area.							*/
+/*--------------------------------------------------------------*/
+
+void clip_gate_taps(void)
+{
+    NET net; 
+    NODE node;
+    DPOINT dp, dpl;
+    int i, lay;
+
+    for (i = 0; i < Numnets; i++) {
+	net = Nlnets[i];
+	for (node = net->netnodes; node; node = node->next) {
+	    dpl = NULL;
+	    for (dp = (DPOINT)node->taps; dp; ) {
+
+		lay = dp->layer;
+
+		if (dp->gridx < 0 || dp->gridy < 0 ||
+			dp->gridx >= NumChannelsX[lay] ||
+			dp->gridy >= NumChannelsY[lay]) {
+		    Fprintf(stderr, "Tap of port of node %d of net %s"
+			" is outside of route area\n",
+			node->nodenum, node->netname);
+
+		    if (dpl == NULL)
+			node->taps = dp->next;
+		    else
+			dpl->next = dp->next;
+
+		    free(dp);
+		    dp = (dpl == NULL) ? node->taps : dpl->next;
+		}
+		else {
+		    dpl = dp;
+		    dp = dp->next;
+		}
+	    }
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* create_obstructions_from_gates()				*/
 /*								*/
 /*  Fills in the Obs[][] grid from obstructions that were	*/

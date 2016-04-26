@@ -2403,7 +2403,9 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 
 	for (x = net->xmin; x < net->xmax; x++)
 	    for (y = net->ymin; y < net->ymax; y++)
-		CONGEST(x, y) += density;
+		if (x >= 0 && x < NumChannelsX[0] &&
+			y >= 0 && y < NumChannelsY[0])
+		    CONGEST(x, y) += density;
     }
 
     // Use instance bounding boxes to estimate average congestion

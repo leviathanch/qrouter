@@ -1333,7 +1333,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
     int processed = 0;
     char OK;
     DSEG drect, newrect;
-    double tmp, maxx, minx, maxy, miny;
+    double tmp;
 
     static char *component_keys[] = {
 	"-",
@@ -1518,16 +1518,6 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 				drect->y1 += gate->placedY;
 				drect->y2 += gate->placedY;
 			    }
-		
-			    if (drect->x1 > maxx) maxx = drect->x1;
-			    else if (drect->x1 < minx) minx = drect->x1;
-			    if (drect->x2 > maxx) maxx = drect->x2;
-			    else if (drect->x2 < minx) minx = drect->x2;
-
-			    if (drect->y1 > maxy) maxy = drect->y1;
-			    else if (drect->y1 < miny) miny = drect->y1;
-			    if (drect->y2 > maxy) maxy = drect->y2;
-			    else if (drect->y2 < miny) miny = drect->y2;
 			}
 		    }
 

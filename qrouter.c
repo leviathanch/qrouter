@@ -504,6 +504,7 @@ static int post_def_setup()
    /* write our node list.						*/
 
    expand_tap_geometry();
+   clip_gate_taps();
    create_obstructions_from_gates();
    create_obstructions_inside_nodes();
    create_obstructions_outside_nodes();

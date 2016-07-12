@@ -217,8 +217,12 @@ runqrouter(int argc, char *argv[])
 
    if (infofile != NULL)
       infoFILEptr = fopen(infofile, "w" );
-   else
+   else {
       infoFILEptr = NULL;
+#ifndef TCL_QROUTER
+      fprintf(stdout, "Qrouter detail maze router version %s.%s\n", VERSION, REVISION);
+#endif
+   }
 
    configFILEptr = fopen(configfile, "r");
 

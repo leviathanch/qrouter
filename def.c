@@ -178,7 +178,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    }
 	    paintLayer = routeLayer;
 
-	    if (special)
+	    if (special == (char)1)
 	    {
 		/* SPECIALNETS has the additional width */
 		token = LefNextToken(f, TRUE);
@@ -719,9 +719,14 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 			case DEF_NETPROP_COVER:
 			    // Treat fixed nets like specialnets:  read them
 			    // in as obstructions, and write them out as-is.
+			    // Use special = 2 so it is treated like a
+			    // specialnet but does not expect the specialnet
+			    // syntax (unless it is, in fact, a specialnet
+			    // entry).
 			    
 			    while (token && (*token != ';'))
-			        token = DefAddRoutes(f, oscale, net, (u_char)1);
+			        token = DefAddRoutes(f, oscale, net,
+					(special == (char)0) ? (char)2 : special);
 			    break;
 		    }
 		}

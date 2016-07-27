@@ -317,8 +317,9 @@ runqrouter(int argc, char *argv[])
    }
    else if (readconfig) {
       Fprintf(stdout, "No netlist file specified, continuing without.\n");
+
+      // Print help message but continue normally.
       helpmessage();
-      return 1;
    }
 
    Obs[0] = (u_int *)NULL;

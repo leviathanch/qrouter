@@ -35,6 +35,7 @@ for i in $@ ; do
 	;;
       -nog*)
 	NULLG=true
+	TKCON=
 	shift
 	;;
       -c* )

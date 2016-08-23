@@ -26,13 +26,22 @@ fi
 # Also, if "-i", "-h", or "-c" is specified, then this is
 # a batch-mode operation and the console should be ignored.
 TKCON=true
+NULLG=
 for i in $@ ; do
    case $i in
       -noc*)
 	TKCON=
 	shift
 	;;
-      -i* | -h* | -c* )
+      -nog*)
+	NULLG=true
+	shift
+	;;
+      -c* )
+	TKCON=
+	;;
+      -i* | -h* )
+	NULLG=true
 	TKCON=
 	;;
    esac
@@ -52,6 +61,9 @@ else
 # *only* needed when running without the console; the console itself is
 # capable of sourcing the startup script.
 #
-   exec ${loclibdir}/qrouterexec -- $@
-
+   if [ $NULLG ]; then
+      exec ${loclibdir}/qrouternullg -- $@
+   else
+      exec ${loclibdir}/qrouterexec -- $@
+   fi
 fi

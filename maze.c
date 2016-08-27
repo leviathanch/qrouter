@@ -808,7 +808,7 @@ u_char ripup_net(NET net, u_char restore)
 	          if ((lay >= Pinlayers) || NODESAV(x, y, lay) == (NODE)NULL) {
 		     dir = OBSVAL(x, y, lay) & PINOBSTRUCTMASK;
 		     if (dir == 0)
-		        OBSVAL(x, y, lay) = 0;
+		        OBSVAL(x, y, lay) = OBSVAL(x, y, lay) & BLOCKED_MASK;
 		     else
 		        OBSVAL(x, y, lay) = NO_NET | dir;
 		  }
@@ -1160,11 +1160,13 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 void writeback_segment(SEG seg, int netnum)
 {
    double dist;
-   int  i, layer;
+   int  i, layer, dir;
    u_int sobs;
 
    if (seg->segtype == ST_VIA) {
-      OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum;
+      /* Preserve blocking information */
+      dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & BLOCKED_MASK;
+      OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum | dir;
       if (needblock[seg->layer + 1] & VIABLOCKX) {
 	 if ((seg->x1 < (NumChannelsX[seg->layer + 1] - 1)) &&
 		(OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) & NETNUM_MASK) == 0)
@@ -1215,7 +1217,8 @@ void writeback_segment(SEG seg, int netnum)
    }
 
    for (i = seg->x1; ; i += (seg->x2 > seg->x1) ? 1 : -1) {
-      OBSVAL(i, seg->y1, seg->layer) = netnum;
+      dir = OBSVAL(i, seg->y1, seg->layer) & BLOCKED_MASK;
+      OBSVAL(i, seg->y1, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKY) {
          if ((seg->y1 < (NumChannelsY[seg->layer] - 1)) &&
 		(OBSVAL(i, seg->y1 + 1, seg->layer) & NETNUM_MASK) == 0)
@@ -1258,7 +1261,8 @@ void writeback_segment(SEG seg, int netnum)
       if (i == seg->x2) break;
    }
    for (i = seg->y1; ; i += (seg->y2 > seg->y1) ? 1 : -1) {
-      OBSVAL(seg->x1, i, seg->layer) = netnum;
+      dir = OBSVAL(seg->x1, i, seg->layer) & BLOCKED_MASK;
+      OBSVAL(seg->x1, i, seg->layer) = netnum | dir;
       if (needblock[seg->layer] & ROUTEBLOCKX) {
 	 if ((seg->x1 < (NumChannelsX[seg->layer] - 1)) &&
 		(OBSVAL(seg->x1 + 1, i, seg->layer) & NETNUM_MASK) == 0)

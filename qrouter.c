@@ -2871,7 +2871,8 @@ static void cleanup_net(NET net)
       if (!xcheckf && !ycheckf) fcheck = FALSE;
 
       // Move to the next-to-last segment
-      for (segl = segf->next; segl && segl->next; segl = segl->next);
+      for (segl = segf->next; segl && segl->next && segl->next->next;
+		segl = segl->next);
 
       if (segl && (segl->next != NULL) && (segl->next->segtype == ST_VIA)) {
 	 if (segl->next->layer < segl->layer) {
@@ -2909,7 +2910,6 @@ static void cleanup_net(NET net)
 		  if ((seg->layer == lf) || ((seg->layer + 1) == lf)) {
 		     if (xcheckf && (seg->y1 == segf->y1) &&
 				(ABSDIFF(seg->x1, segf->x1) == 1)) {
-			fcheck = FALSE;
 			if (seg->layer != segf->layer) {
 
 			   // Adjacent vias are different types.
@@ -2940,7 +2940,6 @@ static void cleanup_net(NET net)
 		     }
 		     else if (ycheckf && (seg->x1 == segf->x1) &&
 				(ABSDIFF(seg->y1, segf->y1) == 1)) {
-			fcheck = FALSE;
 			if (seg->layer != segf->layer) {
 			   // Adjacent vias are different types.
 			   // Deal with it by creating a route between
@@ -2975,7 +2974,6 @@ static void cleanup_net(NET net)
 		  if ((seg->layer == ll) || ((seg->layer + 1) == ll)) {
 		     if (xcheckl && (seg->y1 == segl->y1) &&
 				(ABSDIFF(seg->x1, segl->x1) == 1)) {
-			lcheck = FALSE;
 			if (seg->layer != segl->layer) {
 
 			   // Adjacent vias are different types.
@@ -3006,7 +3004,6 @@ static void cleanup_net(NET net)
 		     }
 		     else if (ycheckl && (seg->x1 == segl->x1) &&
 				(ABSDIFF(seg->y1, segl->y1) == 1)) {
-			lcheck = FALSE;
 			if (seg->layer != segl->layer) {
 
 			   // Adjacent vias are different types.

@@ -155,7 +155,7 @@ proc qrouter::lowerconsole {} {
     consoledown
 }
 
-puts stdout "Qrouter detail maze router version VERSION.REVISION"
+puts stdout "Qrouter detail maze router version VERSION.REVISION.T"
 
 set autoquit 0
 set autoroute 0

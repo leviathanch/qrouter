@@ -577,9 +577,9 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
     /* which is not handled by runqrouter(), and source the	*/
     /* script <name> between runqrouter() and read_def().	*/
 
-    argv = (char **)malloc(objc * sizeof(char *));
+    argv = (char **)malloc((objc - 1) * sizeof(char *));
     argc = 0;
-    for (i = 0; i < objc; i++) {
+    for (i = 1; i < objc; i++) {
 	if (!strcmp(Tcl_GetString(objv[i]), "-s"))
 	    scriptfile = strdup(Tcl_GetString(objv[++i]));
 	else

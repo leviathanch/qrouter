@@ -12,7 +12,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
+#include <unistd.h>
 
 #include "qrouter.h"
 #include "qconfig.h"
@@ -176,42 +176,94 @@ runqrouter(int argc, char *argv[])
    Filename[0] = 0;
    DEFfilename[0] = 0;
 
-   while ((i = getopt(argc, argv, "c:i:hk:fv:p:g:r:")) != -1) {
-      switch (i) {
-	 case 'c':
-	    configfile = strdup(optarg);
-	    break;
-	 case 'v':
-	    Verbose = atoi(optarg);
-	    break;
-	 case 'i':
-	    infofile = strdup(optarg);
-	    break;
-	 case 'p':
-	    vddnet = strdup(optarg);
-	    break;
-	 case 'g':
-	    gndnet = strdup(optarg);
-	    break;
-	 case 'r':
-	    if (sscanf(optarg, "%d", &Scales.iscale) != 1) {
-		Fprintf(stderr, "Bad resolution scalefactor \"%s\", "
+   /* Parse arguments */
+
+   for (i = 0; i < argc; i++) {
+      char optc, argsep = '\0';
+      char *optarg = NULL;
+
+      if (*argv[i] == '-') {
+
+	 /* 1st pass---look for which options require an argument */
+	 optc = *(argv[i] + 1);
+
+	 switch (optc) {
+	    case 'c':
+	    case 'i':
+	    case 'k':
+	    case 'v':
+	    case 'p':
+	    case 'g':
+	    case 'r':
+	       argsep = *(argv[i] + 2);
+	       if (argsep == '\0') {
+		  i++;
+	          if (i < argc) {
+	             optarg = argv[i];
+		     if (*optarg == '-') {
+		        Fprintf(stderr, "Option -%c needs an argument.\n", optc);
+		        Fprintf(stderr, "Option not handled.\n");
+		        continue;
+		     }
+	          }
+	          else {
+		     Fprintf(stderr, "Option -%c needs an argument.\n", optc);
+		     Fprintf(stderr, "Option not handled.\n");
+		     continue;
+		  }
+	       }
+	       else
+		  optarg = argv[i] + 2;
+	 }
+
+	 /* Now handle each option individually */
+
+	 switch (optc) {
+	    case 'c':
+	       configfile = strdup(optarg);
+	       break;
+	    case 'v':
+	       Verbose = atoi(optarg);
+	       break;
+	    case 'i':
+	       infofile = strdup(optarg);
+	       break;
+	    case 'p':
+	       vddnet = strdup(optarg);
+	       break;
+	    case 'g':
+	       gndnet = strdup(optarg);
+	       break;
+	    case 'r':
+	       if (sscanf(optarg, "%d", &Scales.iscale) != 1) {
+		   Fprintf(stderr, "Bad resolution scalefactor \"%s\", "
 			"integer expected.\n", optarg);
-		Scales.iscale = 1;
-	    }
-	    break;
-	 case 'h':
-	    helpmessage();
-	    return 1;
-	    break;
-	 case 'f':
-	    forceRoutable = 1;
-	    break;
-	 case 'k':
-	    keepTrying = (u_char)atoi(optarg);
-	    break;
-	 default:
-	    Fprintf(stderr, "bad switch %d\n", i);
+		   Scales.iscale = 1;
+	       }
+	       break;
+	    case 'h':
+	       helpmessage();
+	       return 1;
+	       break;
+	    case 'f':
+	       forceRoutable = 1;
+	       break;
+	    case 'k':
+	       keepTrying = (u_char)atoi(optarg);
+	       break;
+	    case '\0':
+	       /* Ignore '-' */
+	       break;
+	    case '-':
+	       /* Ignore '--' */
+	       break;
+	    default:
+	       Fprintf(stderr, "Bad option -%c, ignoring.\n", optc);
+	 }
+      }
+      else {
+	 /* Not an option or an option argument, so treat as a filename */
+         strcpy( Filename, argv[i] );
       }
    }
 
@@ -306,11 +358,9 @@ runqrouter(int argc, char *argv[])
       return 1;
    }
 
-   if (optind < argc) {
+   if (Filename[0] != '\0') {
 
-      /* process remaining commandline strings */
-
-      strcpy( Filename, argv[optind] );
+      /* process last non-option string */
       dotptr = strrchr(Filename, '.');
       if (dotptr != NULL) *dotptr = '\0';
       sprintf(DEFfilename, "%s.def", Filename);

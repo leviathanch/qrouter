@@ -27,26 +27,33 @@ fi
 # a batch-mode operation and the console should be ignored.
 TKCON=true
 NULLG=
+ARGS=""
 for i in $@ ; do
    case $i in
       -noc*)
 	TKCON=
-	shift
 	;;
       -nog*)
 	NULLG=true
 	TKCON=
-	shift
 	;;
-      -c* )
+      -c*)
 	TKCON=
+	ARGS="$ARGS $i"
 	;;
-      -i* | -h* )
+      -i* | -h*)
 	NULLG=true
 	TKCON=
+	ARGS="$ARGS $i"
+	;;
+      *)
+	ARGS="$ARGS $i"
 	;;
    esac
 done
+
+set -- junk $ARGS
+shift
 
 if [ $TKCON ]; then
 

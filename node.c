@@ -2524,6 +2524,13 @@ void adjust_stub_lengths(void)
 				continue;
 			     }
 
+			     // Must also be a stub to the same node, not just
+			     // the same net.
+			     if (NODESAV(gridx, gridy, ds->layer) != node) {
+				gridy++;
+				continue;
+			     }
+
 			     // STUBROUTE_X are unroutable;  leave them alone
 			     if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_X) {
 				gridy++;

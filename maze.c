@@ -236,6 +236,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 void clear_target_node(NODE node)
 {
     int x, y, lay;
+    NODEINFO lnode;
     DPOINT ntap;
     PROUTE *Pr;
 
@@ -245,7 +246,8 @@ void clear_target_node(NODE node)
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       if ((lay < Pinlayers) && (NODELOC(x, y, lay) == (NODE)NULL))
+       if ((lay < Pinlayers) && (((lnode = NODEIPTR(x, y, lay)) == NULL)
+		|| (lnode->nodeloc == NULL)))
 	  continue;
        Pr = &OBS2VAL(x, y, lay);
        Pr->flags = 0;
@@ -257,10 +259,11 @@ void clear_target_node(NODE node)
        x = ntap->gridx;
        y = ntap->gridy;
 
-       if (( (lay < Pinlayers)
-             && NODESAV(x, y, lay) == (NODE)NULL)
-	     ||	NODESAV(x, y, lay) != node)
-       continue;
+       if (lay < Pinlayers) {
+	  lnode = NODEIPTR(x, y, lay);
+	  if (lnode == NULL) continue;
+	  if (lnode->nodesav != node) continue;
+       }
 	
        Pr = &OBS2VAL(x, y, lay);
        Pr->flags = 0;
@@ -352,6 +355,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
     int x, y, lay, obsnet = 0;
     int result = 0;
     u_char found_one = (u_char)0;
+    NODEINFO lnode;
     POINT gpoint;
     DPOINT ntap;
     PROUTE *Pr;
@@ -433,9 +437,11 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
        // Don't process extended areas if they coincide with other nodes.
 
-       if ((lay < Pinlayers) && (NODESAV(x, y, lay) == (NODE)NULL
-			|| NODESAV(x, y, lay) != node))
-	  continue;
+       if (lay < Pinlayers) {
+	  lnode = NODEIPTR(x, y, lay);
+	  if (lnode == NULL) continue;
+	  if (lnode->nodesav != node) continue;
+       }
 
        Pr = &OBS2VAL(x, y, lay);
        if (Pr->flags & PR_SOURCE) {
@@ -552,6 +558,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 {
     int x, y, lay;
     int result = 0;
+    NODEINFO lnode;
     POINT gpoint;
     SEG seg;
     NODE n2;
@@ -591,7 +598,8 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// If we found another node connected to the route,
 		// then process it, too.
 
-		n2 = (lay >= Pinlayers) ? NULL : NODELOC(x, y, lay);
+		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
+		n2 = (lnode) ? lnode->nodeloc : NULL;
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
@@ -772,12 +780,13 @@ NETLIST find_colliding(NET net, int *ripnum)
 /*								*/
 /* If argument "restore" is TRUE, then at each node, restore	*/
 /* the crossover cost by attaching the node back to the		*/
-/* NODELOC array.						*/
+/* Nodeinfo array.						*/
 /*--------------------------------------------------------------*/
 
 u_char ripup_net(NET net, u_char restore)
 {
    int thisnet, oldnet, x, y, lay, dir;
+   NODEINFO lnode;
    NODE node;
    ROUTE rt;
    SEG seg;
@@ -805,7 +814,8 @@ u_char ripup_net(NET net, u_char restore)
 		  // were routed over obstructions to reach off-grid
 		  // taps are returned to obstructions.
 
-	          if ((lay >= Pinlayers) || NODESAV(x, y, lay) == (NODE)NULL) {
+	          if ((lay >= Pinlayers) || ((lnode = NODEIPTR(x, y, lay)) == NULL)
+				|| (lnode->nodesav == NULL)) {
 		     dir = OBSVAL(x, y, lay) & PINOBSTRUCTMASK;
 		     if (dir == 0)
 		        OBSVAL(x, y, lay) = OBSVAL(x, y, lay) & BLOCKED_MASK;
@@ -855,7 +865,7 @@ u_char ripup_net(NET net, u_char restore)
       }
    }
 
-   // For each net node tap, restore the node pointer on NODELOC
+   // For each net node tap, restore the node pointer on Nodeinfo->nodeloc
    // so that crossover costs are again applied to routes over this node
    // tap.
 
@@ -865,8 +875,10 @@ u_char ripup_net(NET net, u_char restore)
 	    lay = ntap->layer;
 	    x = ntap->gridx;
 	    y = ntap->gridy;
-	    if (lay < Pinlayers)
-		NODELOC(x, y, lay) = NODESAV(x, y, lay);
+	    if (lay < Pinlayers) {
+		lnode = NODEIPTR(x, y, lay);
+		if (lnode) lnode->nodeloc = lnode->nodesav;
+	    }
 	 }
       }
    }
@@ -916,7 +928,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     int thiscost = 0;
     int netnum;
     NODE node;
-    NODEINFO nodeptr;
+    NODEINFO nodeptr, lnode;
     NETLIST nl;
     PROUTE *Pr, *Pt;
     GRIDP newpt;
@@ -961,7 +973,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
        // 2nd stage allows routes to cross existing routes
        netnum = Pr->prdata.net;
        if (stage && (netnum < MAXNETNUM)) {
-	  if ((newpt.lay < Pinlayers) && (nodeptr->nodesav != NULL))
+	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
 	     return 0;			// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
@@ -981,7 +993,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  thiscost += ConflictCost;
        }
        else if (stage && (netnum == DRC_BLOCKAGE)) {
-	  if ((newpt.lay < Pinlayers) && (nodeptr->nodesav != NULL))
+	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
 	     return 0;			// But cannot route over terminals!
 
 	  // Position does not contain the net number, so we have to
@@ -1059,7 +1071,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     // so that routing over it could block it entirely.
 
     if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
-	if ((node = NODELOC(newpt.x, newpt.y, newpt.lay - 1)) != (NODE)NULL) {
+	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL)
+		&& ((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay - 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
 		if (node->taps && (node->taps->next == NULL))
@@ -1083,7 +1096,8 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	}
     }
     if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
-	if ((node = NODELOC(newpt.x, newpt.y, newpt.lay + 1)) != (NODE)NULL) {
+	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1)) != (NODEINFO)NULL)
+		&& ((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay + 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
 		if (node->taps && (node->taps->next == NULL))
@@ -1162,6 +1176,7 @@ void writeback_segment(SEG seg, int netnum)
    double dist;
    int  i, layer, dir;
    u_int sobs;
+   NODEINFO lnode;
 
    if (seg->segtype == ST_VIA) {
       /* Preserve blocking information */
@@ -1192,8 +1207,9 @@ void writeback_segment(SEG seg, int netnum)
       layer = (seg->layer == 0) ? 0 : seg->layer - 1;
       sobs = OBSVAL(seg->x1, seg->y1, seg->layer);
       if (sobs & OFFSET_TAP) {
-	 dist = STUBVAL(seg->x1, seg->y1, seg->layer);
-	 if (sobs & STUBROUTE_EW) {
+	 lnode = NODEIPTR(seg->x1, seg->y1, seg->layer);
+	 dist = lnode->offset;
+	 if (lnode->flags && NI_OFFSET_EW) {
 	    if ((dist > 0) && (seg->x1 < (NumChannelsX[seg->layer] - 1))) {
 	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer) |= DRC_BLOCKAGE;
 	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
@@ -1203,7 +1219,7 @@ void writeback_segment(SEG seg, int netnum)
 	       OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
 	    }
 	 }
-	 else if (sobs & STUBROUTE_NS) {
+	 else if (lnode->flags && NI_OFFSET_NS) {
 	    if ((dist > 0) && (seg->y1 < (NumChannelsY[seg->layer] - 1))) {
 	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer) |= DRC_BLOCKAGE;
 	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) |= DRC_BLOCKAGE;
@@ -1239,8 +1255,9 @@ void writeback_segment(SEG seg, int netnum)
       if (seg->y1 < (NumChannelsY[layer] - 1)) {
 	 sobs = OBSVAL(i, seg->y1 + 1, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_NS) {
-	       dist = STUBVAL(i, seg->y1 + 1, layer);
+	    lnode = NODEIPTR(i, seg->y1 + 1, layer);
+	    if (lnode->flags & NI_OFFSET_NS) {
+	       dist = lnode->offset;
 	       if (dist < 0) {
 		  OBSVAL(i, seg->y1 + 1, layer) |= DRC_BLOCKAGE;
 	       }
@@ -1250,8 +1267,9 @@ void writeback_segment(SEG seg, int netnum)
       if (seg->y1 > 0) {
 	 sobs = OBSVAL(i, seg->y1 - 1, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_NS) {
-	       dist = STUBVAL(i, seg->y1 - 1, layer);
+	    lnode = NODEIPTR(i, seg->y1 - 1, layer);
+	    if (lnode->flags & NI_OFFSET_NS) {
+	       dist = lnode->offset;
 	       if (dist > 0) {
 		  OBSVAL(i, seg->y1 - 1, layer) |= DRC_BLOCKAGE;
 	       }
@@ -1279,8 +1297,9 @@ void writeback_segment(SEG seg, int netnum)
       if (seg->x1 < (NumChannelsX[layer] - 1)) {
 	 sobs = OBSVAL(seg->x1 + 1, i, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_EW) {
-	       dist = STUBVAL(seg->x1 + 1, i, layer);
+	    lnode = NODEIPTR(seg->x1 + 1, i, layer);
+	    if (lnode->flags & NI_OFFSET_EW) {
+	       dist = lnode->offset;
 	       if (dist < 0) {
 		  OBSVAL(seg->x1 + 1, i, layer) |= DRC_BLOCKAGE;
 	       }
@@ -1290,8 +1309,9 @@ void writeback_segment(SEG seg, int netnum)
       if (seg->x1 > 0) {
 	 sobs = OBSVAL(seg->x1 - 1, i, layer);
 	 if ((sobs & OFFSET_TAP) && !(sobs & ROUTED_NET)) {
-	    if (sobs & STUBROUTE_EW) {
-	       dist = STUBVAL(seg->x1 - 1, i, layer);
+	    lnode = NODEIPTR(seg->x1 - 1, i, layer);
+	    if (lnode->flags & NI_OFFSET_EW) {
+	       dist = lnode->offset;
 	       if (dist > 0) {
 		  OBSVAL(seg->x1 - 1, i, layer) |= DRC_BLOCKAGE;
 	       }
@@ -1320,6 +1340,7 @@ void writeback_segment(SEG seg, int netnum)
 int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
+   NODEINFO lnode1, lnode2;
    int  lay2, rval;
    int  dx = -1, dy = -1, dl;
    u_int netnum, netobs1, netobs2, dir1, dir2;
@@ -1857,6 +1878,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       netobs1 = OBSVAL(seg->x1, seg->y1, seg->layer);
       netobs2 = OBSVAL(seg->x2, seg->y2, lay2);
 
+      lnode1 = (seg->layer < Pinlayers) ? NODEIPTR(seg->x1, seg->y1, seg->layer) : NULL;
+      lnode2 = (lay2 < Pinlayers) ? NODEIPTR(seg->x2, seg->y2, lay2) : NULL;
+
       dir1 = netobs1 & PINOBSTRUCTMASK;
       dir2 = netobs2 & PINOBSTRUCTMASK;
 
@@ -1902,8 +1926,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       if (lseg && ((lseg->segtype & (ST_VIA | ST_OFFSET_END)) ==
 			(ST_VIA | ST_OFFSET_END)))
 	 if (seg->segtype != ST_VIA)
-	    if (((seg->x1 == seg->x2) && (dir1 & STUBROUTE_NS)) ||
-		((seg->y1 == seg->y2) && (dir1 & STUBROUTE_EW)))
+	    if (((seg->x1 == seg->x2) && (lnode1->flags & NI_OFFSET_NS)) ||
+		((seg->y1 == seg->y2) && (lnode1->flags & NI_OFFSET_EW)))
 	       seg->segtype |= ST_OFFSET_START;
 
       // Check if the route ends are offset.  If so, add flags.  The segment
@@ -1913,8 +1937,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       // the offset via, and does not extend past it.
 
       if (dir1 & OFFSET_TAP) {
-	 if (((seg->x1 == seg->x2) && (dir1 & STUBROUTE_NS)) ||
-		((seg->y1 == seg->y2) && (dir1 & STUBROUTE_EW)))
+	 if (((seg->x1 == seg->x2) && (lnode1->flags & NI_OFFSET_NS)) ||
+		((seg->y1 == seg->y2) && (lnode1->flags & NI_OFFSET_EW)))
 	    seg->segtype |= ST_OFFSET_START;
 
 	 // An offset on a via needs to be applied to the previous route
@@ -1922,8 +1946,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	 // in the same direction as the wire.
 
 	 if (lseg && (seg->segtype & ST_VIA) && !(lseg->segtype & ST_VIA))
-	    if (((lseg->x1 == lseg->x2) && (dir2 & STUBROUTE_NS)) ||
-		((lseg->y1 == lseg->y2) && (dir2 & STUBROUTE_EW)))
+	    if (((lseg->x1 == lseg->x2) && lnode2 && (lnode2->flags & NI_OFFSET_NS)) ||
+		((lseg->y1 == lseg->y2) && lnode2 && (lnode2->flags & NI_OFFSET_EW)))
 	       lseg->segtype |= ST_OFFSET_END;
       }
 

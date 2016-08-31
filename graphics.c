@@ -232,7 +232,7 @@ map_obstruction()
 	for (x = 0; x < NumChannelsX[i]; x++) {
 	    xspc = (x + 1) * spacing - hspc;
 	    for (y = 0; y < NumChannelsY[i]; y++) {
-		if (NODESAV(x, y, i) != NULL) {
+		if (NODEIPTR(x, y, i) != NULL) {
 		    yspc = height - (y + 1) * spacing - hspc;
 		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
 				spacing, spacing);

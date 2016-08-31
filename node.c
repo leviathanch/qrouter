@@ -327,6 +327,44 @@ void defineRouteTree(NET net)
 }
 
 /*--------------------------------------------------------------*/
+/* SetNodeinfo --						*/
+/*	Allocate a NODEINFO record and put it in the Nodeinfo	*/
+/*	array at position (gridx, gridy, d->layer).  Return the	*/
+/* 	pointer to the location.				*/
+/*--------------------------------------------------------------*/
+
+NODEINFO
+SetNodeinfo(int gridx, int gridy, int layer)
+{
+    NODEINFO *lnodeptr;
+
+    lnodeptr = &NODEIPTR(gridx, gridy, layer);
+    if (*lnodeptr == NULL) {
+	*lnodeptr = (NODEINFO)malloc(sizeof(struct nodeinfo_));
+    }
+    return *lnodeptr;
+}
+
+/*--------------------------------------------------------------*/
+/* FreeNodeinfo --						*/
+/*	Free a NODEINFO record at array Nodeinfo position	*/
+/*	(gridx, gridy, d->layer).  Set the position pointer to	*/
+/*	NULL.  							*/
+/*--------------------------------------------------------------*/
+
+void
+FreeNodeinfo(int gridx, int gridy, int layer)
+{
+    NODEINFO *lnodeptr;
+    lnodeptr = &NODEIPTR(gridx, gridy, layer);
+
+    if (*lnodeptr != NULL) {
+        free(*lnodeptr);
+	*lnodeptr = NULL;
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* print_nodes - show the nodes list				*/
 /*         ARGS: filename to print to
         RETURNS: nothing
@@ -435,6 +473,7 @@ void
 count_reachable_taps()
 {
     NODE node;
+    NODEINFO lnode;
     GATE g;
     DSEG ds;
     int l, i, j;
@@ -444,15 +483,17 @@ count_reachable_taps()
 
     for (l = 0; l < Num_layers; l++) {
 	for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
-	    node = Nodeinfo[l][j].nodeloc;
-	    if (node != NULL) {
+	    if (Nodeinfo[l][j]) {
+		node = Nodeinfo[l][j]->nodeloc;
+		if (node != NULL) {
 
-		// Redundant check;  if Obs has NO_NET set, then
-		// Nodeinfo.nodeloc for that position should already
-		// be NULL
+		    // Redundant check;  if Obs has NO_NET set, then
+		    // Nodeinfo->nodeloc for that position should already
+		    // be NULL
 
-		if (!(Obs[l][j] & NO_NET))
-		    node->numtaps++;
+		    if (!(Obs[l][j] & NO_NET))
+			node->numtaps++;
+		}
 	    }
 	}
     }
@@ -502,8 +543,9 @@ count_reachable_taps()
 						(OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK)
 						| (u_int)node->netnum;
-					NODELOC(gridx, gridy, ds->layer) = node;
-					NODESAV(gridx, gridy, ds->layer) = node;
+					lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					lnode->nodeloc = node;
+					lnode->nodesav = node;
 					node->numtaps++;
 				    }
 				}
@@ -520,7 +562,7 @@ count_reachable_taps()
 		/* cleanly within the tap geometry, then allow it.	 */
 
 		double dist, mindist;
-		int dir, tapx, tapy, tapl;
+		int dir, mask, tapx, tapy, tapl;
 
 		/* Initialize mindist to a large value */
 		mindist = PitchX[Num_layers - 1] + PitchY[Num_layers - 1];
@@ -572,7 +614,8 @@ count_reachable_taps()
 					(dy + deltay - EPS < ds->y2)) {
 					    if (dist < fabs(mindist)) {
 						mindist = dist;
-						dir = STUBROUTE_EW;
+						mask = STUBROUTE;
+						dir = NI_STUB_EW;
 						tapx = gridx;
 						tapy = gridy;
 						tapl = ds->layer;
@@ -588,7 +631,8 @@ count_reachable_taps()
 					(dy + deltay - EPS < ds->y2)) {
 					    if (dist < fabs(mindist)) {
 						mindist = -dist;
-						dir = STUBROUTE_EW;
+						mask = STUBROUTE;
+						dir = NI_STUB_EW;
 						tapx = gridx;
 						tapy = gridy;
 						tapl = ds->layer;
@@ -604,7 +648,8 @@ count_reachable_taps()
 					(dy - dist - deltay + EPS > ds->y1)) {
 					    if (dist < fabs(mindist)) {
 						mindist = -dist;
-						dir = STUBROUTE_NS;
+						mask = STUBROUTE;
+						dir = NI_STUB_NS;
 						tapx = gridx;
 						tapy = gridy;
 						tapl = ds->layer;
@@ -620,7 +665,8 @@ count_reachable_taps()
 					(dy + dist + deltay - EPS < ds->y2)) {
 					    if (dist < fabs(mindist)) {
 						mindist = dist;
-						dir = STUBROUTE_NS;
+						mask = STUBROUTE;
+						dir = NI_STUB_NS;
 						tapx = gridx;
 						tapy = gridy;
 						tapl = ds->layer;
@@ -636,7 +682,7 @@ count_reachable_taps()
 		}
 
 		/* Was a solution found? */
-		if (dir != 0) {
+		if (mask != 0) {
 		    // Grid position is clear for placing a via
 
 		    Fprintf(stderr, "Tap position (%d, %d) appears to be"
@@ -646,10 +692,12 @@ count_reachable_taps()
 
 		    OBSVAL(tapx, tapy, tapl) =
 				(OBSVAL(tapx, tapy, tapl) & BLOCKED_MASK)
-				| dir | (u_int)node->netnum;
-		    NODELOC(tapx, tapy, tapl) = node;
-		    NODESAV(tapx, tapy, tapl) = node;
-		    STUBVAL(tapx, tapy, tapl) = dist;
+				| mask | (u_int)node->netnum;
+		    lnode = SetNodeinfo(tapx, tapy, tapl);
+		    lnode->nodeloc = node;
+		    lnode->nodesav = node;
+		    lnode->stub = dist;
+		    lnode->flags |= dir;
 		    node->numtaps++;
 		}
 	    }
@@ -740,6 +788,7 @@ void check_variable_pitch(int l, int *hptr, int *vptr)
 void create_obstructions_from_variable_pitch(void)
 {
    int l, vnum, hnum, x, y;
+   NODEINFO lnode;
 
    for (l = 0; l < Num_layers; l++) {
 
@@ -764,20 +813,25 @@ void create_obstructions_from_variable_pitch(void)
 
 	       // If the grid position itself is a node, don't restrict
 	       // routing based on variable pitch.
-	       if (NODELOC(x, y, l) != NULL) continue;
+	       if (((lnode = NODEIPTR(x, y, l)) != NULL) && (lnode->nodeloc != NULL))
+		  continue;
 
 	       // If there is a node in an adjacent grid then allow
 	       // routing from that direction.
 
-	       if ((x > 0) && NODELOC(x - 1, y, l) != NULL)
+	       if ((x > 0) && ((lnode = NODEIPTR(x - 1, y, l)) != NULL) &&
+			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_W;
-	       else if ((y > 0) && NODELOC(x , y - 1, l) != NULL)
+	       else if ((y > 0) && ((lnode = NODEIPTR(x , y - 1, l)) != NULL) &&
+			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_S;
 	       else if ((x < NumChannelsX[l] - 1)
-			&& NODELOC(x + 1, y, l) != NULL)
+			&& ((lnode = NODEIPTR(x + 1, y, l)) != NULL) &&
+			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_E;
 	       else if ((y < NumChannelsY[l] - 1)
-			&& NODELOC(x, y + 1, l) != NULL)
+			&& ((lnode = NODEIPTR(x, y + 1, l)) != NULL) &&
+			(lnode->nodeloc != NULL))
 		  OBSVAL(x, y, l) = BLOCKED_MASK & ~BLOCKED_N;
 	       else
 		  OBSVAL(x, y, l) = NO_NET;
@@ -791,7 +845,7 @@ void create_obstructions_from_variable_pitch(void)
 /* disable_gridpos() ---					*/
 /*	Render the position at (x, y, lay) unroutable by	*/
 /*	setting its Obs[] entry to NO_NET and removing it from	*/
-/*	the Nodeinfo.nodeloc and Nodeinfo.nodesav records.	*/
+/*	the Nodeinfo->nodeloc and Nodeinfo->nodesav records.	*/
 /*--------------------------------------------------------------*/
 
 static void
@@ -800,18 +854,18 @@ disable_gridpos(int x, int y, int lay)
     int apos = OGRID(x, y, lay);
 
     Obs[lay][apos] = (u_int)(NO_NET | OBSTRUCT_MASK);
-    Nodeinfo[lay][apos].nodeloc = NULL;
-    Nodeinfo[lay][apos].nodesav = NULL;
-    Nodeinfo[lay][apos].stub = 0.0;
+    if (Nodeinfo[lay][apos]) {
+	free(Nodeinfo[lay][apos]);
+	Nodeinfo[lay][apos] = NULL;
+    }
 }
 
 /*--------------------------------------------------------------*/
 /* count_pinlayers()---						*/
-/*	Check which layers have non-NULL Nodeinfo.nodeloc,	*/
-/*	Nodeinfo.nodesav, and Nodeinfo.stub entries.  Then set	*/
-/*	"Pinlayers" and free all the unused layers.  This saves	*/
-/*	a lot of memory, especially when the number of routing	*/
-/*	layers becomes large.					*/ 
+/*	Check which layers have non-NULL Nodeinfo entries.  	*/
+/*	Then set "Pinlayers" and free all the unused layers.	*/
+/* 	This saves a lot of memory, especially when the number	*/
+/*	of routing layers becomes large.			*/ 
 /*--------------------------------------------------------------*/
 
 void
@@ -822,7 +876,7 @@ count_pinlayers(void)
    Pinlayers = 0;
    for (l = 0; l < Num_layers; l++) {
       for (j = 0; j < NumChannelsX[l] * NumChannelsY[l]; j++) {
-	 if (Nodeinfo[l][j].nodesav != NULL) {
+	 if (Nodeinfo[l][j]) {
 	    Pinlayers = l + 1;
 	    break;
 	 }
@@ -850,9 +904,11 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 {
     u_int *obsptr;
     float dist;
+    NODEINFO lnode;
 
     obsptr = &(OBSVAL(gridx, gridy, ds->layer));
     dist = OBSINFO(gridx, gridy, ds->layer);
+    lnode = NODEIPTR(gridx, gridy, ds->layer);
 
     // Grid point is inside obstruction + halo.
     *obsptr |= NO_NET;
@@ -1315,9 +1371,10 @@ void expand_tap_geometry(void)
 void create_obstructions_inside_nodes(void)
 {
     NODE node;
+    NODEINFO lnode;
     GATE g;
     DSEG ds;
-    u_int dir, k;
+    u_int dir, mask, k;
     int i, gridx, gridy;
     double dx, dy;
     float dist, xdist;
@@ -1383,7 +1440,8 @@ void create_obstructions_inside_nodes(void)
 				// Duplicate tap point, or pre-existing
 				// route.   Don't re-process it if it is
 				// a duplicate.
-				if (NODELOC(gridx, gridy, ds->layer) != NULL) {
+				if (((lnode = NODEIPTR(gridx, gridy, ds->layer)) != NULL)
+					&& (lnode->nodeloc != NULL)) {
 				    gridy++;
 				    continue;
 				}
@@ -1413,6 +1471,7 @@ void create_obstructions_inside_nodes(void)
 				// of a tap rectangle corner can violate metal
 				// width rules, and so should declare a stub.
 				
+				mask = 0;
 				dir = 0;
 				dist = 0.0;
 			        xdist = 0.5 * LefGetRouteWidth(ds->layer);
@@ -1423,12 +1482,14 @@ void create_obstructions_inside_nodes(void)
 
 				      if ((ds->x2 - dx) > (ds->y2 - dy)) {
 					 // West-pointing stub
-					 dir = STUBROUTE_EW;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_EW;
 					 dist = ds->x2 - dx - 2.0 * xdist;
 				      }
 				      else {
 					 // South-pointing stub
-					 dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_NS;
 					 dist = ds->y2 - dy - 2.0 * xdist;
 				      }
 
@@ -1438,12 +1499,14 @@ void create_obstructions_inside_nodes(void)
 
 				      if ((ds->x2 - dx) > (dy - ds->y1)) {
 					 // West-pointing stub
-					 dir = STUBROUTE_EW;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_EW;
 					 dist = ds->x2 - dx - 2.0 * xdist;
 				      }
 				      else {
 					 // North-pointing stub
-					 dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_NS;
 					 dist = ds->y1 - dy + 2.0 * xdist;
 				      }
 				   }
@@ -1454,12 +1517,14 @@ void create_obstructions_inside_nodes(void)
 
 				      if ((dx - ds->x1) > (ds->y2 - dy)) {
 					 // East-pointing stub
-					 dir = STUBROUTE_EW;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_EW;
 					 dist = ds->x1 - dx + 2.0 * xdist;
 				      }
 				      else {
 					 // South-pointing stub
-					 dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_NS;
 					 dist = ds->y2 - dy - 2.0 * xdist;
 				      }
 
@@ -1469,12 +1534,14 @@ void create_obstructions_inside_nodes(void)
 
 				      if ((dx - ds->x2) > (dy - ds->y1)) {
 					 // East-pointing stub
-					 dir = STUBROUTE_EW;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_EW;
 					 dist = ds->x1 - dx + 2.0 * xdist;
 				      }
 				      else {
 					 // North-pointing stub
-					 dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_NS;
 					 dist = ds->y1 - dy + 2.0 * xdist;
 				      }
 				   }
@@ -1482,11 +1549,12 @@ void create_obstructions_inside_nodes(void)
 
 			        OBSVAL(gridx, gridy, ds->layer)
 			        	= (OBSVAL(gridx, gridy, ds->layer)
-					   & BLOCKED_MASK) | (u_int)node->netnum | dir;
-			        NODELOC(gridx, gridy, ds->layer) = node;
-			        NODESAV(gridx, gridy, ds->layer) = node;
-			        STUBVAL(gridx, gridy, ds->layer) = dist;
-
+					   & BLOCKED_MASK) | (u_int)node->netnum | mask;
+				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode->nodeloc = node;
+				lnode->nodesav = node;
+				lnode->stub = dist;
+				lnode->flags |= dir;
 			     }
 			     else if ((orignet & NO_NET) && ((orignet & OBSTRUCT_MASK)
 					!= OBSTRUCT_MASK)) {
@@ -1500,9 +1568,7 @@ void create_obstructions_inside_nodes(void)
 			        if (k & PINOBSTRUCTMASK) {
 			           if ((k & ROUTED_NET_MASK) != (u_int)node->netnum) {
 				       OBSVAL(gridx, gridy, ds->layer + 1) = NO_NET;
-				       NODELOC(gridx, gridy, ds->layer + 1) = (NODE)NULL;
-				       NODESAV(gridx, gridy, ds->layer + 1) = (NODE)NULL;
-				       STUBVAL(gridx, gridy, ds->layer + 1) = (float)0.0;
+				       FreeNodeinfo(gridx, gridy, ds->layer + 1);
 				   }
 				}
 			     }
@@ -1547,9 +1613,10 @@ void create_obstructions_inside_nodes(void)
 void create_obstructions_outside_nodes(void)
 {
     NODE node, n2;
+    NODEINFO lnode;
     GATE g;
     DSEG ds;
-    u_int dir, k;
+    u_int dir, mask, k;
     int i, gridx, gridy;
     double dx, dy, deltax, deltay;
     float dist, xdist;
@@ -1668,8 +1735,9 @@ void create_obstructions_outside_nodes(void)
 				// the obstruction to resolve the DRC error.
 
 				// Make sure we have marked this as a node.
-			        NODELOC(gridx, gridy, ds->layer) = node;
-			        NODESAV(gridx, gridy, ds->layer) = node;
+				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode->nodeloc = node;
+				lnode->nodesav = node;
 			        OBSVAL(gridx, gridy, ds->layer)
 			        	= (OBSVAL(gridx, gridy, ds->layer)
 					   & BLOCKED_MASK) | (u_int)node->netnum;
@@ -1677,9 +1745,9 @@ void create_obstructions_outside_nodes(void)
 				if (orignet & OBSTRUCT_N) {
 			           offd = -(sdisty - OBSINFO(gridx, gridy, ds->layer));
 				   if (offd >= -offmaxy[ds->layer]) {
-			              STUBVAL(gridx, gridy, ds->layer) = offd;
-			              OBSVAL(gridx, gridy, ds->layer) |=
-						(STUBROUTE_NS | OFFSET_TAP);
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      lnode->offset = offd;
+				      lnode->flags |= NI_OFFSET_NS;
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
@@ -1695,9 +1763,9 @@ void create_obstructions_outside_nodes(void)
 				else if (orignet & OBSTRUCT_S) {
 				   offd = sdisty - OBSINFO(gridx, gridy, ds->layer);
 				   if (offd <= offmaxy[ds->layer]) {
-			              STUBVAL(gridx, gridy, ds->layer) = offd;
-			              OBSVAL(gridx, gridy, ds->layer) |=
-						(STUBROUTE_NS | OFFSET_TAP);
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      lnode->offset = offd;
+				      lnode->flags |= NI_OFFSET_NS;
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
@@ -1714,9 +1782,9 @@ void create_obstructions_outside_nodes(void)
 				else if (orignet & OBSTRUCT_E) {
 				   offd = -(sdistx - OBSINFO(gridx, gridy, ds->layer));
 				   if (offd >= -offmaxx[ds->layer]) {
-			              STUBVAL(gridx, gridy, ds->layer) = offd;
-			              OBSVAL(gridx, gridy, ds->layer) |=
-						(STUBROUTE_EW | OFFSET_TAP);
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      lnode->offset = offd;
+				      lnode->flags |= NI_OFFSET_EW;
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
@@ -1732,9 +1800,9 @@ void create_obstructions_outside_nodes(void)
 				else if (orignet & OBSTRUCT_W) {
 				   offd = sdistx - OBSINFO(gridx, gridy, ds->layer);
 				   if (offd <= offmaxx[ds->layer]) {
-			              STUBVAL(gridx, gridy, ds->layer) = offd;
-			              OBSVAL(gridx, gridy, ds->layer) |=
-						(STUBROUTE_EW | OFFSET_TAP);
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      lnode->offset = offd;
+				      lnode->flags |= NI_OFFSET_EW;
 
 				      /* If position above has obstruction, then */
 				      /* add up/down block to prevent vias.	 */
@@ -1802,18 +1870,22 @@ void create_obstructions_outside_nodes(void)
 			    xdist = 0.5 * LefGetRouteWidth(ds->layer);
 
 			    n2 = NULL;
-			    if (ds->layer > 0)
-			       n2 = NODELOC(gridx, gridy, ds->layer - 1);
-			    if (n2 == NULL)
-			       n2 = NODELOC(gridx, gridy, ds->layer);
-
+			    if (ds->layer > 0) {
+			       lnode = NODEIPTR(gridx, gridy, ds->layer - 1);
+			       n2 = (lnode) ? lnode->nodeloc : NULL;
+			    }
+			    if (n2 == NULL) {
+			       lnode = NODEIPTR(gridx, gridy, ds->layer);
+			       n2 = (lnode) ? lnode->nodeloc : NULL;
+			    }
 			    else {
 			       // Watch out for the case where a tap crosses
 			       // over a different tap.  Don't treat the tap
 			       // on top as if it is not there!
 
 			       NODE n3;
-			       n3 = NODELOC(gridx, gridy, ds->layer);
+			       lnode = NODEIPTR(gridx, gridy, ds->layer);
+			       n3 = (lnode) ? lnode->nodeloc : NULL;
 			       if (n3 != NULL && n3 != node) n2 = n3;
 			    }
 
@@ -1827,7 +1899,8 @@ void create_obstructions_outside_nodes(void)
 			    // stub information will show how to adjust the
 			    // route position to cleanly attach to the port.
 
-			    dir = STUBROUTE_X;
+			    mask = STUBROUTE;
+			    dir = NI_STUB_NS | NI_STUB_EW;
 			    dist = 0.0;
 
 			    if (((k & ROUTED_NET_MASK) != (u_int)node->netnum)
@@ -1851,7 +1924,8 @@ void create_obstructions_outside_nodes(void)
 						((k & OBSTRUCT_MASK) == OBSTRUCT_E)) {
 				         dist = sdist - LefGetRouteKeepout(ds->layer);
 					 if ((dx - ds->x2 + dist) < xdist) {
-				 	    dir = STUBROUTE_EW | OFFSET_TAP;
+				 	    mask = OFFSET_TAP;
+				 	    dir = NI_OFFSET_EW;
 
 				            if ((ds->layer < Num_layers - 1) &&
 							(gridx > 0) &&
@@ -1865,7 +1939,8 @@ void create_obstructions_outside_nodes(void)
 						((k & OBSTRUCT_MASK) == OBSTRUCT_W)) {
 				         dist = LefGetRouteKeepout(ds->layer) - sdist;
 					 if ((ds->x1 - dx - dist) < xdist) {
-				            dir = STUBROUTE_EW | OFFSET_TAP;
+				 	    mask = OFFSET_TAP;
+				            dir = NI_OFFSET_EW;
 
 				            if ((ds->layer < Num_layers - 1) &&
 							gridx <
@@ -1883,7 +1958,8 @@ void create_obstructions_outside_nodes(void)
 						((k & OBSTRUCT_MASK) == OBSTRUCT_N)) {
 				         dist = sdist - LefGetRouteKeepout(ds->layer);
 					 if ((dy - ds->y2 + dist) < xdist) {
-				            dir = STUBROUTE_NS | OFFSET_TAP;
+				 	    mask = OFFSET_TAP;
+				            dir = NI_OFFSET_NS;
 
 				            if ((ds->layer < Num_layers - 1) &&
 							gridy < 
@@ -1898,7 +1974,8 @@ void create_obstructions_outside_nodes(void)
 						((k & OBSTRUCT_MASK) == OBSTRUCT_S)) {
 				         dist = LefGetRouteKeepout(ds->layer) - sdist;
 					 if ((ds->y1 - dy - dist) < xdist) {
-				            dir = STUBROUTE_NS | OFFSET_TAP;
+				 	    mask = OFFSET_TAP;
+				            dir = NI_OFFSET_NS;
 
 				            if ((ds->layer < Num_layers - 1) &&
 							(gridy > 0) &&
@@ -1909,7 +1986,7 @@ void create_obstructions_outside_nodes(void)
 					 }
 				      }
 				   }
-				   // Otherwise, dir is left as STUBROUTE_X
+				   // Otherwise, dir is left as NI_STUB_MASK
 				}
 				else {
 
@@ -1925,7 +2002,8 @@ void create_obstructions_outside_nodes(void)
 				      if ((dy - ds->y2) <= xdist &&
 					  (ds->y1 - dy) <= xdist) {
 					 // Within reach of tap rectangle
-					 dir = STUBROUTE_EW;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_EW;
 					 dist = ds->x2 - dx;
 					 if (dy < (ds->y2 - xdist) &&
 						dy > (ds->y1 + xdist)) {
@@ -1943,7 +2021,8 @@ void create_obstructions_outside_nodes(void)
 				      if ((dy - ds->y2) <= xdist &&
 					  (ds->y1 - dy) <= xdist) {
 					 // Within reach of tap rectangle
-					 dir = STUBROUTE_EW;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_EW;
 					 dist = ds->x1 - dx;
 					 if (dy < (ds->y2 - xdist) &&
 						dy > (ds->y1 + xdist)) {
@@ -1961,7 +2040,8 @@ void create_obstructions_outside_nodes(void)
 				      if ((dx - ds->x2) <= xdist &&
 					  (ds->x1 - dx) <= xdist) {
 					 // Within reach of tap rectangle
-					 dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_NS;
 					 dist = ds->y2 - dy;
 					 if (dx < (ds->x2 - xdist) &&
 						dx > (ds->x1 + xdist)) {
@@ -1979,7 +2059,8 @@ void create_obstructions_outside_nodes(void)
 				      if ((dx - ds->x2) <= xdist &&
 					  (ds->x1 - dx) <= xdist) {
 					 // Within reach of tap rectangle
-					 dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+					 dir = NI_STUB_NS;
 					 dist = ds->y1 - dy;
 					 if (dx < (ds->x2 - xdist) &&
 						dx > (ds->x1 + xdist)) {
@@ -1991,7 +2072,7 @@ void create_obstructions_outside_nodes(void)
 				      }
 				   }
 
-				   if (dir == STUBROUTE_X) {
+				   if ((mask == STUBROUTE) && (dir == NI_STUB_MASK)) {
 
 				      // Outside of pin at a corner.  First, if one
 				      // direction is too far away to connect to a
@@ -2000,14 +2081,16 @@ void create_obstructions_outside_nodes(void)
 				      if (dx < ds->x1 - xdist || dx > ds->x2 + xdist) {
 				         if (dy >= ds->y1 - xdist &&
 							dy <= ds->y2 + xdist) {
-				            dir = STUBROUTE_EW;
+					    mask = STUBROUTE;
+				            dir = NI_STUB_EW;
 				            dist = (float)(((ds->x1 + ds->x2) / 2.0)
 							- dx);
 					 }
 				      }
 				      else if (dy < ds->y1 - xdist ||
 							dy > ds->y2 + xdist) {
-				         dir = STUBROUTE_NS;
+					 mask = STUBROUTE;
+				         dir = NI_STUB_NS;
 				         dist = (float)(((ds->y1 + ds->y2) / 2.0) - dy);
 				      }
 
@@ -2015,37 +2098,49 @@ void create_obstructions_outside_nodes(void)
 				      // to reach the pin by moving in any single
 				      // direction.  To be pedantic, we could define
 				      // some jogged stub, but for now, we just call
-				      // the point unroutable (leave dir = STUBROUTE_X)
+				      // the point unroutable (leave dir = NI_STUB_MASK)
 				   }
 				}
 
 				// Stub distances of <= 1/2 route width are
 				// unnecessary, so don't create them.
 
-				if (dir == STUBROUTE_NS || dir == STUBROUTE_EW)
+				if (mask == STUBROUTE && (dir == NI_STUB_NS
+					|| dir == NI_STUB_EW))
 				   if (fabs(dist) < (xdist + EPS)) {
+				      mask = 0;
 				      dir = 0;
 				      dist = 0.0;
 				   }
 
-				if ((k < Numnets) && (dir != STUBROUTE_X)) {
+				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+
+				if ((k < Numnets) && (dir != NI_STUB_MASK)) {
 				   OBSVAL(gridx, gridy, ds->layer)
 				   	= (OBSVAL(gridx, gridy, ds->layer)
-					  & BLOCKED_MASK) | (u_int)g->netnum[i] | dir; 
-				   NODELOC(gridx, gridy, ds->layer) = node;
-				   NODESAV(gridx, gridy, ds->layer) = node;
+					  & BLOCKED_MASK) | (u_int)g->netnum[i] | mask; 
+				   lnode->nodeloc = node;
+				   lnode->nodesav = node;
+				   lnode->flags |= dir;
 				}
 				else if ((OBSVAL(gridx, gridy, ds->layer)
 					& NO_NET) != 0) {
 				   // Keep showing an obstruction, but add the
 				   // direction info and log the stub distance.
-				   OBSVAL(gridx, gridy, ds->layer) |= dir;
+				   OBSVAL(gridx, gridy, ds->layer) |= mask;
+				   lnode->flags |= dir;
 				}
 				else {
 				   OBSVAL(gridx, gridy, ds->layer)
-					|= (dir | (g->netnum[i] & ROUTED_NET_MASK));
+					|= (mask | (g->netnum[i] & ROUTED_NET_MASK));
+				   lnode->flags |= dir;
 				}
-				STUBVAL(gridx, gridy, ds->layer) = dist;
+				if ((mask & STUBROUTE) != 0) {
+				   lnode->stub = dist;
+				}
+				else if (((mask & OFFSET_TAP) != 0) || (dist != 0.0)) {
+				   lnode->offset = dist;
+				}
 			    }
 			    else if (epass == 0) {
 
@@ -2082,9 +2177,10 @@ void create_obstructions_outside_nodes(void)
 				  // node record.  This will probably need
 				  // revisiting.
 				
-				  if ((k & (STUBROUTE_X | OFFSET_TAP)) != 0)
+				  if ((k & PINOBSTRUCTMASK) != 0)
 				     disable_gridpos(gridx, gridy, ds->layer);
-				  else if (NODESAV(gridx, gridy, ds->layer) != NULL) {
+				  else if ((lnode = NODEIPTR(gridx, gridy, ds->layer))
+					!= NULL && (lnode->nodesav != NULL)) {
 
 				     u_char no_offsets = TRUE;
 				     int offset_net;
@@ -2102,9 +2198,11 @@ void create_obstructions_outside_nodes(void)
 							ds->layer, 0);
 					   dist = ds->x2 - dx + xdist +
 							LefGetRouteSpacing(ds->layer);
-					   dir = (STUBROUTE_EW | OFFSET_TAP);
-					   STUBVAL(gridx, gridy, ds->layer) = dist;
-					   OBSVAL(gridx, gridy, ds->layer) |= dir;
+					   mask = OFFSET_TAP;
+					   dir = NI_OFFSET_EW;
+					   OBSVAL(gridx, gridy, ds->layer) |= mask;
+					   lnode->offset = dist;
+					   lnode->flags |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
@@ -2124,9 +2222,11 @@ void create_obstructions_outside_nodes(void)
 							ds->layer, 0);
 					   dist = ds->x1 - dx - xdist -
 							LefGetRouteSpacing(ds->layer);
-					   dir = (STUBROUTE_EW | OFFSET_TAP);
-					   STUBVAL(gridx, gridy, ds->layer) = dist;
-					   OBSVAL(gridx, gridy, ds->layer) |= dir;
+					   mask = OFFSET_TAP;
+					   dir = NI_OFFSET_EW;
+					   OBSVAL(gridx, gridy, ds->layer) |= mask;
+					   lnode->offset = dist;
+					   lnode->flags |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
@@ -2147,9 +2247,11 @@ void create_obstructions_outside_nodes(void)
 							ds->layer, 1);
 					   dist = ds->y2 - dy + xdist +
 							LefGetRouteSpacing(ds->layer);
-					   dir = (STUBROUTE_NS | OFFSET_TAP);
-					   STUBVAL(gridx, gridy, ds->layer) = dist;
-					   OBSVAL(gridx, gridy, ds->layer) |= dir;
+					   mask = OFFSET_TAP;
+					   dir = NI_OFFSET_NS;
+					   OBSVAL(gridx, gridy, ds->layer) |= mask;
+					   lnode->offset = dist;
+					   lnode->flags |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
@@ -2169,9 +2271,11 @@ void create_obstructions_outside_nodes(void)
 							ds->layer, 1);
 					   dist = ds->y1 - dy - xdist -
 							LefGetRouteSpacing(ds->layer);
-					   dir = (STUBROUTE_NS | OFFSET_TAP);
-					   STUBVAL(gridx, gridy, ds->layer) = dist;
-					   OBSVAL(gridx, gridy, ds->layer) |= dir;
+					   mask = OFFSET_TAP;
+					   dir = NI_OFFSET_NS;
+					   OBSVAL(gridx, gridy, ds->layer) |= mask;
+					   lnode->offset = dist;
+					   lnode->flags |= dir;
 					   no_offsets = FALSE;
 
 				           if ((ds->layer < Num_layers - 1) &&
@@ -2204,35 +2308,40 @@ void create_obstructions_outside_nodes(void)
 					!= node->netnum) && ((othernet == 0) ||
 					(othernet == (u_int)node->netnum))) {
 
+				  lnode = NODEIPTR(gridx, gridy, ds->layer);
 				  xdist = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
 				  if ((dy + xdist + LefGetRouteSpacing(ds->layer) >
 					ds->y1) && (dy + xdist < ds->y1)) {
 				     if ((dx - xdist < ds->x2) &&
 						(dx + xdist > ds->x1) &&
-						(STUBVAL(gridx, gridy, ds->layer)
+						(lnode == NULL || lnode->stub
 						== 0.0)) {
-					STUBVAL(gridx, gridy, ds->layer) = ds->y1 - dy;
 					OBSVAL(gridx, gridy, ds->layer)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
-						node->netnum | STUBROUTE_NS;
-					NODELOC(gridx, gridy, ds->layer) = node;
-					NODESAV(gridx, gridy, ds->layer) = node;
+						node->netnum | STUBROUTE;
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					lnode->nodeloc = node;
+					lnode->nodesav = node;
+					lnode->stub = ds->y1 - dy;
+					lnode->flags |= NI_STUB_NS;
 				     }
 				  }
 				  if ((dy - xdist - LefGetRouteSpacing(ds->layer) <
 					ds->y2) && (dy - xdist > ds->y2)) {
 				     if ((dx - xdist < ds->x2) &&
 						(dx + xdist > ds->x1) &&
-						(STUBVAL(gridx, gridy, ds->layer)
+						(lnode == NULL || lnode->stub
 						== 0.0)) {
-					STUBVAL(gridx, gridy, ds->layer) = ds->y2 - dy;
 					OBSVAL(gridx, gridy, ds->layer)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
-						node->netnum | STUBROUTE_NS;
-					NODELOC(gridx, gridy, ds->layer) = node;
-					NODESAV(gridx, gridy, ds->layer) = node;
+						node->netnum | STUBROUTE;
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					lnode->nodeloc = node;
+					lnode->nodesav = node;
+					lnode->stub = ds->y2 - dy;
+					lnode->flags |= NI_STUB_NS;
 				     }
 				  }
 
@@ -2241,30 +2350,34 @@ void create_obstructions_outside_nodes(void)
 					ds->x1) && (dx + xdist < ds->x1)) {
 				     if ((dy - xdist < ds->y2) &&
 						(dy + xdist > ds->y1) &&
-						(STUBVAL(gridx, gridy, ds->layer)
+						(lnode == NULL || lnode->stub
 						 == 0.0)) {
-					STUBVAL(gridx, gridy, ds->layer) = ds->x1 - dx;
 					OBSVAL(gridx, gridy, ds->layer)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
-						node->netnum | STUBROUTE_EW;
-					NODELOC(gridx, gridy, ds->layer) = node;
-					NODESAV(gridx, gridy, ds->layer) = node;
+						node->netnum | STUBROUTE;
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					lnode->nodeloc = node;
+					lnode->nodesav = node;
+					lnode->stub = ds->x1 - dx;
+					lnode->flags |= NI_STUB_EW;
 				     }
 				  }
 				  if ((dx - xdist - LefGetRouteSpacing(ds->layer) <
 					ds->x2) && (dx - xdist > ds->x2)) {
 				     if ((dy - xdist < ds->y2) &&
 						(dy + xdist > ds->y1) &&
-						(STUBVAL(gridx, gridy, ds->layer)
+						(lnode == NULL || lnode->stub
 						== 0.0)) {
-					STUBVAL(gridx, gridy, ds->layer) = ds->x2 - dx;
 					OBSVAL(gridx, gridy, ds->layer)
 				   		= (OBSVAL(gridx, gridy, ds->layer)
 						& BLOCKED_MASK) |
-						node->netnum | STUBROUTE_EW;
-					NODELOC(gridx, gridy, ds->layer) = node;
-					NODESAV(gridx, gridy, ds->layer) = node;
+						node->netnum | STUBROUTE;
+				        lnode = SetNodeinfo(gridx, gridy, ds->layer);
+					lnode->nodeloc = node;
+					lnode->nodesav = node;
+					lnode->stub = ds->x2 - dx;
+					lnode->flags |= NI_STUB_EW;
 				     }
 				  }
 			       }
@@ -2295,11 +2408,12 @@ void create_obstructions_outside_nodes(void)
 
 void tap_to_tap_interactions(void)
 {
+    NODEINFO lnode;
     GATE g;
     DSEG ds;
     struct dseg_ de;
     int mingridx, mingridy, maxgridx, maxgridy;
-    int i, gridx, gridy, net, orignet, offset;
+    int i, gridx, gridy, net, orignet;
     double dx, dy;
     float dist;
 
@@ -2337,14 +2451,14 @@ void tap_to_tap_interactions(void)
 
 		      orignet = OBSVAL(gridx, gridy, ds->layer);
 		      if (orignet & OFFSET_TAP) {
-			 offset = orignet & PINOBSTRUCTMASK;
 			 orignet &= ROUTED_NET_MASK;
 			 if (orignet != net) {
 
 		            dx = (gridx * PitchX[ds->layer]) + Xlowerbound;
 		            dy = (gridy * PitchY[ds->layer]) + Ylowerbound;
 
-			    dist = STUBVAL(gridx, gridy, ds->layer);
+			    lnode = NODEIPTR(gridx, gridy, ds->layer);
+			    dist = (lnode) ? lnode->offset : 0.0;
 
 			    /* "de" is the bounding box of a via placed	  */
 			    /* at (gridx, gridy) and offset as specified. */
@@ -2355,11 +2469,11 @@ void tap_to_tap_interactions(void)
 			    de.y1 = dy - deltay[ds->layer];
 			    de.y2 = dy + deltay[ds->layer];
 
-			    if (offset == (STUBROUTE_NS | OFFSET_TAP)) {
+			    if (lnode->flags & NI_OFFSET_NS) {
 			       de.y1 += dist;
 			       de.y2 += dist;
 			    }
-			    else if (offset == (STUBROUTE_EW | OFFSET_TAP)) {
+			    else if (lnode->flags & NI_OFFSET_EW) {
 			       de.x1 += dist;
 			       de.x2 += dist;
 			    }
@@ -2402,6 +2516,7 @@ void tap_to_tap_interactions(void)
 void
 make_routable(NODE node)
 {
+    NODEINFO lnode;
     GATE g;
     DSEG ds;
     int i, gridx, gridy;
@@ -2432,8 +2547,9 @@ make_routable(NODE node)
 
 			    if (orignet & NO_NET) {
 				OBSVAL(gridx, gridy, ds->layer) = g->netnum[i];
-				NODELOC(gridx, gridy, ds->layer) = node;
-				NODESAV(gridx, gridy, ds->layer) = node;
+				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode->nodeloc = node;
+				lnode->nodesav = node;
 				return;
 			    }
 			 }
@@ -2465,6 +2581,7 @@ make_routable(NODE node)
 void adjust_stub_lengths(void)
 {
     NODE node;
+    NODEINFO lnode;
     GATE g;
     DSEG ds, ds2;
     struct dseg_ dt, de;
@@ -2523,18 +2640,22 @@ void adjust_stub_lengths(void)
 				gridy++;
 				continue;
 			     }
+			     lnode = NODEIPTR(gridx, gridy, ds->layer);
 
-			     // Must also be a stub to the same node, not just
-			     // the same net.
-			     if (NODESAV(gridx, gridy, ds->layer) != node) {
+			     // Even if it's on the same net, we need to check
+			     // if the stub is to this node, otherwise it is not
+			     // an issue.
+			     if (lnode->nodesav != node) {
 				gridy++;
 				continue;
 			     }
 
-			     // STUBROUTE_X are unroutable;  leave them alone
-			     if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_X) {
-				gridy++;
-				continue;
+			     // NI_STUB_MASK are unroutable;  leave them alone
+			     if (orignet & STUBROUTE) {
+				if ((lnode->flags & NI_OFFSET_MASK) == NI_OFFSET_MASK) {
+				   gridy++;
+				   continue;
+				}
 			     }
 
 			     // define a route box around the grid point
@@ -2545,24 +2666,24 @@ void adjust_stub_lengths(void)
 			     dt.y1 = dy - wy;
 			     dt.y2 = dy + wy;
 
-			     dist = STUBVAL(gridx, gridy, ds->layer);
-
 			     // adjust the route box according to the stub
 			     // or offset geometry, provided that the stub
 			     // is longer than the route box.
 
 			     if (orignet & OFFSET_TAP) {
-				if (orignet & STUBROUTE_EW) {
+			        dist = lnode->offset;
+				if (lnode->flags & NI_OFFSET_EW) {
 				   dt.x1 += dist;
 				   dt.x2 += dist;
 				}
-				else if (orignet & STUBROUTE_NS) {
+				else if (lnode->flags & NI_OFFSET_NS) {
 				   dt.y1 += dist;
 				   dt.y2 += dist;
 				}
 			     }
-			     else if (orignet & PINOBSTRUCTMASK) {
-				if (orignet & STUBROUTE_EW) {
+			     else if (orignet & STUBROUTE) {
+			        dist = lnode->stub;
+				if (lnode->flags & NI_STUB_EW) {
 				   if (dist > EPS) {
 				      if (dx + dist > dt.x2)
 				 	 dt.x2 = dx + dist;
@@ -2572,7 +2693,7 @@ void adjust_stub_lengths(void)
 					 dt.x1 = dx + dist;
 				   }
 				}
-				else if (orignet & STUBROUTE_NS) {
+				else if (lnode->flags & NI_STUB_NS) {
 				   if (dist > EPS) {
 				      if (dy + dist > dt.y2)
 					 dt.y2 = dy + dist;
@@ -2716,84 +2837,92 @@ void adjust_stub_lengths(void)
 				/* if (de.x2 > dt.x2) { */
 				if ((de.x2 > dt.x2) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
-				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
-			              STUBVAL(gridx, gridy, ds->layer) = de.x2 - dx;
+				   if ((orignet & STUBROUTE) == 0) {
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE;
+				      lnode->stub = de.x2 - dx;
+				      lnode->flags |= NI_STUB_EW;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_EW
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_EW)
 						&& (dist > 0)) {
-			              STUBVAL(gridx, gridy, ds->layer) = de.x2 - dx;
+				      lnode->stub = de.x2 - dx;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) ==
-						STUBROUTE_NS) {
-			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_NS;
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
-			              STUBVAL(gridx, gridy, ds->layer) = de.x2 - dx;
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_NS)) {
+				      lnode->stub = de.x2 - dx;
+				      lnode->flags &= ~NI_STUB_MASK;
+				      lnode->flags |= NI_STUB_EW;
 				      errbox = FALSE;
 				   }
 				}
 				/* else if (de.x1 < dt.x1) { */
 				else if ((de.x1 < dt.x1) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
-				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
-			              STUBVAL(gridx, gridy, ds->layer) = de.x1 - dx;
+				   if ((orignet & STUBROUTE) == 0) {
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE;
+				      lnode->stub = de.x1 - dx;
+				      lnode->flags |= NI_STUB_EW;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_EW
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_EW)
 						&& (dist < 0)) {
-			              STUBVAL(gridx, gridy, ds->layer) = de.x1 - dx;
+				      lnode->stub = de.x1 - dx;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) ==
-						STUBROUTE_NS) {
-			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_NS;
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_EW;
-			              STUBVAL(gridx, gridy, ds->layer) = de.x1 - dx;
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_NS)) {
+				      lnode->stub = de.x1 - dx;
+				      lnode->flags &= ~NI_STUB_MASK;
+				      lnode->flags |= NI_STUB_EW;
 				      errbox = FALSE;
 				   }
 				}
 				/* else if (de.y2 > dt.y2) { */
 				else if ((de.y2 > dt.y2) && (de.x1 < ds->x2) &&
 					(de.x2 > ds->x1)) {
-				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
-			              STUBVAL(gridx, gridy, ds->layer) = de.y2 - dy;
+				   if ((orignet & STUBROUTE) == 0) {
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE;
+				      lnode->stub = de.y2 - dy;
+				      lnode->flags |= NI_STUB_NS;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_NS
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_NS)
 						&& (dist > 0)) {
-			              STUBVAL(gridx, gridy, ds->layer) = de.y2 - dy;
+				      lnode->stub = de.y2 - dy;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) ==
-						STUBROUTE_EW) {
-			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_EW;
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
-			              STUBVAL(gridx, gridy, ds->layer) = de.y2 - dy;
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_EW)) {
+				      lnode->flags &= ~NI_STUB_MASK;
+				      lnode->flags |= NI_STUB_NS;
+				      lnode->stub = de.y2 - dy;
 				      errbox = FALSE;
 				   }
 				}
 				/* else if (de.y1 < dt.y1) { */
 				else if ((de.y1 < dt.y1) && (de.x1 < ds->x2) &&
 					(de.x2 > ds->x1)) {
-				   if ((orignet & PINOBSTRUCTMASK) == 0) {
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
-			              STUBVAL(gridx, gridy, ds->layer) = de.y1 - dy;
+				   if ((orignet & STUBROUTE) == 0) {
+			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE;
+				      lnode->stub = de.y1 - dy;
+				      lnode->flags |= NI_STUB_NS;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) == STUBROUTE_NS
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_NS)
 						&& (dist < 0)) {
-			              STUBVAL(gridx, gridy, ds->layer) = de.y1 - dy;
+				      lnode->stub = de.y1 - dy;
 				      errbox = FALSE;
 				   }
-				   else if ((orignet & PINOBSTRUCTMASK) ==
-						STUBROUTE_EW) {
-			              OBSVAL(gridx, gridy, ds->layer) &= ~STUBROUTE_EW;
-			              OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_NS;
-			              STUBVAL(gridx, gridy, ds->layer) = de.y1 - dy;
+				   else if ((orignet & STUBROUTE)
+						&& (lnode->flags & NI_STUB_EW)) {
+				      lnode->stub = de.y1 - dy;
+				      lnode->flags &= ~NI_STUB_MASK;
+				      lnode->flags |= NI_STUB_NS;
 				      errbox = FALSE;
 				   }
 				}
@@ -2808,7 +2937,8 @@ void adjust_stub_lengths(void)
 
 				if (errbox == TRUE) {
 				   // Unroutable position, so mark it unroutable
-			           OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE_X;
+			           OBSVAL(gridx, gridy, ds->layer) |= STUBROUTE;
+				   lnode->flags |= NI_STUB_MASK;
 				}
 			     }
 		         }
@@ -2918,7 +3048,7 @@ void
 find_route_blocks()
 {
    GATE g;
-   // DPOINT dp;
+   NODEINFO lnode;
    DSEG ds;
    struct dseg_ dt;
    int i, gridx, gridy;
@@ -2958,8 +3088,9 @@ find_route_blocks()
 		     gridy++;
 		  }
 		  while (dy < ds->y2 + s) {
-		     u = ((OBSVAL(gridx, gridy, ds->layer) &
-				PINOBSTRUCTMASK) == STUBROUTE_EW) ? v : w;
+		     lnode = NODEIPTR(gridx, gridy, ds->layer);
+		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+				&& (lnode->flags & NI_STUB_EW)) ? v : w;
 		     if (dy + EPS < ds->y2 - u)
 			block_route(gridx, gridy, ds->layer, NORTH);
 		     if (dy - EPS > ds->y1 + u)
@@ -2991,8 +3122,9 @@ find_route_blocks()
 		     gridy++;
 		  }
 		  while (dy < ds->y2 + s) {
-		     u = ((OBSVAL(gridx, gridy, ds->layer) &
-				PINOBSTRUCTMASK) == STUBROUTE_EW) ? v : w;
+		     lnode = NODEIPTR(gridx, gridy, ds->layer);
+		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+				&& (lnode->flags & NI_STUB_EW)) ? v : w;
 		     if (dy + EPS < ds->y2 - u)
 			block_route(gridx, gridy, ds->layer, NORTH);
 		     if (dy - EPS > ds->y1 + u)
@@ -3024,8 +3156,9 @@ find_route_blocks()
 		     gridx++;
 		  }
 		  while (dx < ds->x2 + s) {
-		     u = ((OBSVAL(gridx, gridy, ds->layer) &
-				PINOBSTRUCTMASK) == STUBROUTE_NS) ? v : w;
+		     lnode = NODEIPTR(gridx, gridy, ds->layer);
+		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+				&& (lnode->flags & NI_STUB_NS)) ? v : w;
 		     if (dx + EPS < ds->x2 - u)
 			block_route(gridx, gridy, ds->layer, EAST);
 		     if (dx - EPS > ds->x1 + u)
@@ -3057,8 +3190,9 @@ find_route_blocks()
 		     gridx++;
 		  }
 		  while (dx < ds->x2 + s) {
-		     u = ((OBSVAL(gridx, gridy, ds->layer) &
-				PINOBSTRUCTMASK) == STUBROUTE_NS) ? v : w;
+		     lnode = NODEIPTR(gridx, gridy, ds->layer);
+		     u = ((OBSVAL(gridx, gridy, ds->layer) & STUBROUTE)
+				&& (lnode->flags & NI_STUB_NS)) ? v : w;
 		     if (dx + EPS < ds->x2 - u)
 			block_route(gridx, gridy, ds->layer, EAST);
 		     if (dx - EPS > ds->x1 + u)

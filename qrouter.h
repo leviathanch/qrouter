@@ -194,6 +194,11 @@ struct route_ {
   u_char flags;         // See below for flags
 };
 
+/* Definitions for flags in struct route_ */
+
+#define RT_OUTPUT	0x1	// Route has been output
+#define RT_STUB		0x2	// Route has at least one stub route
+
 /* Structure used to hold nodes, saved nodes, and stub/offset info */
 
 typedef struct nodeinfo_ *NODEINFO;
@@ -201,13 +206,19 @@ typedef struct nodeinfo_ *NODEINFO;
 struct nodeinfo_ {
    NODE  nodesav;
    NODE  nodeloc;
-   float stub;
+   float stub;		// Stub route to node
+   float offset;	// Tap offset
+   u_char flags;
 };
 
-/* Definitions for flags in struct route_ */
+/* Definitions for flags in stuct nodeinfo_ */
 
-#define RT_OUTPUT	0x1	// Route has been output
-#define RT_STUB		0x2	// Route has been output
+#define NI_STUB_NS	 0x01	// Stub route north(+)/south(-)
+#define NI_STUB_EW	 0x02	// Stub route east(+)/west(-)
+#define NI_STUB_MASK	 0x03	// Stub route mask (N/S + E/W)
+#define NI_OFFSET_NS	 0x04	// Tap offset north(+)/south(-)
+#define NI_OFFSET_EW	 0x08	// Tap offset east(+)/west(-)
+#define NI_OFFSET_MASK   0x0c	// Tap offset mask (N/S + E/W)
 
 struct node_ {
   NODE    next;
@@ -310,12 +321,12 @@ struct routeinfo_ {
 // The maximum number of nets must not overrun the area used by flags, so
 // the maximum number of nets is 0x1fffff, or 2,097,151 nets
 
-#define PINOBSTRUCTMASK	((u_int)0xe0000000)  // takes values from below
-#define STUBROUTE_NS	((u_int)0x20000000)  // route north or south to reach terminal
-#define STUBROUTE_EW	((u_int)0x40000000)  // route east or west to reach terminal
-#define STUBROUTE_X	((u_int)0x60000000)  // diagonal---not routable
-#define OFFSET_TAP	((u_int)0x80000000)  // position needs to be offset
-#define NO_NET		((u_int)0x10000000)  // indicates a non-routable obstruction
+#define OFFSET_TAP	((u_int)0x80000000)  // tap position needs to be offset
+#define STUBROUTE	((u_int)0x40000000)  // route stub to reach terminal
+#define PINOBSTRUCTMASK	((u_int)0xc0000000)  // either offset tap or stub route
+#define NO_NET		((u_int)0x20000000)  // indicates a non-routable obstruction
+#define ROUTED_NET	((u_int)0x10000000)  // indicates position occupied by a routed
+
 #define BLOCKED_N	((u_int)0x08000000)  // grid point cannot be routed from the N
 #define BLOCKED_S	((u_int)0x04000000)  // grid point cannot be routed from the S
 #define BLOCKED_E	((u_int)0x02000000)  // grid point cannot be routed from the E
@@ -323,22 +334,18 @@ struct routeinfo_ {
 #define BLOCKED_U	((u_int)0x00800000)  // grid point cannot be routed from top
 #define BLOCKED_D	((u_int)0x00400000)  // grid point cannot be routed from bottom
 #define BLOCKED_MASK	((u_int)0x0fc00000)
-#define ROUTED_NET	((u_int)0x00200000)  // indicates position occupied by a routed
-					     // net
-#define MAX_NETNUMS	((u_int)0x001fffff)  // Maximum net number
+#define OBSTRUCT_MASK	((u_int)0x0000000f)  // with NO_NET, directional obstruction
+#define OBSTRUCT_N	((u_int)0x00000008)  // Tells where the obstruction is
+#define OBSTRUCT_S	((u_int)0x00000004)  // relative to the grid point.  Nodeinfo
+#define OBSTRUCT_E	((u_int)0x00000002)  // offset contains distance to grid point
+#define OBSTRUCT_W	((u_int)0x00000001)
+#define MAX_NETNUMS	((u_int)0x003fffff)  // Maximum net number
 
-#define NETNUM_MASK	((u_int)0x101fffff)  // Mask for the net number field
+#define NETNUM_MASK	((u_int)0x203fffff)  // Mask for the net number field
 					     // (includes NO_NET)
-#define ROUTED_NET_MASK ((u_int)0x103fffff)  // Mask for the net number field
+#define ROUTED_NET_MASK ((u_int)0x303fffff)  // Mask for the net number field
 					     // (includes NO_NET and ROUTED_NET)
 #define DRC_BLOCKAGE	(NO_NET | ROUTED_NET) // Special case
-
-// Definitions used along with the NO_NET bit.
-#define OBSTRUCT_MASK	((u_int)0x0000000f)  // Tells where obstruction is
-#define OBSTRUCT_N	((u_int)0x00000008)  // relative to the grid point.
-#define OBSTRUCT_S	((u_int)0x00000004)  // Stub[] contains distance of
-#define OBSTRUCT_E	((u_int)0x00000002)  // obstruction to grid point.
-#define OBSTRUCT_W	((u_int)0x00000001)
 
 // Map and draw modes
 #define MAP_NONE	0x0	// No map (blank background)
@@ -389,13 +396,10 @@ extern u_char *RMask;
 extern u_int  *Obs[MAX_LAYERS];		// obstructions by layer, y, x
 extern PROUTE *Obs2[MAX_LAYERS]; 	// working copy of Obs 
 extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
-extern NODEINFO Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
+extern NODEINFO *Nodeinfo[MAX_LAYERS];	// stub route distances to pins and
 					// pointers to node structures.
 
-#define NODEIPTR(x, y, l) (&(Nodeinfo[l][OGRID(x, y, l)]))
-#define NODESAV(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].nodesav)
-#define NODELOC(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].nodeloc)
-#define STUBVAL(x, y, l) (Nodeinfo[l][OGRID(x, y, l)].stub)
+#define NODEIPTR(x, y, l) (Nodeinfo[l][OGRID(x, y, l)])
 #define OBSINFO(x, y, l) (Obsinfo[l][OGRID(x, y, l)])
 #define OBSVAL(x, y, l)  (Obs[l][OGRID(x, y, l)])
 #define OBS2VAL(x, y, l) (Obs2[l][OGRID(x, y, l)])

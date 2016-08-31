@@ -38,7 +38,7 @@ u_char   *RMask;    	        // mask out best area to route
 u_int    *Obs[MAX_LAYERS];      // net obstructions in layer
 PROUTE   *Obs2[MAX_LAYERS];     // used for pt->pt routes on layer
 float    *Obsinfo[MAX_LAYERS];  // temporary array used for detailed obstruction info
-NODEINFO  Nodeinfo[MAX_LAYERS]; // nodes and stub information is here. . .
+NODEINFO *Nodeinfo[MAX_LAYERS]; // nodes and stub information is here. . .
 DSEG      UserObs;		// user-defined obstruction layers
 
 u_char needblock[MAX_LAYERS];
@@ -361,6 +361,7 @@ runqrouter(int argc, char *argv[])
    if (Filename[0] != '\0') {
 
       /* process last non-option string */
+
       dotptr = strrchr(Filename, '.');
       if (dotptr != NULL) *dotptr = '\0';
       sprintf(DEFfilename, "%s.def", Filename);
@@ -389,7 +390,7 @@ runqrouter(int argc, char *argv[])
 
 static void reinitialize()
 {
-    int i;
+    int i, j;
     NETLIST nl;
     NET net;
     ROUTE rt;
@@ -402,6 +403,9 @@ static void reinitialize()
     // Free up all of the matrices
 
     for (i = 0; i < Pinlayers; i++) {
+	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++)
+	    if (Nodeinfo[i][j])
+		free(Nodeinfo[i][j]);
 	free(Nodeinfo[i]);
 	Nodeinfo[i] = NULL;
     }
@@ -541,8 +545,8 @@ static int post_def_setup()
 	 exit(5);
       }
 
-      Nodeinfo[i] = (NODEINFO)calloc(NumChannelsX[i] * NumChannelsY[i],
-			sizeof(struct nodeinfo_));
+      Nodeinfo[i] = (NODEINFO *)calloc(NumChannelsX[i] * NumChannelsY[i],
+			sizeof(NODEINFO));
       if (!Nodeinfo[i]) {
 	 fprintf( stderr, "Out of memory 6.\n");
 	 exit(6);
@@ -2258,10 +2262,12 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
      for (i = 0; i < Pinlayers; i++) {
 	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   node = Nodeinfo[i][j].nodeloc;
-	   if (node != (NODE)NULL)
-	      if (node->netnum == iroute->net->netnum)
-		 Nodeinfo[i][j].nodeloc = (NODE)NULL;
+	   if (Nodeinfo[i][j]) {
+	      node = Nodeinfo[i][j]->nodeloc;
+	      if (node != (NODE)NULL)
+	         if (node->netnum == iroute->net->netnum)
+		    Nodeinfo[i][j]->nodeloc = (NODE)NULL;
+	   }
         }
      }
 
@@ -2309,6 +2315,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   u_int netnum, dir;
   int  result, rval, unroutable;
   NODE node;
+  NODEINFO lnode;
   PROUTE *Pr;
 
   // Make Obs2[][] a copy of Obs[][].  Convert pin obstructions to
@@ -2324,10 +2331,11 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 	         Pr->prdata.net = netnum;
 	      else
 	         Pr->prdata.net = netnum & NETNUM_MASK;
-	      dir = netnum & PINOBSTRUCTMASK;
-	      if ((dir != 0) && ((dir & STUBROUTE_X) == STUBROUTE_X)) {
-		 if ((netnum & NETNUM_MASK) == iroute->net->netnum)
-		    Pr->prdata.net = 0;	// STUBROUTE_X not routable
+	      if (netnum & STUBROUTE) {
+		 lnode = Nodeinfo[i][j];
+		 if ((lnode->flags & NI_STUB_MASK) == NI_STUB_MASK)
+		    if ((netnum & NETNUM_MASK) == iroute->net->netnum)
+		       Pr->prdata.net = 0;	// STUBROUTE_X not routable, fixme
 	      }
 	   } else {
 	      Pr->flags = PR_COST;		// This location is routable
@@ -2436,10 +2444,12 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 
      for (i = 0; i < Pinlayers; i++) {
 	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   iroute->nsrc = Nodeinfo[i][j].nodeloc;
-	   if (iroute->nsrc != (NODE)NULL)
-	      if (iroute->nsrc->netnum == iroute->net->netnum)
-		 Nodeinfo[i][j].nodeloc = (NODE)NULL;
+	   if (Nodeinfo[i][j]) {
+	      iroute->nsrc = Nodeinfo[i][j]->nodeloc;
+	      if (iroute->nsrc != (NODE)NULL)
+	         if (iroute->nsrc->netnum == iroute->net->netnum)
+		    Nodeinfo[i][j]->nodeloc = (NODE)NULL;
+	   }
         }
      }
 
@@ -2881,6 +2891,7 @@ static void cleanup_net(NET net)
 {
    SEG segf, segl, seg;
    ROUTE rt, rt2;
+   NODEINFO lnode;
    int lf, ll, lf2, ll2;
    u_char fcheck, lcheck;
    u_char xcheckf, ycheckf, xcheckl, ycheckl; 
@@ -2913,7 +2924,8 @@ static void cleanup_net(NET net)
 	 fcheck = TRUE;
 
 	 // We're going to remove the contact so it can't be a tap
-	 if ((lf < Pinlayers) && (NODESAV(segf->x1, segf->y1, lf) != NULL))
+	 if ((lf < Pinlayers) && ((lnode = NODEIPTR(segf->x1, segf->y1, lf)) != NULL)
+			&& (lnode->nodesav != NULL))
 	    fcheck = FALSE;
       }
       xcheckf = needblock[lf] & VIABLOCKX;
@@ -2939,7 +2951,8 @@ static void cleanup_net(NET net)
 	 lcheck = TRUE;
 
 	 // We're going to remove the contact so it can't be a tap
-	 if ((ll < Pinlayers) && (NODESAV(segl->x1, segl->y1, ll) != NULL))
+	 if ((ll < Pinlayers) && ((lnode = NODEIPTR(segl->x1, segl->y1, ll)) != NULL)
+			&& (lnode->nodesav != NULL))
 	    lcheck = FALSE;
       }
       xcheckl = needblock[ll] & VIABLOCKX;
@@ -3110,6 +3123,7 @@ static void
 emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 {
    SEG seg, saveseg, lastseg, prevseg;
+   NODEINFO lnode, lnode1, lnode2;
    ROUTE rt;
    u_int dir1, dir2, tdir;
    int layer;
@@ -3117,7 +3131,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
    double dc;
    int lastx = -1, lasty = -1, lastlay;
    int horizontal;
-   float offset1, offset2;
+   float offset1, offset2, stub, offset;
    u_char cancel, segtype;
    double invscale = (double)(1.0 / (double)iscale); 
 
@@ -3175,26 +3189,25 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			seg->layer))
 	       layer++;
 
-	    dir1 = OBSVAL(seg->x1, seg->y1, layer);
-	    dir1 &= PINOBSTRUCTMASK;
-	    if (dir1 && !(seg->segtype & (ST_OFFSET_START | ST_OFFSET_END))) {
+	    lnode = (layer < Pinlayers) ? NODEIPTR(seg->x1, seg->y1, layer) : NULL;
+	    stub = (lnode) ? lnode->stub : 0.0;
+	    if (OBSVAL(seg->x1, seg->y1, layer) & STUBROUTE) {
 	       if ((special == (u_char)0) && (Verbose > 2))
 		  Fprintf(stdout, "Stub route distance %g to terminal"
-				" at %d %d (%d)\n",
-				STUBVAL(seg->x1, seg->y1, layer),
+				" at %d %d (%d)\n", stub,
 				seg->x1, seg->y1, layer);
 
 	       dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
 	       x = (int)((REPS(dc)) * oscale);
-	       if (dir1 == STUBROUTE_EW)
-		  dc += STUBVAL(seg->x1, seg->y1, layer);
+	       if (lnode->flags & NI_STUB_EW)
+		  dc += stub;
 	       x2 = (int)((REPS(dc)) * oscale);
 	       dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
 	       y = (int)((REPS(dc)) * oscale);
-	       if (dir1 == STUBROUTE_NS)
-		  dc += STUBVAL(seg->x1, seg->y1, layer);
+	       if (lnode->flags & NI_STUB_NS)
+		  dc += stub;
 	       y2 = (int)((REPS(dc)) * oscale);
-	       if (dir1 == STUBROUTE_EW) {
+	       if (lnode->flags & NI_STUB_EW) {
 		  horizontal = TRUE;
 
 		  // If the gridpoint ahead of the stub has a route
@@ -3213,8 +3226,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     tdir = OBSVAL(seg->x1 + 1, seg->y1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 					(net->netnum | ROUTED_NET)) {
-			if (STUBVAL(seg->x1, seg->y1, layer) +
-					LefGetRouteKeepout(layer) >= PitchX[layer]) {
+			if (stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	   dc = Xlowerbound + (double)(seg->x1 + 1)
 					* PitchX[layer];
 		      	   x2 = (int)((REPS(dc)) * oscale);
@@ -3225,8 +3237,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     tdir = OBSVAL(seg->x1 - 1, seg->y1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 					(net->netnum | ROUTED_NET)) {
-			if (-STUBVAL(seg->x1, seg->y1, layer) +
-					LefGetRouteKeepout(layer) >= PitchX[layer]) {
+			if (-stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	   dc = Xlowerbound + (double)(seg->x1 - 1)
 					* PitchX[layer];
 		      	   x2 = (int)((REPS(dc)) * oscale);
@@ -3273,8 +3284,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     tdir = OBSVAL(seg->x1, seg->y1 + 1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			if (STUBVAL(seg->x1, seg->y1, layer) +
-					LefGetRouteKeepout(layer) >= PitchY[layer]) {
+			if (stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	   dc = Ylowerbound + (double)(seg->y1 + 1)
 					* PitchY[layer];
 		      	   y2 = (int)((REPS(dc)) * oscale);
@@ -3285,8 +3295,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		     tdir = OBSVAL(seg->x1, seg->y1 - 1, layer);
 		     if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			if (-STUBVAL(seg->x1, seg->y1, layer) +
-					LefGetRouteKeepout(layer) >= PitchY[layer]) {
+			if (-stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	   dc = Ylowerbound + (double)(seg->y1 - 1)
 					* PitchY[layer];
 		      	   y2 = (int)((REPS(dc)) * oscale);
@@ -3346,14 +3355,17 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    dir2 = 0;
 
 	    if (seg->segtype & ST_OFFSET_START) {
-	       dir1 = OBSVAL(seg->x1, seg->y1, seg->layer) & PINOBSTRUCTMASK;
-	       if (dir1 == 0 && lastseg) {
+	       dir1 = OBSVAL(seg->x1, seg->y1, seg->layer) & OFFSET_TAP;
+	       if ((dir1 == 0) && lastseg) {
 		  dir1 = OBSVAL(lastseg->x2, lastseg->y2, lastseg->layer)
-				& PINOBSTRUCTMASK;
-		  offset1 = STUBVAL(lastseg->x2, lastseg->y2, lastseg->layer);
+				& OFFSET_TAP;
+		  lnode1 = NODEIPTR(lastseg->x2, lastseg->y2, lastseg->layer);
+		  offset1 = lnode1->offset;
 	       }
-	       else
-		  offset1 = STUBVAL(seg->x1, seg->y1, seg->layer);
+	       else {
+		  lnode1 = NODEIPTR(seg->x1, seg->y1, seg->layer);
+		  offset1 = lnode1->offset;
+	       }
 
 	       // Offset was calculated for vias;  plain metal routes
 	       // typically will need less offset distance, so subtract off
@@ -3380,14 +3392,17 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	       }
 	    }
 	    if (seg->segtype & ST_OFFSET_END) {
-	       dir2 = OBSVAL(seg->x2, seg->y2, seg->layer) & PINOBSTRUCTMASK;
-	       if (dir2 == 0 && seg->next) {
+	       dir2 = OBSVAL(seg->x2, seg->y2, seg->layer) & OFFSET_TAP;
+	       if ((dir2 == 0) && seg->next) {
 		  dir2 = OBSVAL(seg->next->x1, seg->next->y1, seg->next->layer) &
-					PINOBSTRUCTMASK;
-		  offset2 = STUBVAL(seg->next->x1, seg->next->y1, seg->next->layer);
+					OFFSET_TAP;
+		  lnode2 = NODEIPTR(seg->next->x1, seg->next->y1, seg->next->layer);
+		  offset2 = lnode2->offset;
 	       }
-	       else
-		  offset2 = STUBVAL(seg->x2, seg->y2, seg->layer);
+	       else {
+		  lnode2 = NODEIPTR(seg->x2, seg->y2, seg->layer);
+		  offset2 = lnode2->offset;
+	       }
 
 	       // Offset was calculated for vias;  plain metal routes
 	       // typically will need less offset distance, so subtract off
@@ -3422,16 +3437,16 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	    // config file and lefInfo.
 
 	    dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
-	    if (dir1 == (STUBROUTE_EW | OFFSET_TAP)) dc += offset1;
+	    if ((dir1 & OFFSET_TAP) && (lnode1->flags & NI_OFFSET_EW)) dc += offset1;
 	    x = (int)((REPS(dc)) * oscale);
 	    dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
-	    if (dir1 == (STUBROUTE_NS | OFFSET_TAP)) dc += offset1;
+	    if ((dir1 & OFFSET_TAP) && (lnode1->flags & NI_OFFSET_NS)) dc += offset1;
 	    y = (int)((REPS(dc)) * oscale);
 	    dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
-	    if (dir2 == (STUBROUTE_EW | OFFSET_TAP)) dc += offset2;
+	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_EW)) dc += offset2;
 	    x2 = (int)((REPS(dc)) * oscale);
 	    dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
-	    if (dir2 == (STUBROUTE_NS | OFFSET_TAP)) dc += offset2;
+	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_NS)) dc += offset2;
 	    y2 = (int)((REPS(dc)) * oscale);
 	    segtype = seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END);
 	    switch (segtype) {
@@ -3646,30 +3661,29 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	 if (special == (u_char)1 && Pathon != -1) Pathon = 0;
 
 	 // Check last position for terminal offsets
-	 if (seg && ((seg != saveseg)
-				|| (seg->segtype & ST_WIRE))) {
+	 if (seg && ((seg != saveseg) || (seg->segtype & ST_WIRE))) {
 	     cancel = FALSE;
 	     layer = seg->layer;
-	     dir2 = OBSVAL(seg->x2, seg->y2, layer);
-	     dir2 &= PINOBSTRUCTMASK;
+	     lnode = (layer < Pinlayers) ? NODEIPTR(seg->x2, seg->y2, layer) : NULL;
+	     dir2 = OBSVAL(seg->x2, seg->y2, layer) & STUBROUTE;
 	     if (dir2 && !(seg->segtype & (ST_OFFSET_END | ST_OFFSET_START))) {
+	        stub = lnode->stub;
 		if ((special == (u_char)0) && (Verbose > 2))
 		   Fprintf(stdout, "Stub route distance %g to terminal"
 				" at %d %d (%d)\n",
-				STUBVAL(seg->x2, seg->y2, layer),
-				seg->x2, seg->y2, layer);
+				stub, seg->x2, seg->y2, layer);
 
 		dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
 		x = (int)((REPS(dc)) * oscale);
-		if (dir2 == STUBROUTE_EW)
-		   dc += STUBVAL(seg->x2, seg->y2, layer);
+		if (lnode->flags & NI_STUB_EW)
+		   dc += stub;
 		x2 = (int)((REPS(dc)) * oscale);
 		dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
 		y = (int)((REPS(dc)) * oscale);
-		if (dir2 == STUBROUTE_NS)
-		   dc += STUBVAL(seg->x2, seg->y2, layer);
+		if (lnode->flags & NI_STUB_NS)
+		   dc += stub;
 		y2 = (int)((REPS(dc)) * oscale);
-		if (dir2 == STUBROUTE_EW) {
+		if (lnode->flags & NI_STUB_EW) {
 		   horizontal = TRUE;
 
 		   // If the gridpoint ahead of the stub has a route
@@ -3682,8 +3696,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      tdir = OBSVAL(seg->x2 + 1, seg->y2, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (STUBVAL(seg->x1, seg->y2, layer) +
-					LefGetRouteKeepout(layer) >= PitchX[layer]) {
+			 if (stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	    dc = Xlowerbound + (double)(seg->x2 + 1)
 					* PitchX[layer];
 		      	    x2 = (int)((REPS(dc)) * oscale);
@@ -3694,8 +3707,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      tdir = OBSVAL(seg->x2 - 1, seg->y2, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (-STUBVAL(seg->x2, seg->y2, layer) +
-					LefGetRouteKeepout(layer) >= PitchX[layer]) {
+			 if (-stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
 		      	    dc = Xlowerbound + (double)(seg->x2 - 1)
 					* PitchX[layer];
 		      	    x2 = (int)((REPS(dc)) * oscale);
@@ -3742,8 +3754,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      tdir = OBSVAL(seg->x2, seg->y2 + 1, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (STUBVAL(seg->x2, seg->y2, layer) +
-					LefGetRouteKeepout(layer) >= PitchY[layer]) {
+			 if (stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	    dc = Ylowerbound + (double)(seg->y2 + 1)
 					* PitchY[layer];
 		      	    y2 = (int)((REPS(dc)) * oscale);
@@ -3754,8 +3765,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      tdir = OBSVAL(seg->x2, seg->y2 - 1, layer);
 		      if ((tdir & ROUTED_NET_MASK) ==
 						(net->netnum | ROUTED_NET)) {
-			 if (-STUBVAL(seg->x1, seg->y2, layer) +
-					LefGetRouteKeepout(layer) >= PitchY[layer]) {
+			 if (-stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
 		      	    dc = Ylowerbound + (double)(seg->y2 - 1)
 					* PitchY[layer];
 		      	    y2 = (int)((REPS(dc)) * oscale);
@@ -3822,6 +3832,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	       // Problems only arise when the via width is larger than
 	       // the width of the metal route leaving the via.
 
+	       offset = lnode->offset;
 	       if (LefGetViaWidth(seg->layer, lastseg->layer, 1 - horizontal) >
 			LefGetRouteWidth(lastseg->layer)) {
 
@@ -3849,8 +3860,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			   if ((PitchX[lastseg->layer] -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
 				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 1) -
-				(prevseg->x1 - seg->x1) *
-				STUBVAL(seg->x2, seg->y2, seg->layer))
+				(prevseg->x1 - seg->x1) * offset)
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -3867,8 +3877,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			   if ((PitchY[lastseg->layer] -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
 				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 0)
-				- (prevseg->y1 - seg->y1) *
-				STUBVAL(seg->x2, seg->y2, seg->layer))
+				- (prevseg->y1 - seg->y1) * offset)
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -3887,8 +3896,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			   if ((PitchX[lastseg->layer] -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
 				0.5 * LefGetRouteWidth(prevseg->layer) -
-				(prevseg->x1 - seg->x1) *
-				STUBVAL(seg->x2, seg->y2, seg->layer))
+				(prevseg->x1 - seg->x1) * offset)
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -3905,8 +3913,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 			   if ((PitchY[lastseg->layer] -
 				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
 				0.5 * LefGetRouteWidth(prevseg->layer) -
-				(prevseg->y1 - seg->y1) *
-				STUBVAL(seg->x2, seg->y2, seg->layer))
+				(prevseg->y1 - seg->y1) * offset)
 				< LefGetRouteSpacing(lastseg->layer)) {
 			      if (special == (u_char)0) {
 				 rt->flags |= RT_STUB;
@@ -4168,6 +4175,9 @@ static void helpmessage(void)
 	Fprintf(stdout, "\t-i <file>\t\t\tPrint route names and pitches and exit.\n");
 	Fprintf(stdout, "\t-p <name>\t\t\tSpecify global power bus name.\n");
 	Fprintf(stdout, "\t-g <name>\t\t\tSpecify global ground bus name.\n");
+	Fprintf(stdout, "\t-r <value>\t\t\tForce output resolution scale.\n");
+	Fprintf(stdout, "\t-f       \t\t\tForce all pins to be routable.\n");
+	Fprintf(stdout, "\t-k <level>\t\t\tLevel of effort to keep trying.\n");
 	Fprintf(stdout, "\n");
     }
 #ifdef TCL_QROUTER

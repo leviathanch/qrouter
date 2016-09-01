@@ -340,7 +340,7 @@ SetNodeinfo(int gridx, int gridy, int layer)
 
     lnodeptr = &NODEIPTR(gridx, gridy, layer);
     if (*lnodeptr == NULL) {
-	*lnodeptr = (NODEINFO)malloc(sizeof(struct nodeinfo_));
+	*lnodeptr = (NODEINFO)calloc(1, sizeof(struct nodeinfo_));
     }
     return *lnodeptr;
 }
@@ -565,6 +565,7 @@ count_reachable_taps()
 		int dir, mask, tapx, tapy, tapl;
 
 		/* Initialize mindist to a large value */
+		mask = 0;
 		mindist = PitchX[Num_layers - 1] + PitchY[Num_layers - 1];
 		dir = 0;	/* Indicates no solution found */
 
@@ -2099,6 +2100,8 @@ void create_obstructions_outside_nodes(void)
 				      // direction.  To be pedantic, we could define
 				      // some jogged stub, but for now, we just call
 				      // the point unroutable (leave dir = NI_STUB_MASK)
+
+				      // To do:  Apply offset + stub
 				   }
 				}
 
@@ -2141,6 +2144,8 @@ void create_obstructions_outside_nodes(void)
 				else if (((mask & OFFSET_TAP) != 0) || (dist != 0.0)) {
 				   lnode->offset = dist;
 				}
+				
+				// To do:  Remove STUBROUTE_X (NI_STUB_MASK)?
 			    }
 			    else if (epass == 0) {
 
@@ -2585,7 +2590,7 @@ void adjust_stub_lengths(void)
     GATE g;
     DSEG ds, ds2;
     struct dseg_ dt, de;
-    int i, gridx, gridy, orignet;
+    int i, gridx, gridy, orignet, o;
     double dx, dy, wx, wy, s;
     float dist;
     u_char errbox;
@@ -2823,18 +2828,17 @@ void adjust_stub_lengths(void)
 				// makes contact without the stub.  Moving the stub
 				// to another side should not create an error.
 
-				// NOTE:  Changed 4/29/13;  direction of stub will
-				// be changed even though it might create an error
-				// in the other direction;  it can't do worse.
-				// But, the case should be re-run to check (to-do)
+				// NOTE:  error box must touch ds geometry, and by
+				// more than just a point.
 
-				// NOTE 2: Changed again 1/8/14;  error box must
-				// touch ds geometry.
-				// Changed again 2/5/14:  error box must touch
-				// ds geometry by more than just a point.  <=
-				// changed to < and >= changed to >
+				// 8/31/2016:
+				// If DRC violations are created on two adjacent
+				// sides, then create both a stub route and a tap
+				// offset.  Put the stub route in the preferred
+				// metal direction of the layer, and set the tap
+				// offset to prevent the DRC error in the other
+				// direction.
 
-				/* if (de.x2 > dt.x2) { */
 				if ((de.x2 > dt.x2) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
 				   if ((orignet & STUBROUTE) == 0) {
@@ -2844,20 +2848,38 @@ void adjust_stub_lengths(void)
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
-						&& (lnode->flags & NI_STUB_EW)
-						&& (dist > 0)) {
+						&& (lnode->flags & NI_STUB_EW)) {
+				      // Beware, if dist > 0 then this reverses
+				      // the stub.  For U-shaped ports may need
+				      // to have separate E and W stubs.
 				      lnode->stub = de.x2 - dx;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
 						&& (lnode->flags & NI_STUB_NS)) {
-				      lnode->stub = de.x2 - dx;
-				      lnode->flags &= ~NI_STUB_MASK;
-				      lnode->flags |= NI_STUB_EW;
-				      errbox = FALSE;
+
+				      // If preferred route direction is
+				      // horizontal, then change the stub
+
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      if (LefGetRouteOrientation(ds->layer) == 1) {
+					 lnode->flags = NI_OFFSET_NS | NI_STUB_EW;
+					 // lnode->offset = lnode->stub;  // ?
+					 if (lnode->stub > 0)
+					    lnode->offset = de.y2 - dy - wy;
+					 else
+					    lnode->offset = de.y1 - dy + wy;
+				         lnode->stub = de.x2 - dx;
+				         errbox = FALSE;
+				      }
+				      else {
+					 // Add the offset
+				         lnode->offset = de.x2 - dx - wx;
+					 lnode->flags |= NI_OFFSET_EW;
+				         errbox = FALSE;
+				      }
 				   }
 				}
-				/* else if (de.x1 < dt.x1) { */
 				else if ((de.x1 < dt.x1) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
 				   if ((orignet & STUBROUTE) == 0) {
@@ -2867,20 +2889,38 @@ void adjust_stub_lengths(void)
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
-						&& (lnode->flags & NI_STUB_EW)
-						&& (dist < 0)) {
+						&& (lnode->flags & NI_STUB_EW)) {
+				      // Beware, if dist > 0 then this reverses
+				      // the stub.  For U-shaped ports may need
+				      // to have separate E and W stubs.
 				      lnode->stub = de.x1 - dx;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
 						&& (lnode->flags & NI_STUB_NS)) {
-				      lnode->stub = de.x1 - dx;
-				      lnode->flags &= ~NI_STUB_MASK;
-				      lnode->flags |= NI_STUB_EW;
-				      errbox = FALSE;
+
+				      // If preferred route direction is
+				      // horizontal, then change the stub
+
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      if (LefGetRouteOrientation(ds->layer) == 1) {
+					 lnode->flags = NI_OFFSET_NS | NI_STUB_EW;
+					 // lnode->offset = lnode->stub;  // ?
+					 if (lnode->stub > 0)
+					    lnode->offset = de.y2 - dy - wy;
+					 else
+					    lnode->offset = de.y1 - dy + wy;
+				         lnode->stub = de.x1 - dx;
+				         errbox = FALSE;
+				      }
+				      else {
+					 // Add the offset
+				         lnode->offset = de.x1 - dx + wx;
+					 lnode->flags |= NI_OFFSET_EW;
+				         errbox = FALSE;
+				      }
 				   }
 				}
-				/* else if (de.y2 > dt.y2) { */
 				else if ((de.y2 > dt.y2) && (de.x1 < ds->x2) &&
 					(de.x2 > ds->x1)) {
 				   if ((orignet & STUBROUTE) == 0) {
@@ -2890,20 +2930,38 @@ void adjust_stub_lengths(void)
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
-						&& (lnode->flags & NI_STUB_NS)
-						&& (dist > 0)) {
+						&& (lnode->flags & NI_STUB_NS)) {
+				      // Beware, if dist > 0 then this reverses
+				      // the stub.  For C-shaped ports may need
+				      // to have separate N and S stubs.
 				      lnode->stub = de.y2 - dy;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
 						&& (lnode->flags & NI_STUB_EW)) {
-				      lnode->flags &= ~NI_STUB_MASK;
-				      lnode->flags |= NI_STUB_NS;
-				      lnode->stub = de.y2 - dy;
-				      errbox = FALSE;
+
+				      // If preferred route direction is
+				      // vertical, then change the stub
+
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      if (LefGetRouteOrientation(ds->layer) == 0) {
+					 lnode->flags = NI_OFFSET_EW | NI_STUB_NS;
+					 // lnode->offset = lnode->stub;  // ?
+					 if (lnode->stub > 0)
+					    lnode->offset = de.x2 - dx - wx;
+					 else
+					    lnode->offset = de.x1 - dx + wx;
+				         lnode->stub = de.y2 - dy;
+				         errbox = FALSE;
+				      }
+				      else {
+					 // Add the offset
+				         lnode->offset = de.y2 - dy - wy;
+					 lnode->flags |= NI_OFFSET_NS;
+				         errbox = FALSE;
+				      }
 				   }
 				}
-				/* else if (de.y1 < dt.y1) { */
 				else if ((de.y1 < dt.y1) && (de.x1 < ds->x2) &&
 					(de.x2 > ds->x1)) {
 				   if ((orignet & STUBROUTE) == 0) {
@@ -2913,17 +2971,36 @@ void adjust_stub_lengths(void)
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
-						&& (lnode->flags & NI_STUB_NS)
-						&& (dist < 0)) {
+						&& (lnode->flags & NI_STUB_NS)) {
+				      // Beware, if dist > 0 then this reverses
+				      // the stub.  For C-shaped ports may need
+				      // to have separate N and S stubs.
 				      lnode->stub = de.y1 - dy;
 				      errbox = FALSE;
 				   }
 				   else if ((orignet & STUBROUTE)
 						&& (lnode->flags & NI_STUB_EW)) {
-				      lnode->stub = de.y1 - dy;
-				      lnode->flags &= ~NI_STUB_MASK;
-				      lnode->flags |= NI_STUB_NS;
-				      errbox = FALSE;
+
+				      // If preferred route direction is
+				      // vertical, then change the stub
+
+			              OBSVAL(gridx, gridy, ds->layer) |= OFFSET_TAP;
+				      if (LefGetRouteOrientation(ds->layer) == 0) {
+					 lnode->flags = NI_OFFSET_EW | NI_STUB_NS;
+					 // lnode->offset = lnode->stub;  // ?
+					 if (lnode->stub > 0)
+					    lnode->offset = de.x2 - dx - wx;
+					 else
+					    lnode->offset = de.x1 - dx + wx;
+				         lnode->stub = de.y1 - dy + wy;
+				         errbox = FALSE;
+				      }
+				      else {
+					 // Add the offset
+				         lnode->offset = de.y1 - dy + wy;
+					 lnode->flags |= NI_OFFSET_NS;
+				         errbox = FALSE;
+				      }
 				   }
 				}
 

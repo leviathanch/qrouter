@@ -2331,12 +2331,6 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 	         Pr->prdata.net = netnum;
 	      else
 	         Pr->prdata.net = netnum & NETNUM_MASK;
-	      if (netnum & STUBROUTE) {
-		 lnode = Nodeinfo[i][j];
-		 if ((lnode->flags & NI_STUB_MASK) == NI_STUB_MASK)
-		    if ((netnum & NETNUM_MASK) == iroute->net->netnum)
-		       Pr->prdata.net = 0;	// STUBROUTE_X not routable, fixme
-	      }
 	   } else {
 	      Pr->flags = PR_COST;		// This location is routable
 	      Pr->prdata.cost = MAXRT;
@@ -3142,28 +3136,105 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
       fprintf(Cmd, ";\n- %s\n", net->netname);
    }
 
-   int viaOffsetX[MAX_LAYERS][2];
-   int viaOffsetY[MAX_LAYERS][2];
+   u_char viaCheckX[MAX_LAYERS];
+   u_char viaCheckY[MAX_LAYERS];
+   double viaOffsetX[MAX_LAYERS][3];
+   double viaOffsetY[MAX_LAYERS][3];
 
-   /* Compute via offsets, if needed for adjacent vias */
+   /* Compute via offsets, if needed for adjacent vias on different nets. */
+
+   /* A well-designed standard cell set should not have DRC errors	*/
+   /* between vias spaced on adjacent tracks.  But not every standard	*/
+   /* cell set is well-designed. . .					*/
+
+   /* Example of offset measurements:					*/
+   /* viaOffsetX[layer][n]:  layer is the base layer of the via, n is	*/
+   /* 0 for the via one layer below, 1 for the same via, and 2 for the	*/
+   /* via one layer above.  Note that the n = 1 has interactions on two	*/
+   /* different metal layers.  The maximum distance is used.		*/
+
+   /* viaCheckX[1] is 0 if all of viaOffsetX[1][0-2] is zero.  This	*/
+   /*	 allows a quick determination if a check for neighboring vias	*/
+   /*    is required.							*/
+   /* viaOffsetX[1][0] is the additional spacing above the grid	width	*/
+   /*	 for via2-to-via1 (on metal2 only).				*/
+   /* viaOffsetX[1][1] is the additional spacing above the grid	width	*/
+   /*	 for via2-to-via2 (maximum for metal2 and metal3)		*/
+   /* viaOffsetX[1][2] is the additional spacing above the grid	width	*/
+   /*	 for via2-to-via3 (on metal3 only).				*/
+
+   viaOffsetX[0][0] = 0;		// nothing below the 1st via
+   viaOffsetY[0][0] = 0;
+   viaOffsetX[Num_layers - 1][2] = 0;	// nothing above the last via
+   viaOffsetY[Num_layers - 1][2] = 0;
 
    for (layer = 0; layer < Num_layers - 1; layer++) {
+      double s1  = LefGetRouteSpacing(layer);
+      double s2  = LefGetRouteSpacing(layer + 1);
+      double p1x = PitchX[layer];
+      double p2x = PitchX[layer + 1];
+      double p1y = PitchY[layer];
+      double p2y = PitchY[layer + 1];
+      double w1x = LefGetViaWidth(layer, layer, 0);
+      double w1y = LefGetViaWidth(layer, layer, 1);
+      double w2x = LefGetViaWidth(layer, layer + 1, 0);
+      double w2y = LefGetViaWidth(layer, layer + 1, 1);
+    
+      double w0x, w0y, w3x, w3y;
 
-      dc = LefGetRouteSpacing(layer) + LefGetViaWidth(layer, layer, 1)
-		- PitchY[layer] - EPS;
-      viaOffsetY[layer][0] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
+      viaCheckX[layer] = 0;
+      viaCheckY[layer] = 0;
 
-      dc = LefGetRouteSpacing(layer) + LefGetViaWidth(layer, layer, 0)
-		- PitchX[layer] - EPS;
-      viaOffsetX[layer][0] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
+      if (layer > 0) {
 
-      dc = LefGetRouteSpacing(layer + 1) + LefGetViaWidth(layer, layer + 1, 1)
-		- PitchY[layer + 1] - EPS;
-      viaOffsetY[layer][1] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
+	 /* Space from via to (via - 1) */
 
-      dc = LefGetRouteSpacing(layer + 1) + LefGetViaWidth(layer, layer + 1, 0)
-		- PitchX[layer + 1] - EPS;
-      viaOffsetX[layer][1] = (dc > 0.0) ? (int)((oscale * dc * 0.5) + 0.5) : 0;
+         w0x = LefGetViaWidth(layer - 1, layer, 0);
+         w0y = LefGetViaWidth(layer - 1, layer, 1);
+
+         dc = s1 + (w1x + w0x) / 2 - p1x;
+         viaOffsetX[layer][0] = (dc > 0.0) ? dc : 0.0;
+
+         dc = s1 + (w1y + w0y) / 2 - p1y;
+         viaOffsetY[layer][0] = (dc > 0.0) ? dc : 0.0;
+      }
+
+      /* Space from via to via (check both lower and upper metal layers) */
+
+      dc = s1 + w1x - p1x;
+      viaOffsetX[layer][1] = (dc > 0.0) ? dc : 0.0;
+
+      dc = s2 + w2x - p2x;
+      if (dc < 0.0) dc = 0.0;
+      if (dc > viaOffsetX[layer][1]) viaOffsetX[layer][1] = dc;
+
+      dc = s1 + w1y - p1y;
+      viaOffsetY[layer][1] = (dc > 0.0) ? dc : 0.0;
+
+      dc = s2 + w2y - p2y;
+      if (dc < 0.0) dc = 0.0;
+      if (dc > viaOffsetY[layer][1]) viaOffsetY[layer][1] = dc;
+
+      if (layer < Num_layers - 1) {
+
+	 /* Space from via to (via + 1) */
+
+         w3x = LefGetViaWidth(layer + 1, layer, 0);
+         w3y = LefGetViaWidth(layer + 1, layer, 1);
+
+         dc = s2 + (w2x + w3x) / 2 - p2x;
+         viaOffsetX[layer][2] = (dc > 0.0) ? dc : 0.0;
+
+         dc = s2 + (w2y + w3y) / 2 - p2y;
+         viaOffsetY[layer][2] = (dc > 0.0) ? dc : 0.0;
+      }
+
+      if (viaOffsetX[layer][0] > 0 || viaOffsetX[layer][1] > 0 ||
+		viaOffsetX[layer][2] > 0)
+	 viaCheckX[layer] = 1;
+      if (viaOffsetY[layer][0] > 0 || viaOffsetY[layer][1] > 0 ||
+		viaOffsetY[layer][2] > 0)
+	 viaCheckY[layer] = 1;
    }
 
    Pathon = -1;
@@ -3547,97 +3618,209 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	       case ST_VIA:
 		  rt->flags |= RT_OUTPUT;
 		  if (special == (u_char)0) {
+		     double viaoffx, viaoffy;
+		     int vx = 0;
+		     int vy = 0;
+		     u_int tdirpp, tdirp, tdirn;
+		     u_char viaNL, viaNM, viaNU;
+		     u_char viaSL, viaSM, viaSU;
+		     u_char viaEL, viaEM, viaEU;
+		     u_char viaWL, viaWM, viaWU;
+
 		     if (lastseg == NULL) {
 			// Make sure last position is valid
 			lastx = x;
 			lasty = y;
 		     }
+
 		     // Check for vias between adjacent but different nets
 		     // that need position offsets to avoid a DRC spacing error
 
-		     if (viaOffsetX[layer][0] > 0) {
-			if (seg->x1 > 0 && ((tdir = (OBSVAL(seg->x1 - 1,
-				seg->y1, layer) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x + viaOffsetX[layer][0],
-					y, lastx, lasty, seg->x1, seg->y1, invscale);
+		     // viaCheckX[layer] indicates whether a check for
+		     // vias is needed.  If so, record what vias are to east
+		     // and west.
+
+		     if (viaCheckX[layer] > 0) {
+
+			viaEL = viaEM = viaEU = 0;
+			viaWL = viaWM = viaWU = 0;
+
+			// Check for via to west
+			if (seg->x1 > 0) {
+			   tdir = OBSVAL(seg->x1 - 1, seg->y1, layer)
+					& ROUTED_NET_MASK;
+
+			   if ((tdir & NO_NET == 0) && (tdir != 0) &&
+				(tdir != (net->netnum | ROUTED_NET))) {
+
+			      if (layer < Num_layers - 1) {
+			         tdirp = OBSVAL(seg->x1 - 1, seg->y1, layer + 1)
+					& ROUTED_NET_MASK;
+			         if ((tdirp & NO_NET == 0) && (tdirp != 0) &&
+				     	(tdirp != (net->netnum | ROUTED_NET))) {
+
+			            if (layer < Num_layers - 2) {
+			               tdirpp = OBSVAL(seg->x1 - 1, seg->y1, layer + 2)
+						& ROUTED_NET_MASK;
+			               if (tdirp == tdirpp) viaWU = 1;
+				    }
+				 }
+			         if (tdir == tdirp) viaWM = 1;
+			      }
+			
+			      if (layer > 0) {
+			         tdirn = OBSVAL(seg->x1 - 1, seg->y1, layer - 1)
+					& ROUTED_NET_MASK;
+			         if (tdir == tdirn) viaWL = 1;
+			      }
+			   }
 			}
-			else if ((seg->x1 < NumChannelsX[layer] - 1)
-				&& ((tdir = (OBSVAL(seg->x1 + 1, seg->y1, layer)
-				& ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x - viaOffsetX[layer][0],
-					y, lastx, lasty, seg->x1, seg->y1, invscale);
+
+			// Check for via to east
+			if (seg->x1 < NumChannelsX[layer] - 1) {
+			   tdir = OBSVAL(seg->x1 + 1, seg->y1, layer)
+					& ROUTED_NET_MASK;
+
+			   if ((tdir & NO_NET == 0) && (tdir != 0) &&
+				(tdir != (net->netnum | ROUTED_NET))) {
+
+			      if (layer < Num_layers - 1) {
+			         tdirp = OBSVAL(seg->x1 + 1, seg->y1, layer + 1)
+					& ROUTED_NET_MASK;
+			         if ((tdirp & NO_NET == 0) && (tdirp != 0) &&
+				     	(tdirp != (net->netnum | ROUTED_NET))) {
+
+			            if (layer < Num_layers - 2) {
+			               tdirpp = OBSVAL(seg->x1 + 1, seg->y1, layer + 2)
+						& ROUTED_NET_MASK;
+			               if (tdirp == tdirpp) viaEU = 1;
+				    }
+				 }
+			         if (tdir == tdirp) viaEM = 1;
+			      }
+			
+			      if (layer > 0) {
+			         tdirn = OBSVAL(seg->x1 + 1, seg->y1, layer - 1)
+					& ROUTED_NET_MASK;
+			         if (tdir == tdirn) viaEL = 1;
+			      }
+			   }
 			}
-			else
-			    pathvia(Cmd, layer, x, y, lastx, lasty, seg->x1,
-					seg->y1, invscale);
+
+			// Compute X offset
+			viaoffx = 0.0;
+
+			if (viaWL) viaoffx = viaOffsetX[layer][0];
+			else if (viaEL) viaoffx = -viaOffsetX[layer][0];
+
+			if (viaWM && viaOffsetX[layer][1] > viaoffx)
+			   viaoffx = viaOffsetX[layer][1];
+			else if (viaEM && -viaOffsetX[layer][1] < viaoffx)
+			   viaoffx = -viaOffsetX[layer][1];
+
+			if (viaWU && viaOffsetX[layer][2] > viaoffx)
+			   viaoffx = viaOffsetX[layer][2];
+			else if (viaEU && -viaOffsetX[layer][2] < viaoffx)
+			   viaoffx = -viaOffsetX[layer][2];
+
+		        vx = (int)((REPS(viaoffx)) * oscale);
 		     }
-		     else if (viaOffsetY[layer][0] > 0) {
-			if (seg->y1 > 0 && ((tdir = (OBSVAL(seg->x1,
-				seg->y1 - 1, layer) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x, y + viaOffsetY[layer][0],
-					lastx, lasty, seg->x1, seg->y1, invscale);
+
+		     // viaCheckY[layer] indicates whether a check for
+		     // vias is needed.  If so, record what vias are to north
+		     // and south.
+
+		     if (viaCheckY[layer] > 0) {
+
+			viaNL = viaNM = viaNU = 0;
+			viaSL = viaSM = viaSU = 0;
+
+			// Check for via to south
+			if (seg->y1 > 0) {
+			   tdir = OBSVAL(seg->x1, seg->y1 - 1, layer)
+					& ROUTED_NET_MASK;
+
+			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
+				(tdir != (net->netnum | ROUTED_NET))) {
+
+			      if (layer < Num_layers - 1) {
+			         tdirp = OBSVAL(seg->x1, seg->y1 - 1, layer + 1)
+					& ROUTED_NET_MASK;
+			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
+				     	(tdirp != (net->netnum | ROUTED_NET))) {
+
+			            if (layer < Num_layers - 2) {
+			               tdirpp = OBSVAL(seg->x1, seg->y1 - 1, layer + 2)
+						& ROUTED_NET_MASK;
+			               if (tdirp == tdirpp) viaSU = 1;
+				    }
+				 }
+			         if (tdir == tdirp) viaSM = 1;
+			      }
+			
+			      if (layer > 0) {
+			         tdirn = OBSVAL(seg->x1, seg->y1 - 1, layer - 1)
+					& ROUTED_NET_MASK;
+			         if (tdir == tdirn) viaSL = 1;
+			      }
+			   }
 			}
-			else if ((seg->y1 < NumChannelsY[layer] - 1)
-				&& ((tdir = (OBSVAL(seg->x1, seg->y1 + 1,
-				layer) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x, y - viaOffsetY[layer][0],
-					lastx, lasty, seg->x1, seg->y1, invscale);
+
+			// Check for via to north
+			if (seg->y1 < NumChannelsY[layer] - 1) {
+			   tdir = OBSVAL(seg->x1, seg->y1 + 1, layer)
+					& ROUTED_NET_MASK;
+
+			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
+				(tdir != (net->netnum | ROUTED_NET))) {
+
+			      if (layer < Num_layers - 1) {
+			         tdirp = OBSVAL(seg->x1, seg->y1 + 1, layer + 1)
+					& ROUTED_NET_MASK;
+			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
+				     	(tdirp != (net->netnum | ROUTED_NET))) {
+
+			            if (layer < Num_layers - 2) {
+			               tdirpp = OBSVAL(seg->x1, seg->y1 + 1, layer + 2)
+						& ROUTED_NET_MASK;
+			               if (tdirp == tdirpp) viaNU = 1;
+				    }
+				 }
+			         if (tdir == tdirp) viaNM = 1;
+			      }
+			
+			      if (layer > 0) {
+			         tdirn = OBSVAL(seg->x1, seg->y1 + 1, layer - 1)
+					& ROUTED_NET_MASK;
+			         if (tdir == tdirn) viaNL = 1;
+			      }
+			   }
 			}
-			else
-			    pathvia(Cmd, layer, x, y, lastx, lasty, seg->x1,
-					seg->y1, invscale);
+
+			// Compute Y offset
+			viaoffy = 0;
+
+			if (viaSL) viaoffy = viaOffsetY[layer][0];
+			else if (viaNL) viaoffy = -viaOffsetY[layer][0];
+
+			if (viaSM && viaOffsetY[layer][1] > viaoffy)
+			   viaoffy = viaOffsetY[layer][1];
+			else if (viaNM && -viaOffsetY[layer][1] < viaoffy)
+			   viaoffy = -viaOffsetY[layer][1];
+
+			if (viaSU && viaOffsetY[layer][2] > viaoffy)
+			   viaoffy = viaOffsetY[layer][2];
+			else if (viaNU && -viaOffsetY[layer][2] < viaoffy)
+			   viaoffy = -viaOffsetY[layer][2];
+
+		        vy = (int)((REPS(viaoffy)) * oscale);
 		     }
-		     else if (viaOffsetX[layer][1] > 0) {
-			if (seg->x1 > 0 && ((tdir = (OBSVAL(seg->x1 - 1,
-				seg->y1, layer + 1) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x + viaOffsetX[layer][1],
-					y, lastx, lasty, seg->x1, seg->y1, invscale);
-			}
-			else if ((seg->x1 < NumChannelsX[layer + 1] - 1)
-				&& ((tdir = (OBSVAL(seg->x1 + 1, seg->y1,
-				layer + 1) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x - viaOffsetX[layer][1],
-					y, lastx, lasty, seg->x1, seg->y1, invscale);
-			}
-			else
-			    pathvia(Cmd, layer, x, y, lastx, lasty, seg->x1,
-					seg->y1, invscale);
-		     }
-		     else if (viaOffsetY[layer][1] > 0) {
-			if (seg->y1 > 0 && ((tdir = (OBSVAL(seg->x1,
-				seg->y1 - 1, layer + 1) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x, y + viaOffsetY[layer][1],
-					lastx, lasty, seg->x1, seg->y1, invscale);
-			}
-			else if ((seg->y1 < NumChannelsY[layer + 1] - 1)
-				&& ((tdir = (OBSVAL(seg->x1, seg->y1 + 1,
-				layer + 1) & ROUTED_NET_MASK)) != 
-				(net->netnum | ROUTED_NET)) &&
-				(((tdir & (ROUTED_NET | NO_NET)) == ROUTED_NET))) {
-			   pathvia(Cmd, layer, x, y - viaOffsetY[layer][1],
-					lastx, lasty, seg->x1, seg->y1, invscale);
-			}
-			else
-			    pathvia(Cmd, layer, x, y, lastx, lasty, seg->x1,
-					seg->y1, invscale);
-		     }
-		     else
-			pathvia(Cmd, layer, x, y, lastx, lasty, seg->x1,
-					seg->y1, invscale);
+
+		     // via-to-via interactions are symmetric, so move each
+		     // via half the distance (?)
+
+		     pathvia(Cmd, layer, x + vx, y + vy, lastx, lasty,
+					seg->x1, seg->y1, invscale);
 
 		     lastx = x;
 		     lasty = y;
@@ -3665,8 +3848,140 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 	     cancel = FALSE;
 	     layer = seg->layer;
 	     lnode = (layer < Pinlayers) ? NODEIPTR(seg->x2, seg->y2, layer) : NULL;
-	     dir2 = OBSVAL(seg->x2, seg->y2, layer) & STUBROUTE;
-	     if (dir2 && !(seg->segtype & (ST_OFFSET_END | ST_OFFSET_START))) {
+
+	     // Look for stub routes and offset taps
+	     dir2 = OBSVAL(seg->x2, seg->y2, layer) & (STUBROUTE | OFFSET_TAP);
+
+	     if ((dir2 & OFFSET_TAP) && (seg->segtype & ST_VIA) && prevseg) {
+
+	        // Additional handling for offset taps.  When a tap position
+	        // is a via and is offset in the direction of the last
+	        // route segment, then a DRC violation can be created if
+	        // (1) the via is wider than the route width, and (2) the
+	        // adjacent track position is another via or a bend in the
+	        // route, and (3) the tap offset is large enough to create
+	        // a spacing violation between the via and the adjacent via
+	        // or perpendicular route.  If these three conditions are
+	        // satisfied, then generate a stub route the width of the
+	        // via and one track pitch in length back toward the last
+	        // track position.
+
+ 	        // Problems only arise when the via width is larger than
+	        // the width of the metal route leaving the via.
+ 
+	        offset = lnode->offset;
+	        if (LefGetViaWidth(seg->layer, lastseg->layer, 1 - horizontal) >
+			LefGetRouteWidth(lastseg->layer)) {
+
+		   // Problems only arise when the last segment is exactly
+		   // one track long.
+
+		   if ((ABSDIFF(lastseg->x2, lastseg->x1) == 1) ||
+			(ABSDIFF(lastseg->y2, lastseg->y1) == 1)) {
+
+		      if (prevseg->segtype & ST_VIA) {
+
+		 	 dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
+			 x = (int)((REPS(dc)) * oscale);
+			 dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
+			 y = (int)((REPS(dc)) * oscale);
+
+			 dc = Xlowerbound + (double)prevseg->x1 * PitchX[layer];
+			 x2 = (int)((REPS(dc)) * oscale);
+			 dc = Ylowerbound + (double)prevseg->y1 * PitchY[layer];
+			 y2 = (int)((REPS(dc)) * oscale);
+
+			 // Setup is (via, 1 track route, via with offset)
+
+			 if (prevseg->x1 != seg->x1) {
+			    if ((PitchX[lastseg->layer] -
+				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
+				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 1) -
+				(prevseg->x1 - seg->x1) * offset)
+				< LefGetRouteSpacing(lastseg->layer)) {
+			       if (special == (u_char)0) {
+				  rt->flags |= RT_STUB;
+				  net->flags |= NET_STUB;
+			       }
+			       else {
+				  pathstart(Cmd, lastseg->layer, x, y,
+					(u_char)1, oscale, invscale, 1);
+				  pathto(Cmd, x2, y2, 1, x, y, invscale);
+		      		  lastx = x2;
+				  lasty = y2;
+			       }
+			    }
+			 }
+			 else if (prevseg->y1 != seg->y1) {
+			    if ((PitchY[lastseg->layer] -
+				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
+				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 0)
+				- (prevseg->y1 - seg->y1) * offset)
+				< LefGetRouteSpacing(lastseg->layer)) {
+			       if (special == (u_char)0) {
+				 rt->flags |= RT_STUB;
+				 net->flags |= NET_STUB;
+			       }
+			       else {
+				  pathstart(Cmd, lastseg->layer, x, y,
+					(u_char)1, oscale, invscale, 0);
+				  pathto(Cmd, x2, y2, 0, x, y, invscale);
+		      		  lastx = x2;
+				  lasty = y2;
+			       }
+			    }
+			 }
+		      }
+		      else {	// Metal route bends at next track
+			 if (prevseg->x1 != seg->x1) {
+			    if ((PitchX[lastseg->layer] -
+				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
+				0.5 * LefGetRouteWidth(prevseg->layer) -
+				(prevseg->x1 - seg->x1) * offset)
+				< LefGetRouteSpacing(lastseg->layer)) {
+			       if (special == (u_char)0) {
+				 rt->flags |= RT_STUB;
+				 net->flags |= NET_STUB;
+			       }
+			       else {
+				  pathstart(Cmd, lastseg->layer, x, y,
+					(u_char)1, oscale, invscale, 1);
+				  pathto(Cmd, x2, y2, 1, x, y, invscale);
+		      		  lastx = x2;
+				  lasty = y2;
+			       }
+			    }
+			 }
+			 else if (prevseg->y1 != seg->y1) {
+			    if ((PitchY[lastseg->layer] -
+				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
+				0.5 * LefGetRouteWidth(prevseg->layer) -
+				(prevseg->y1 - seg->y1) * offset)
+				< LefGetRouteSpacing(lastseg->layer)) {
+			       if (special == (u_char)0) {
+				  rt->flags |= RT_STUB;
+				  net->flags |= NET_STUB;
+			       }
+			       else {
+				  pathstart(Cmd, lastseg->layer, x, y,
+					(u_char)1, oscale, invscale, 0);
+				  pathto(Cmd, x2, y2, 0, x, y, invscale);
+		      		  lastx = x2;
+				  lasty = y2;
+			       }
+			    }
+			 }
+		      }
+		   }
+	        }
+	     }
+
+	     // For stub routes, reset the path between terminals, since
+	     // the stubs are not connected.
+	     if (special == (u_char)1 && Pathon != -1) Pathon = 0;
+
+	     // Handling of stub routes
+	     if (dir2 & STUBROUTE) {
 	        stub = lnode->stub;
 		if ((special == (u_char)0) && (Verbose > 2))
 		   Fprintf(stdout, "Stub route distance %g to terminal"
@@ -3674,11 +3989,15 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 				stub, seg->x2, seg->y2, layer);
 
 		dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
+		if (lnode->flags & NI_OFFSET_EW)
+		   dc += offset;
 		x = (int)((REPS(dc)) * oscale);
 		if (lnode->flags & NI_STUB_EW)
 		   dc += stub;
 		x2 = (int)((REPS(dc)) * oscale);
 		dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
+		if (lnode->flags & NI_OFFSET_NS)
+		   dc += offset;
 		y = (int)((REPS(dc)) * oscale);
 		if (lnode->flags & NI_STUB_NS)
 		   dc += stub;
@@ -3741,7 +4060,7 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		      if (seg->x1 != seg->x2) cancel = TRUE;
 		   }
 		}
-		else {
+		else {  /* lnode->flags & NI_STUB_EW implied */
 		   horizontal = FALSE;
 
 		   // If the gridpoint ahead of the stub has a route
@@ -3812,123 +4131,6 @@ emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
 		   lastx = x2;
 		   lasty = y2;
 		}
-	    }
-	    else if (dir2 && (seg->segtype & ST_VIA) && prevseg) {
-	       // (seg->segtype & (ST_OFFSET_END | ST_OFFSET_START)) != 0
-	       // is implied.
-	       //
-	       // Additional handling for offset taps.  When a tap position
-	       // is a via and is offset in the direction of the last
-	       // route segment, then a DRC violation can be created if
-	       // (1) the via is wider than the route width, and (2) the
-	       // adjacent track position is another via or a bend in the
-	       // route, and (3) the tap offset is large enough to create
-	       // a spacing violation between the via and the adjacent via
-	       // or perpendicular route.  If these three conditions are
-	       // satisfied, then generate a stub route the width of the
-	       // via and one track pitch in length back toward the last
-	       // track position.
-
-	       // Problems only arise when the via width is larger than
-	       // the width of the metal route leaving the via.
-
-	       offset = lnode->offset;
-	       if (LefGetViaWidth(seg->layer, lastseg->layer, 1 - horizontal) >
-			LefGetRouteWidth(lastseg->layer)) {
-
-		  // Problems only arise when the last segment is exactly
-		  // one track long.
-
-		  if ((ABSDIFF(lastseg->x2, lastseg->x1) == 1) ||
-			(ABSDIFF(lastseg->y2, lastseg->y1) == 1)) {
-
-		     if (prevseg->segtype & ST_VIA) {
-
-			dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
-			x = (int)((REPS(dc)) * oscale);
-			dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
-			y = (int)((REPS(dc)) * oscale);
-
-			dc = Xlowerbound + (double)prevseg->x1 * PitchX[layer];
-			x2 = (int)((REPS(dc)) * oscale);
-			dc = Ylowerbound + (double)prevseg->y1 * PitchY[layer];
-			y2 = (int)((REPS(dc)) * oscale);
-
-			// Setup is (via, 1 track route, via with offset)
-
-			if (prevseg->x1 != seg->x1) {
-			   if ((PitchX[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
-				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 1) -
-				(prevseg->x1 - seg->x1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			      if (special == (u_char)0) {
-				 rt->flags |= RT_STUB;
-				 net->flags |= NET_STUB;
-			      }
-			      else {
-				 pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 1);
-				 pathto(Cmd, x2, y2, 1, x, y, invscale);
-			      }
-			   }
-			}
-			else if (prevseg->y1 != seg->y1) {
-			   if ((PitchY[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
-				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 0)
-				- (prevseg->y1 - seg->y1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			      if (special == (u_char)0) {
-				 rt->flags |= RT_STUB;
-				 net->flags |= NET_STUB;
-			      }
-			      else {
-				 pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 0);
-				 pathto(Cmd, x2, y2, 0, x, y, invscale);
-			      }
-			   }
-			}
-		     }
-		     else {	// Metal route bends at next track
-			if (prevseg->x1 != seg->x1) {
-			   if ((PitchX[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
-				0.5 * LefGetRouteWidth(prevseg->layer) -
-				(prevseg->x1 - seg->x1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			      if (special == (u_char)0) {
-				 rt->flags |= RT_STUB;
-				 net->flags |= NET_STUB;
-			      }
-			      else {
-				 pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 1);
-				 pathto(Cmd, x2, y2, 1, x, y, invscale);
-			      }
-			   }
-			}
-			else if (prevseg->y1 != seg->y1) {
-			   if ((PitchY[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
-				0.5 * LefGetRouteWidth(prevseg->layer) -
-				(prevseg->y1 - seg->y1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			      if (special == (u_char)0) {
-				 rt->flags |= RT_STUB;
-				 net->flags |= NET_STUB;
-			      }
-			      else {
-				 pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 0);
-				 pathto(Cmd, x2, y2, 0, x, y, invscale);
-			      }
-			   }
-			}
-		     }
-		  }
-	       }
 	    }
 	 }
 	 if (Pathon != -1) Pathon = 0;

@@ -1512,18 +1512,32 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
 
     rectList = LefReadGeometry(lefMacro, f, oscale);
 
-    if (pinName != NULL) lefMacro->node[pinNum] = strdup(pinName);
-
     if (pinNum >= 0) {
-        if (pinNum >= MAX_GATE_NODES) {
-	    LefError("Too many pins (%d) in LEF macro \"%s\"!\n", 
- 			pinNum, lefMacro->gatename);
+        int nodealloc, orignodes;
+
+	if (lefMacro->nodes <= pinNum) {
+            orignodes = lefMacro->nodes;
+	    lefMacro->nodes = (pinNum + 1);
+            nodealloc = lefMacro->nodes / 10;
+            if (nodealloc > (orignodes / 10)) {
+		nodealloc++;
+		lefMacro->taps = (DSEG *)realloc(lefMacro->taps,
+			nodealloc * 10 * sizeof(DSEG));
+		lefMacro->noderec = (NODE *)realloc(lefMacro->noderec,
+			nodealloc * 10 * sizeof(NODE));
+		lefMacro->netnum = (int *)realloc(lefMacro->netnum,
+			nodealloc * 10 * sizeof(int));
+		lefMacro->node = (char **)realloc(lefMacro->node,
+			nodealloc * 10 * sizeof(char *));
+            } 
         }
-        else {
-	    lefMacro->taps[pinNum] = rectList;
-	    if (lefMacro->nodes <= pinNum)
-	        lefMacro->nodes = (pinNum + 1);
-        }
+	lefMacro->taps[pinNum] = rectList;
+	lefMacro->noderec[pinNum] = NULL;
+	lefMacro->netnum[pinNum] = -1;
+        if (pinName != NULL)
+            lefMacro->node[pinNum] = strdup(pinName);
+        else
+	    lefMacro->node[pinNum] = NULL;
     }
     else {
        while (rectList) {
@@ -1772,6 +1786,16 @@ LefReadMacro(f, mname, oscale)
     lefMacro->next = GateInfo;
     lefMacro->nodes = 0;
     lefMacro->orient = 0;
+    // Allocate memory for up to 10 pins initially
+    lefMacro->taps = (DSEG *)malloc(10 * sizeof(DSEG));
+    lefMacro->noderec = (NODE *)malloc(10 * sizeof(NODE));
+    lefMacro->netnum = (int *)malloc(10 * sizeof(int));
+    lefMacro->node = (char **)malloc(10 * sizeof(char *));
+    // Fill in 1st entry
+    lefMacro->taps[0] = NULL;
+    lefMacro->noderec[0] = NULL;
+    lefMacro->node[0] = NULL;
+    lefMacro->netnum[0] = -1;
     GateInfo = lefMacro;
 
 
@@ -2517,20 +2541,27 @@ LefRead(inName)
 	gateginfo->gatetype = NULL;
 	gateginfo->gatename = (char *)malloc(4);
 	strcpy(gateginfo->gatename, "pin");
-	gateginfo->node[0] = strdup("pin");
 	gateginfo->width = 0.0;
 	gateginfo->height = 0.0;
 	gateginfo->placedX = 0.0;
 	gateginfo->placedY = 0.0;
 	gateginfo->nodes = 1;
 
+        gateginfo->taps = (DSEG *)malloc(sizeof(DSEG));
+        gateginfo->noderec = (NODE *)malloc(sizeof(NODE));
+        gateginfo->netnum = (int *)malloc(sizeof(int));
+        gateginfo->node = (char **)malloc(sizeof(char *));
+
 	grect = (DSEG)malloc(sizeof(struct dseg_));
 	grect->x1 = grect->x2 = 0.0;
 	grect->y1 = grect->y2 = 0.0;
 	grect->next = (DSEG)NULL;
-	gateginfo->taps[0] = grect;
 	gateginfo->obs = (DSEG)NULL;
 	gateginfo->next = GateInfo;
+	gateginfo->taps[0] = grect;
+        gateginfo->noderec[0] = NULL;
+        gateginfo->netnum[0] = -1;
+	gateginfo->node[0] = strdup("pin");
 	GateInfo = gateginfo;
     }
     PinMacro = gateginfo;

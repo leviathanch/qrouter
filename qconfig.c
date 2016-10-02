@@ -416,7 +416,20 @@ int read_config(FILE *fconfig, int is_info)
 	    gateinfo->height = darg2;
 	    gateinfo->placedX = 0.0;	// implicit cell origin
 	    gateinfo->placedY = 0.0;
+            gateinfo->nodes = 0;
 	    gateinfo->next = GateInfo;	// prepend to linked gate list
+
+            // Allocate memory for up to 10 pins
+	    gateinfo->taps = (DSEG *)malloc(10 * sizeof(DSEG));
+	    gateinfo->noderec = (NODE *)malloc(10 * sizeof(NODE));
+	    gateinfo->netnum = (int *)malloc(10 * sizeof(int));
+	    gateinfo->node = (char **)malloc(10 * sizeof(char *));
+	    // Initialize first entry
+	    gateinfo->taps[0] = NULL;
+	    gateinfo->noderec[0] = NULL;
+	    gateinfo->netnum[0] = -1;
+	    gateinfo->node[0] = NULL;
+ 
 	    GateInfo = gateinfo;
 	}
 	
@@ -447,6 +460,18 @@ int read_config(FILE *fconfig, int is_info)
 	    drect->layer = 0;
 	    drect->next = (DSEG)NULL;
 	    CurrentPin++;
+
+            if (CurrentPin % 10 == 0) {
+		// Allocate memory for 10 more pins
+                gateinfo->taps = (DSEG *)realloc(gateinfo->taps,
+				(CurrentPin + 10) * sizeof(DSEG));
+                gateinfo->noderec = (NODE *)realloc(gateinfo->taps,
+				(CurrentPin + 10) * sizeof(NODE));
+                gateinfo->netnum = (int *)realloc(gateinfo->taps,
+				(CurrentPin + 10) * sizeof(int));
+                gateinfo->node = (char **)realloc(gateinfo->taps,
+				(CurrentPin + 10) * sizeof(char *));
+	    }
 	}
 
 	if (OK == 0) {

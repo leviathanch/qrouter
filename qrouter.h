@@ -42,9 +42,6 @@ typedef unsigned long  u_long;
 /* Maximum number of route layers */
 #define MAX_LAYERS    9
 
-/* Maximum number of pins in a gate */
-#define MAX_GATE_NODES 64
-
 /* Cell name (and other names) max length */
 #define MAX_NAME_LEN    1024
 
@@ -241,14 +238,14 @@ typedef struct gate_ *GATE;
 
 struct gate_ {
     GATE next;
-    char *gatename;     	     // Name of instance
-    GATE  gatetype;		     // Pointer to macro record
-    int   nodes;                     // number of nodes on this gate
-    char *node[MAX_GATE_NODES];	     // names of the pins on this gate
-    int    netnum[MAX_GATE_NODES];   // net number connected to each pin
-    NODE   noderec[MAX_GATE_NODES];  // node record for each pin
-    DSEG   taps[MAX_GATE_NODES];     // list of gate node locations and layers
-    DSEG   obs;			     // list of obstructions in gate
+    char *gatename;	// Name of instance
+    GATE  gatetype;	// Pointer to macro record
+    int   nodes;        // number of nodes on this gate
+    char **node;	// names of the pins on this gate
+    int   *netnum;	// net number connected to each pin
+    NODE  *noderec;	// node record for each pin
+    DSEG  *taps;	// list of gate node locations and layers
+    DSEG   obs;		// list of obstructions in gate
     double width, height;
     double placedX;                 
     double placedY;

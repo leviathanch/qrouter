@@ -958,6 +958,16 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		gate->width = gate->height = 0;
 		curlayer = -1;
 
+		/* Pin record has one node;  allocate memory for it */
+		gate->taps = (DSEG *)malloc(sizeof(DSEG));
+		gate->noderec = (NODE *)malloc(sizeof(NODE));
+		gate->netnum = (int *)malloc(sizeof(int));
+		gate->node = (char **)malloc(sizeof(char *));
+		gate->taps[0] = NULL;
+		gate->noderec[0] = NULL;
+		gate->netnum[0] = -1;
+		gate->node[0] = NULL;
+
 		/* Now do a search through the line for "+" entries	*/
 		/* And process each.					*/
 
@@ -1036,6 +1046,10 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		else {
 		    LefError("Pin %s is defined outside of route layer area!\n",
 				pinname);
+		    free(gate->taps);
+		    free(gate->noderec);
+		    free(gate->netnum);
+		    free(gate->node);
 		    free(gate);
 		}
 
@@ -1409,7 +1423,6 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    gate->gatename = strdup(usename);
 		    gate->gatetype = gateginfo;
 		}
-
 		
 		/* Now do a search through the line for "+" entries	*/
 		/* And process each.					*/
@@ -1454,6 +1467,11 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    gate->height = gateginfo->height;   
 		    gate->nodes = gateginfo->nodes;   
 		    gate->obs = (DSEG)NULL;
+
+                    gate->taps = (DSEG *)malloc(gate->nodes * sizeof(DSEG));
+                    gate->noderec = (NODE *)malloc(gate->nodes * sizeof(NODE));
+                    gate->netnum = (int *)malloc(gate->nodes * sizeof(int));
+                    gate->node = (char **)malloc(gate->nodes * sizeof(char *));
 
 		    for (i = 0; i < gate->nodes; i++) {
 			/* Let the node names point to the master cell;	*/

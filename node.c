@@ -2145,7 +2145,14 @@ void create_obstructions_outside_nodes(void)
 				   lnode->offset = dist;
 				}
 				
-				// To do:  Remove STUBROUTE_X (NI_STUB_MASK)?
+				// Remove entries with NI_STUB_MASK---these
+				// are blocked-in taps that are not routable
+				// without causing DRC violations (formerly
+				// called STUBROUTE_X).
+
+				if (dir == NI_STUB_MASK) {
+				   disable_gridpos(gridx, gridy, ds->layer);
+				}
 			    }
 			    else if (epass == 0) {
 

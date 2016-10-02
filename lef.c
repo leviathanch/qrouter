@@ -1515,9 +1515,15 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
     if (pinName != NULL) lefMacro->node[pinNum] = strdup(pinName);
 
     if (pinNum >= 0) {
-	lefMacro->taps[pinNum] = rectList;
-	if (lefMacro->nodes <= pinNum)
-	    lefMacro->nodes = (pinNum + 1);
+        if (pinNum >= MAX_GATE_NODES) {
+	    LefError("Too many pins (%d) in LEF macro \"%s\"!\n", 
+ 			pinNum, lefMacro->gatename);
+        }
+        else {
+	    lefMacro->taps[pinNum] = rectList;
+	    if (lefMacro->nodes <= pinNum)
+	        lefMacro->nodes = (pinNum + 1);
+        }
     }
     else {
        while (rectList) {
@@ -1765,7 +1771,9 @@ LefReadMacro(f, mname, oscale)
     lefMacro->obs = (DSEG)NULL;
     lefMacro->next = GateInfo;
     lefMacro->nodes = 0;
+    lefMacro->orient = 0;
     GateInfo = lefMacro;
+
 
     /* Initial values */
     pinNum = 0;

@@ -2105,16 +2105,121 @@ void create_obstructions_outside_nodes(void)
 				   }
 				}
 
+				// Additional checks on stub routes
+
 				// Stub distances of <= 1/2 route width are
 				// unnecessary, so don't create them.
 
 				if (mask == STUBROUTE && (dir == NI_STUB_NS
-					|| dir == NI_STUB_EW))
-				   if (fabs(dist) < (xdist + EPS)) {
+					|| dir == NI_STUB_EW) &&
+					(fabs(dist) < (xdist + EPS))) {
+				    mask = 0;
+				    dir = 0;
+				    dist = 0.0;
+				}
+				else if (mask == STUBROUTE && (dir == NI_STUB_NS
+					|| dir == NI_STUB_EW)) {
+				   struct dseg_ de;
+				   DSEG ds2;
+				   u_char errbox = TRUE;
+
+				   // Additional check:  Sometimes the above
+				   // checks put stub routes where they are
+				   // not needed because the stub is completely
+				   // covered by other tap geometry.  Take the
+				   // stub area and remove parts covered by
+				   // other tap rectangles.  If the entire
+				   // stub is gone, then don't put a stub here.
+
+				   if (dir == NI_STUB_NS) {
+				       de.x1 = dx - xdist;
+				       de.x2 = dx + xdist;
+				       if (dist > 0) {
+					  de.y1 = dy + xdist;
+					  de.y2 = dy + dist;
+				       }
+				       else {
+					  de.y1 = dy + dist;
+					  de.y2 = dy - xdist;
+				       }
+				   }
+				   if (dir == NI_STUB_EW) {
+				       de.y1 = dy - xdist;
+				       de.y2 = dy + xdist;
+				       if (dist > 0) {
+					  de.x1 = dx + xdist;
+					  de.x2 = dx + dist;
+				       }
+				       else {
+					  de.x1 = dx + dist;
+					  de.x2 = dx - xdist;
+				       }
+				   }
+
+				   // For any tap that overlaps the
+				   // stub extension box, remove that
+				   // part of the box.
+
+			           for (ds2 = g->taps[i]; ds2; ds2 = ds2->next) {
+				      if (ds2->layer != ds->layer) continue;
+
+				      if (ds2->x1 <= de.x1 && ds2->x2 >= de.x2 &&
+						ds2->y1 <= de.y1 && ds2->y2 >= de.y2) {
+				         errbox = FALSE;	// Completely covered
+				         break;
+				      }
+
+				      // Look for partial coverage.  Note that any
+				      // change can cause a change in the original
+				      // two conditionals, so we have to keep
+				      // evaluating those conditionals.
+
+				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
+				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
+					    // if (ds2->x1 < de.x1 - EPS &&
+					    if (ds2->x1 < de.x1 + EPS &&
+							ds2->x2 < de.x2 - EPS) {
+					       de.x1 = ds2->x2;
+					       if (ds2->x2 >= ds->x2) errbox = FALSE;
+					    }
+
+				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
+				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
+					    // if (ds2->x2 > de.x2 + EPS &&
+					    if (ds2->x2 > de.x2 - EPS &&
+							ds2->x1 > de.x1 + EPS) {
+					       de.x2 = ds2->x1;
+					       if (ds2->x1 <= ds->x1) errbox = FALSE;
+					    }
+
+				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
+				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
+					    // if (ds2->y1 < de.y1 - EPS &&
+					    if (ds2->y1 < de.y1 + EPS &&
+							ds2->y2 < de.y2 - EPS) {
+					       de.y1 = ds2->y2;
+					       if (ds2->y2 >= ds->y2) errbox = FALSE;
+					    }
+
+				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
+				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
+					    // if (ds2->y2 > de.y2 + EPS &&
+					    if (ds2->y2 > de.y2 - EPS &&
+							ds2->y1 > de.y1 + EPS) {
+					       de.y2 = ds2->y1;
+					       if (ds2->y1 <= ds->y1) errbox = FALSE;
+					    }
+			           }
+
+				   // If nothing is left of the stub box,
+				   // then remove the stub.
+
+				   if (errbox == FALSE) {
 				      mask = 0;
 				      dir = 0;
-				      dist = 0.0;
+				      dist = 0;
 				   }
+                                }
 
 				lnode = SetNodeinfo(gridx, gridy, ds->layer);
 
@@ -2722,7 +2827,7 @@ void adjust_stub_lengths(void)
 			     // check for DRC spacing interactions between
 			     // the tap box and the route box
 
-			     if ((dt.y1 - ds->y2) > EPS && (dt.y1 - ds->y2) < s) {
+			     if ((dt.y1 - ds->y2) > EPS && (dt.y1 - ds->y2) + EPS < s) {
 				if (ds->x2 > (dt.x1 - s) && ds->x1 < (dt.x2 + s)) {
 				   de.y2 = dt.y1;
 				   de.y1 = ds->y2;
@@ -2731,7 +2836,7 @@ void adjust_stub_lengths(void)
 				   errbox = TRUE;
 				}
 			     }
-			     else if ((ds->y1 - dt.y2) > EPS && (ds->y1 - dt.y2) < s) {
+			     else if ((ds->y1 - dt.y2) > EPS && (ds->y1 - dt.y2) + EPS < s) {
 				if (ds->x2 > (dt.x1 - s) && ds->x1 < (dt.x2 + s)) {
 				   de.y1 = dt.y2;
 				   de.y2 = ds->y1;
@@ -2741,7 +2846,7 @@ void adjust_stub_lengths(void)
 				}
 			     }
 
-			     if ((dt.x1 - ds->x2) > EPS && (dt.x1 - ds->x2) < s) {
+			     if ((dt.x1 - ds->x2) > EPS && (dt.x1 - ds->x2) + EPS < s) {
 				if (ds->y2 > (dt.y1 - s) && ds->y1 < (dt.y2 + s)) {
 				   de.x2 = dt.x1;
 				   de.x1 = ds->x2;
@@ -2750,7 +2855,7 @@ void adjust_stub_lengths(void)
 				   errbox = TRUE;
 				}
 			     }
-			     else if ((ds->x1 - dt.x2) > EPS && (ds->x1 - dt.x2) < s) {
+			     else if ((ds->x1 - dt.x2) > EPS && (ds->x1 - dt.x2) + EPS < s) {
 				if (ds->y2 > (dt.y1 - s) && ds->y1 < (dt.y2 + s)) {
 				   de.x1 = dt.x2;
 				   de.x2 = ds->x1;
@@ -2845,6 +2950,11 @@ void adjust_stub_lengths(void)
 				// metal direction of the layer, and set the tap
 				// offset to prevent the DRC error in the other
 				// direction.
+				// 10/3/2016:  The tap offset can be set either
+				// by moving toward the obstructing edge to
+				// remove the gap, or moving away from it to
+				// avoid the DRC spacing error.  Choose the one
+				// that offsets by the smaller distance.
 
 				if ((de.x2 > dt.x2) && (de.y1 < ds->y2) &&
 						(de.y2 > ds->y1)) {
@@ -2872,16 +2982,24 @@ void adjust_stub_lengths(void)
 				      if (LefGetRouteOrientation(ds->layer) == 1) {
 					 lnode->flags = NI_OFFSET_NS | NI_STUB_EW;
 					 // lnode->offset = lnode->stub;  // ?
-					 if (lnode->stub > 0)
+					 if (lnode->stub > 0) {
 					    lnode->offset = de.y2 - dy - wy;
-					 else
+					    if (lnode->offset > s - lnode->offset)
+					         lnode->offset -= s;
+					 }
+					 else {
 					    lnode->offset = de.y1 - dy + wy;
+					    if (-lnode->offset > s + lnode->offset)
+					        lnode->offset += s;
+					 }
 				         lnode->stub = de.x2 - dx;
 				         errbox = FALSE;
 				      }
 				      else {
 					 // Add the offset
 				         lnode->offset = de.x2 - dx - wx;
+					 if (lnode->offset > s - lnode->offset)
+					     lnode->offset -= s;
 					 lnode->flags |= NI_OFFSET_EW;
 				         errbox = FALSE;
 				      }
@@ -2913,16 +3031,24 @@ void adjust_stub_lengths(void)
 				      if (LefGetRouteOrientation(ds->layer) == 1) {
 					 lnode->flags = NI_OFFSET_NS | NI_STUB_EW;
 					 // lnode->offset = lnode->stub;  // ?
-					 if (lnode->stub > 0)
+					 if (lnode->stub > 0) {
 					    lnode->offset = de.y2 - dy - wy;
-					 else
+					    if (lnode->offset > s - lnode->offset)
+					         lnode->offset -= s;
+					 }
+					 else {
 					    lnode->offset = de.y1 - dy + wy;
+					    if (-lnode->offset > s + lnode->offset)
+					        lnode->offset += s;
+					 }
 				         lnode->stub = de.x1 - dx;
 				         errbox = FALSE;
 				      }
 				      else {
 					 // Add the offset
 				         lnode->offset = de.x1 - dx + wx;
+					 if (-lnode->offset > s + lnode->offset)
+					     lnode->offset += s;
 					 lnode->flags |= NI_OFFSET_EW;
 				         errbox = FALSE;
 				      }
@@ -2954,16 +3080,24 @@ void adjust_stub_lengths(void)
 				      if (LefGetRouteOrientation(ds->layer) == 0) {
 					 lnode->flags = NI_OFFSET_EW | NI_STUB_NS;
 					 // lnode->offset = lnode->stub;  // ?
-					 if (lnode->stub > 0)
+					 if (lnode->stub > 0) {
 					    lnode->offset = de.x2 - dx - wx;
-					 else
+					    if (lnode->offset > s - lnode->offset)
+					        lnode->offset -= s;
+					 }
+					 else {
 					    lnode->offset = de.x1 - dx + wx;
+					    if (-lnode->offset > s + lnode->offset)
+					        lnode->offset += s;
+					 }
 				         lnode->stub = de.y2 - dy;
 				         errbox = FALSE;
 				      }
 				      else {
 					 // Add the offset
 				         lnode->offset = de.y2 - dy - wy;
+					 if (lnode->offset > s - lnode->offset)
+					     lnode->offset -= s;
 					 lnode->flags |= NI_OFFSET_NS;
 				         errbox = FALSE;
 				      }
@@ -2995,16 +3129,24 @@ void adjust_stub_lengths(void)
 				      if (LefGetRouteOrientation(ds->layer) == 0) {
 					 lnode->flags = NI_OFFSET_EW | NI_STUB_NS;
 					 // lnode->offset = lnode->stub;  // ?
-					 if (lnode->stub > 0)
+					 if (lnode->stub > 0) {
 					    lnode->offset = de.x2 - dx - wx;
-					 else
+					    if (lnode->offset > s - lnode->offset)
+					        lnode->offset -= s;
+					 }
+					 else {
 					    lnode->offset = de.x1 - dx + wx;
+					    if (-lnode->offset > s + lnode->offset)
+					        lnode->offset += s;
+					 }
 				         lnode->stub = de.y1 - dy + wy;
 				         errbox = FALSE;
 				      }
 				      else {
 					 // Add the offset
 				         lnode->offset = de.y1 - dy + wy;
+					 if (-lnode->offset > s + lnode->offset)
+					     lnode->offset += s;
 					 lnode->flags |= NI_OFFSET_NS;
 				         errbox = FALSE;
 				      }

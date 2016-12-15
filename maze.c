@@ -374,6 +374,10 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
+
+       if ((x < 0) || (x >= NumChannelsX[lay])) continue;
+       if ((y < 0) || (y >= NumChannelsX[lay])) continue;
+
        Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
 	  Fprintf(stderr, "Error:  Tap position %d, %d layer %d not "
@@ -435,9 +439,13 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        x = ntap->gridx;
        y = ntap->gridy;
 
-       // Don't process extended areas if they coincide with other nodes.
+       // Don't process extended areas if they coincide with other nodes,
+       // or those that are out-of-bounds
 
        if (lay < Pinlayers) {
+	  if ((x < 0) || (x >= NumChannelsX[lay])) continue;
+	  if ((y < 0) || (y >= NumChannelsX[lay])) continue;
+
 	  lnode = NODEIPTR(x, y, lay);
 	  if (lnode == NULL) continue;
 	  if (lnode->nodesav != node) continue;
@@ -1209,7 +1217,7 @@ void writeback_segment(SEG seg, int netnum)
       if (sobs & OFFSET_TAP) {
 	 lnode = NODEIPTR(seg->x1, seg->y1, seg->layer);
 	 dist = lnode->offset;
-	 if (lnode->flags && NI_OFFSET_EW) {
+	 if (lnode->flags & NI_OFFSET_EW) {
 	    if ((dist > 0) && (seg->x1 < (NumChannelsX[seg->layer] - 1))) {
 	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer) |= DRC_BLOCKAGE;
 	       OBSVAL(seg->x1 + 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
@@ -1219,7 +1227,7 @@ void writeback_segment(SEG seg, int netnum)
 	       OBSVAL(seg->x1 - 1, seg->y1, seg->layer + 1) |= DRC_BLOCKAGE;
 	    }
 	 }
-	 else if (lnode->flags && NI_OFFSET_NS) {
+	 else if (lnode->flags & NI_OFFSET_NS) {
 	    if ((dist > 0) && (seg->y1 < (NumChannelsY[seg->layer] - 1))) {
 	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer) |= DRC_BLOCKAGE;
 	       OBSVAL(seg->x1, seg->y1 + 1, seg->layer + 1) |= DRC_BLOCKAGE;

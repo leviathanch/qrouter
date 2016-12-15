@@ -922,7 +922,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 
        // Make more detailed checks in each direction
 
-       if (dy < ds->y1) {
+       if (dy <= ds->y1) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_N)) == 0) {
 	     if ((dist == 0) || ((ds->y1 - dy) < dist))
 		OBSINFO(gridx, gridy, ds->layer) = ds->y1 - dy;
@@ -930,7 +930,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
        }
-       else if (dy > ds->y2) {
+       else if (dy >= ds->y2) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_S)) == 0) {
 	     if ((dist == 0) || ((dy - ds->y2) < dist))
 		OBSINFO(gridx, gridy, ds->layer) = dy - ds->y2;
@@ -938,7 +938,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
        }
-       if (dx < ds->x1) {
+       if (dx <= ds->x1) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_E)) == 0) {
 	     if ((dist == 0) || ((ds->x1 - dx) < dist))
 		OBSINFO(gridx, gridy, ds->layer) = ds->x1 - dx;
@@ -946,7 +946,7 @@ check_obstruct(int gridx, int gridy, DSEG ds, double dx, double dy)
 	  }
 	  else *obsptr |= OBSTRUCT_MASK;
        }
-       else if (dx > ds->x2) {
+       else if (dx >= ds->x2) {
 	  if ((*obsptr & (OBSTRUCT_MASK & ~OBSTRUCT_W)) == 0) {
 	     if ((dist == 0) || ((dx - ds->x2) < dist))
 		OBSINFO(gridx, gridy, ds->layer) = dx - ds->x2;
@@ -1298,6 +1298,7 @@ void expand_tap_geometry(void)
     for (g = Nlgates; g; g = g->next) {
 	for (i = 0; i < g->nodes; i++) {
 	    if (g->netnum[i] == 0) continue;
+	    if (g->taps == NULL) continue;
 
 	    for (ds = g->taps[i]; ds; ds = ds->next) {
 		expanded = TRUE;
@@ -1377,28 +1378,8 @@ void create_obstructions_inside_nodes(void)
     DSEG ds;
     u_int dir, mask, k;
     int i, gridx, gridy;
-    double dx, dy;
-    float dist, xdist;
-    double offmaxx[MAX_LAYERS], offmaxy[MAX_LAYERS];
-
-    // Use a more conservative definition of keepout, to include via
-    // widths, which may be bigger than route widths.
-
-    for (i = 0; i < Num_layers; i++) {
-	offmaxx[i] = PitchX[i] - LefGetRouteSpacing(i)
-		- 0.5 * (LefGetRouteWidth(i) + LefGetViaWidth(i, i, 0));
-	offmaxy[i] = PitchY[i] - LefGetRouteSpacing(i)
-		- 0.5 * (LefGetRouteWidth(i) + LefGetViaWidth(i, i, 1));
-    }
-
-    // When we place vias at an offset, they have to satisfy the spacing
-    // requirements for the via's top layer, as well.  So take the least
-    // maximum offset of each layer and the layer above it.
-
-    for (i = 0; i < Num_layers - 1; i++) {
-       offmaxx[i] = MIN(offmaxx[i], offmaxx[i + 1]);
-       offmaxy[i] = MIN(offmaxy[i], offmaxy[i + 1]);
-    }
+    double dx, dy, xdist;
+    float dist;
 
     // For each node terminal (gate pin), mark each grid position with the
     // net number.  This overrides any obstruction that may be placed at that
@@ -1619,8 +1600,8 @@ void create_obstructions_outside_nodes(void)
     DSEG ds;
     u_int dir, mask, k;
     int i, gridx, gridy;
-    double dx, dy, deltax, deltay;
-    float dist, xdist;
+    double dx, dy, deltax, deltay, xdist;
+    float dist;
     double offmaxx[MAX_LAYERS], offmaxy[MAX_LAYERS];
 
     // Use a more conservative definition of keepout, to include via
@@ -2799,7 +2780,7 @@ void adjust_stub_lengths(void)
 				}
 			     }
 			     else if (orignet & STUBROUTE) {
-			        dist = lnode->stub;
+			        dist = (double)lnode->stub;
 				if (lnode->flags & NI_STUB_EW) {
 				   if (dist > EPS) {
 				      if (dx + dist > dt.x2)
@@ -3279,7 +3260,7 @@ find_route_blocks()
    struct dseg_ dt;
    int i, gridx, gridy;
    double dx, dy, w, v, s, u;
-   float dist;
+   double dist;
 
    for (g = Nlgates; g; g = g->next) {
       for (i = 0; i < g->nodes; i++) {

@@ -61,6 +61,9 @@ static int qrouter_stage3(
 static int qrouter_writedef(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_writedelays(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_readdef(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -136,6 +139,7 @@ static cmdstruct qrouter_commands[] =
    {"read_def", qrouter_readdef},
    {"read_lef", qrouter_readlef},
    {"read_config", qrouter_readconfig},
+   {"write_delays", qrouter_writedelays},
    {"layer_info", qrouter_layerinfo},
    {"obstruction", qrouter_obs},
    {"ignore", qrouter_ignore},
@@ -599,7 +603,7 @@ qrouter_start(ClientData clientData, Tcl_Interp *interp,
 	if (result != TCL_OK) return result;
     }
 
-    if ((DEFfilename[0] != '\0') && (Nlgates == NULL)) {
+    if ((DEFfilename != NULL) && (Nlgates == NULL)) {
 	read_def(NULL);
 	draw_layout();
     }
@@ -1453,7 +1457,7 @@ static int
 qrouter_readdef(ClientData clientData, Tcl_Interp *interp,
                 int objc, Tcl_Obj *CONST objv[])
 {
-    if ((DEFfilename[0] == '\0') && (objc != 2)) {
+    if ((DEFfilename == NULL) && (objc != 2)) {
 	Tcl_SetResult(interp, "No DEF filename specified!", NULL);
 	return TCL_ERROR;
     }
@@ -1480,12 +1484,33 @@ qrouter_writedef(ClientData clientData, Tcl_Interp *interp,
 
     if (objc == 2)
 	DEFoutfile = Tcl_GetString(objv[1]);
-    else if (DEFfilename[0] == '\0') {
+    else if (DEFfilename == NULL) {
 	Tcl_SetResult(interp, "No DEF filename specified!", NULL);
 	return TCL_ERROR;
     }
 
     write_def(DEFoutfile);
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "write_delays"				*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_writedelays(ClientData clientData, Tcl_Interp *interp,
+                 int objc, Tcl_Obj *CONST objv[])
+{
+    char *delayoutfile = NULL;
+
+    if (objc == 2)
+	delayoutfile = Tcl_GetString(objv[1]);
+    else if (delayfilename == NULL) {
+	Tcl_SetResult(interp, "No delay filename specified!", NULL);
+	return TCL_ERROR;
+    }
+
+    write_delays(delayoutfile);
     return QrouterTagCallback(interp, objc, objv);
 }
 
@@ -2078,7 +2103,9 @@ qrouter_layers(ClientData clientData, Tcl_Interp *interp,
 	result = Tcl_GetIntFromObj(interp, objv[1], &value);
 	if (result != TCL_OK) return result;
 	if (value <= 0 || value > LefGetMaxLayer()) {
-	    Tcl_SetResult(interp, "Number of layers out of range", NULL);
+	    Tcl_SetResult(interp, "Number of layers out of range,"
+			" setting to max.", NULL);
+	    Num_layers = LefGetMaxLayer();
 	    return TCL_ERROR;
 	}
 	Num_layers = value;

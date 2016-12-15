@@ -14,6 +14,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef TCL_QROUTER
+#include <tk.h>
+#endif
+
 #include "qrouter.h"
 #include "qconfig.h"
 #include "node.h"
@@ -56,7 +60,8 @@ u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
 u_char ripLimit = 10;	// Fail net rather than rip up more than
 			// this number of other nets.
 
-char DEFfilename[256];
+char *DEFfilename = NULL;
+char *delayfilename = NULL;
 
 ScaleRec Scales;	// record of input and output scales
 
@@ -168,13 +173,11 @@ runqrouter(int argc, char *argv[])
    char *configfile = configdefault;
    char *infofile = NULL;
    char *dotptr;
-   char Filename[256];
+   char *Filename = NULL;
    u_char readconfig = FALSE;
     
    Scales.iscale = 1;
    Scales.mscale = 100;
-   Filename[0] = 0;
-   DEFfilename[0] = 0;
 
    /* Parse arguments */
 
@@ -192,6 +195,7 @@ runqrouter(int argc, char *argv[])
 	    case 'i':
 	    case 'k':
 	    case 'v':
+	    case 'd':
 	    case 'p':
 	    case 'g':
 	    case 'r':
@@ -228,6 +232,10 @@ runqrouter(int argc, char *argv[])
 	    case 'i':
 	       infofile = strdup(optarg);
 	       break;
+	    case 'd':
+	       if (delayfilename != NULL) free(delayfilename);
+	       delayfilename = strdup(optarg);
+	       break;
 	    case 'p':
 	       vddnet = strdup(optarg);
 	       break;
@@ -263,12 +271,14 @@ runqrouter(int argc, char *argv[])
       }
       else {
 	 /* Not an option or an option argument, so treat as a filename */
-         strcpy( Filename, argv[i] );
+	 Filename = strdup(argv[i]);
       }
    }
 
-   if (infofile != NULL)
+   if (infofile != NULL) {
       infoFILEptr = fopen(infofile, "w" );
+      free(infofile);
+   }
    else {
       infoFILEptr = NULL;
 #ifndef TCL_QROUTER
@@ -358,12 +368,14 @@ runqrouter(int argc, char *argv[])
       return 1;
    }
 
-   if (Filename[0] != '\0') {
+   if (Filename != NULL) {
 
       /* process last non-option string */
 
       dotptr = strrchr(Filename, '.');
       if (dotptr != NULL) *dotptr = '\0';
+      if (DEFfilename != NULL) free(DEFfilename);
+      DEFfilename = (char *)malloc(strlen(Filename) + 5);
       sprintf(DEFfilename, "%s.def", Filename);
    }
    else if (readconfig) {
@@ -512,7 +524,7 @@ static int post_def_setup()
    int i;
    double sreq1, sreq2;
 
-   if (DEFfilename[0] == '\0') {
+   if (DEFfilename == NULL) {
       Fprintf(stderr, "No DEF file read, nothing to set up.\n");
       return 1;
    }
@@ -660,13 +672,16 @@ void read_def(char *filename)
 {
    double oscale, precis;
 
-   if ((filename == NULL) && (DEFfilename[0] == '\0')) {
+   if ((filename == NULL) && (DEFfilename == NULL)) {
       Fprintf(stderr, "No DEF file specified, nothing to read.\n");
       return;
    }
    else if (filename != NULL) {
-      if (DEFfilename[0] != '\0') reinitialize();
-      strcpy(DEFfilename, filename);
+      if (DEFfilename != NULL) {
+	  reinitialize();
+	  free(DEFfilename);
+      }
+      DEFfilename = strdup(filename);
    }
    else reinitialize();
 
@@ -756,6 +771,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 }
 
 /*--------------------------------------------------------------*/
+/* Write the output annotated DEF file.				*/
 /*--------------------------------------------------------------*/
 
 int write_def(char *filename)
@@ -763,8 +779,6 @@ int write_def(char *filename)
    NET net;
    NETLIST nl;
 
-   // Finish up by writing the routes to an annotated DEF file
-    
    emit_routes((filename == NULL) ? DEFfilename : filename,
 		Scales.oscale, Scales.iscale);
 
@@ -1456,8 +1470,10 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 
 	 // Remove routing information for all new routes that have
 	 // not been copied back into Obs[].
-	 if (rt == NULL)
+	 if (rt == NULL) {
 	    rt = net->routes;
+	    net->routes = NULL;		// remove defunct pointer
+	 }
 	 else {
 	    rt2 = rt->next;
 	    rt->next = NULL;
@@ -1470,6 +1486,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
               free(rt->segments);
               rt->segments = seg;
             }
+	    free(rt);
 	    rt = rt2;
 	 }
 
@@ -4160,7 +4177,6 @@ static void emit_routes(char *filename, double oscale, int iscale)
     char netname[MAX_NAME_LEN];
     NET net = NULL;
     ROUTE rt;
-    char newDEFfile[256];
     FILE *fdef;
     u_char errcond = FALSE;
     u_char need_cleanup = FALSE;
@@ -4186,6 +4202,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
 	char *dotptr;
 
 	if (filename == DEFfilename) {
+	    char *newDEFfile = (char *)malloc(strlen(filename) + 11);
 	    strcpy(newDEFfile, filename);
 	    dotptr = strrchr(newDEFfile, '.');
 	    if (dotptr)
@@ -4194,6 +4211,7 @@ static void emit_routes(char *filename, double oscale, int iscale)
 		strcat(newDEFfile, "_route.def");
 	    
 	    Cmd = fopen(newDEFfile, "w");
+	    free(newDEFfile);
 	}
 	else
 	    Cmd = fopen(filename, "w");
@@ -4352,6 +4370,149 @@ static void emit_routes(char *filename, double oscale, int iscale)
 } /* emit_routes() */
 
 /*--------------------------------------------------------------*/
+/* Recursive route-walking routine				*/
+/*--------------------------------------------------------------*/
+
+int walk_route()
+{
+}
+
+/*--------------------------------------------------------------*/
+/* Find a node in the node list.  If qrouter is compiled with	*/
+/* Tcl support, then this routine uses hash tables, greatly  	*/
+/* speeding up the output of large delay files.          	*/
+/*--------------------------------------------------------------*/
+
+#ifndef TCL_QROUTER
+
+GATE
+FindGateNode(NODE node, int *ridx)
+{
+    GATE g;
+
+    /* This is a slow lookup;  Tcl/Tk compile and hashing is preferred */ 
+
+    for (g = Nlgates; g; g = g->next) {
+	for (i = 0; i < g->nodes; i++) {
+	    if (g->noderec[i] == node) {
+		*ridx = i;
+		return g;
+	    }
+	}
+    }
+    return NULL;
+}
+
+#else /* The version using TCL hash tables */
+
+/* Define record holding information pointing to a gate and the	*/
+/* index into a specific node of that gate.			*/
+
+typedef struct gatenode_ *GATENODE;
+
+struct gatenode_ {
+    GATE gate;
+    int idx;
+};
+
+GATE
+FindGateNode(Tcl_HashTable *NodeTable, NODE node, int *ridx)
+{
+    GATENODE gn;
+    GATE g;
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_FindHashEntry(NodeTable, node);
+    gn = (entry) ? (GATENODE)Tcl_GetHashValue(entry) : NULL;
+    *ridx = gn->idx;
+    return gn->gate;
+}
+
+#endif	/* TCL_QROUTER */
+
+/*--------------------------------------------------------------*/
+/* Write an output file of the calculated R, C for every route	*/
+/* branch.							*/
+/*--------------------------------------------------------------*/
+
+int write_delays(char *filename)
+{
+    FILE *delayFile;
+    NET net;
+    ROUTE rt;
+    SEG seg;
+    int i, new;
+
+#ifdef TCL_QROUTER    
+    Tcl_HashTable NodeTable;
+    Tcl_HashEntry *entry;
+    GATE g;
+#endif
+
+    if (!strcmp(filename, "stdout"))
+	delayFile = stdout;
+    else if (filename == NULL)
+	delayFile = fopen(delayfilename, "w");
+    else
+	delayFile = fopen(filename, "w");
+
+    if (!delayFile) {
+	Fprintf(stderr, "write_delays():  Couldn't open output delay file.\n");
+	return -1;
+    }
+
+#ifdef TCL_QROUTER    
+    /* Build a hash table of nodes;  key = node record address,		*/
+    /* record = pointer to gate and index of the node in its noderec.	*/
+
+    Tcl_InitHashTable(&NodeTable, TCL_ONE_WORD_KEYS);
+
+    for (g = Nlgates; g; g = g->next) {
+	for (i = 0; i < g->nodes; i++) {
+	    GATENODE gn;
+	    gn = (GATENODE)malloc(sizeof(struct gatenode_));
+	    gn->idx = i;
+	    gn->gate = g;
+	    entry = Tcl_CreateHashEntry(&NodeTable, g->noderec + i, &new);
+	    Tcl_SetHashValue(entry, gn);
+	}
+    }
+#endif
+
+    for (i = 0; i < Numnets; i++) {
+	net = Nlnets[i];
+        fprintf(delayFile, "%s", net->netname);
+
+	/* For each route, determine if endpoints land on another route */
+	/* Mark each such point.  If the point is in the middle of a	*/
+	/* segment, then break the segment at that point.		*/
+
+	/* At the same time, determine the driver node, as determined	*/
+	/* by the node with LEF direction 'OUTPUT'.  			*/
+	/* (For now, if a net has multiple tristate drivers, just use	*/
+	/* the first one and treat the rest as receivers.)		*/
+
+	for (rt = net->routes; rt; rt = rt->next) {
+	    for (seg = rt->segments; seg; seg = seg->next) {
+		// WIP
+	    }
+	}
+
+	/* Determine the driver */
+
+	/* Walk the routes from the driver to all receivers recursively */
+    }
+
+    fclose(delayFile);
+
+#ifdef TCL_QROUTER    
+    Tcl_DeleteHashTable(&NodeTable);
+#endif
+
+    return 0;
+}
+
+/*--------------------------------------------------------------*/
 /* helpmessage - tell user how to use the program		*/
 /*								*/
 /*   ARGS: none.						*/
@@ -4373,6 +4534,7 @@ static void helpmessage(void)
 	Fprintf(stdout, "usage:  qrouter [-switches] design_name\n\n");
 	Fprintf(stdout, "switches:\n");
 	Fprintf(stdout, "\t-c <file>\t\t\tConfiguration file name if not route.cfg.\n");
+	Fprintf(stdout, "\t-d <file>\t\t\tGenerate delay information output.\n");
 	Fprintf(stdout, "\t-v <level>\t\t\tVerbose output level.\n");
 	Fprintf(stdout, "\t-i <file>\t\t\tPrint route names and pitches and exit.\n");
 	Fprintf(stdout, "\t-p <name>\t\t\tSpecify global power bus name.\n");

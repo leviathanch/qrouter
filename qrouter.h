@@ -223,7 +223,7 @@ struct node_ {
   DPOINT  taps;			// point position for node taps
   DPOINT  extend;		// point position within halo of the tap
   char    *netname;   		// name of net this node belongs to
-  unsigned char numtaps;	// number of actual reachable taps
+  u_char  numtaps;		// number of actual reachable taps
   int     netnum;               // number of net this node belongs to
   int     numnodes;		// number of nodes on this net
   int	  branchx;		// position of the node branch in x
@@ -244,6 +244,7 @@ struct gate_ {
     char **node;	// names of the pins on this gate
     int   *netnum;	// net number connected to each pin
     NODE  *noderec;	// node record for each pin
+    u_char *direction;	// port direction (input, output, etc.)	
     DSEG  *taps;	// list of gate node locations and layers
     DSEG   obs;		// list of obstructions in gate
     double width, height;
@@ -381,7 +382,8 @@ extern STRING  DontRoute;
 extern STRING  CriticalNet;
 extern NET     CurNet;
 extern NETLIST FailedNets;	// nets that have failed the first pass
-extern char    DEFfilename[];
+extern char    *DEFfilename;
+extern char    *delayfilename;
 extern ScaleRec Scales;
 
 extern GATE   GateInfo;		// standard cell macro information
@@ -442,6 +444,7 @@ int    runqrouter(int argc, char *argv[]);
 
 void   read_def(char *filename);
 int    write_def(char *filename);
+int    write_delays(char *filename);
 
 char  *print_node_name(NODE node);
 void   print_nets(char *filename);

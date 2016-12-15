@@ -58,6 +58,9 @@ typedef struct {
     double  width;	/* nominal route width, in microns */
     double  pitch;	/* route pitch, in microns */
     double  offset;	/* route track offset from origin, in microns */
+    double  respersq;	/* resistance per square */
+    double  areacap;	/* area capacitance per square micron */
+    double  edgecap;	/* edge capacitance per micron */
     u_char hdirection;	/* horizontal direction preferred */
 } lefRoute;
 
@@ -73,6 +76,7 @@ typedef struct {
     GATE	cell;		/* Cell for fixed via def, or NULL	*/
     DSEG	lr;		/* Extra information for vias with	*/
 				/* more complicated geometry.		*/
+    double      respervia;	/* resistance per via			*/
     int		obsType;	/* Secondary obstruction type		*/
 } lefVia;
 

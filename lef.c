@@ -757,7 +757,7 @@ LefGetXYViaWidth(int base, int layer, int dir, int orient)
 	viatable = (orient == 1) ? ViaY : ViaX;
     }
     if (!lefl) {
-	if (base == Num_layers)
+	if (base == (Num_layers - 1))
 	    lefl = LefFindLayer(*(viatable + base - 1));
     }
     if (lefl) {
@@ -1525,6 +1525,8 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
 			nodealloc * 10 * sizeof(DSEG));
 		lefMacro->noderec = (NODE *)realloc(lefMacro->noderec,
 			nodealloc * 10 * sizeof(NODE));
+		lefMacro->direction = (u_char *)realloc(lefMacro->noderec,
+			nodealloc * 10 * sizeof(u_char));
 		lefMacro->netnum = (int *)realloc(lefMacro->netnum,
 			nodealloc * 10 * sizeof(int));
 		lefMacro->node = (char **)realloc(lefMacro->node,
@@ -1533,6 +1535,7 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
         }
 	lefMacro->taps[pinNum] = rectList;
 	lefMacro->noderec[pinNum] = NULL;
+	lefMacro->direction[pinNum] = pinDir;
 	lefMacro->netnum[pinNum] = -1;
         if (pinName != NULL)
             lefMacro->node[pinNum] = strdup(pinName);
@@ -1789,6 +1792,7 @@ LefReadMacro(f, mname, oscale)
     // Allocate memory for up to 10 pins initially
     lefMacro->taps = (DSEG *)malloc(10 * sizeof(DSEG));
     lefMacro->noderec = (NODE *)malloc(10 * sizeof(NODE));
+    lefMacro->direction = (u_char *)malloc(10 * sizeof(u_char));
     lefMacro->netnum = (int *)malloc(10 * sizeof(int));
     lefMacro->node = (char **)malloc(10 * sizeof(char *));
     // Fill in 1st entry
@@ -2003,6 +2007,7 @@ LefAddViaGeometry(FILE *f, LefList lefl, int curlayer, float oscale)
 enum lef_layer_keys {LEF_LAYER_TYPE=0, LEF_LAYER_WIDTH,
 	LEF_LAYER_SPACING, LEF_LAYER_SPACINGTABLE,
 	LEF_LAYER_PITCH, LEF_LAYER_DIRECTION, LEF_LAYER_OFFSET,
+	LEF_LAYER_RES, LEF_LAYER_CAP, LEF_LAYER_EDGECAP,
 	LEF_VIA_DEFAULT, LEF_VIA_LAYER, LEF_VIA_RECT,
 	LEF_VIARULE_VIA, LEF_LAYER_END};
 
@@ -2039,6 +2044,9 @@ LefReadLayerSection(f, lname, mode, lefl)
 	"PITCH",
 	"DIRECTION",
 	"OFFSET",
+	"RESISTANCE",
+	"CAPACITANCE",
+	"EDGECAPACITANCE",
 	"DEFAULT",
 	"LAYER",
 	"RECT",
@@ -2253,6 +2261,44 @@ LefReadLayerSection(f, lname, mode, lefl)
 		token = LefNextToken(f, TRUE);
 		sscanf(token, "%lg", &dvalue);
 		lefl->info.route.offset = dvalue / (double)oscale;
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_RES:
+		token = LefNextToken(f, TRUE);
+		if (lefl->lefClass == CLASS_ROUTE) {
+		    if (!strcmp(token, "RPERSQ")) {
+			token = LefNextToken(f, TRUE);
+			sscanf(token, "%lg", &dvalue);
+			// Units are ohms per square
+			lefl->info.route.respersq = dvalue;
+		    }
+		}
+		else if (lefl->lefClass == CLASS_VIA) {
+		    sscanf(token, "%lg", &dvalue);
+		    lefl->info.via.respervia = dvalue;	// Units ohms
+		}
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_CAP:
+		token = LefNextToken(f, TRUE);
+		if (lefl->lefClass == CLASS_ROUTE) {
+		    if (!strcmp(token, "CPERSQDIST")) {
+			token = LefNextToken(f, TRUE);
+			sscanf(token, "%lg", &dvalue);
+			// Units are pF per squared unit length
+			lefl->info.route.areacap = dvalue / 
+				((double)oscale * (double)oscale);
+		    }
+		}
+		LefEndStatement(f);
+		break;
+	    case LEF_LAYER_EDGECAP:
+		token = LefNextToken(f, TRUE);
+		if (lefl->lefClass == CLASS_ROUTE) {
+		    sscanf(token, "%lg", &dvalue);
+		    // Units are pF per unit length
+		    lefl->info.route.edgecap = dvalue / (double)oscale;
+		}
 		LefEndStatement(f);
 		break;
 	    case LEF_VIA_DEFAULT:
@@ -2549,6 +2595,7 @@ LefRead(inName)
 
         gateginfo->taps = (DSEG *)malloc(sizeof(DSEG));
         gateginfo->noderec = (NODE *)malloc(sizeof(NODE));
+        gateginfo->direction = (u_char *)malloc(sizeof(u_char));
         gateginfo->netnum = (int *)malloc(sizeof(int));
         gateginfo->node = (char **)malloc(sizeof(char *));
 

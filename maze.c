@@ -444,7 +444,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
        if (lay < Pinlayers) {
 	  if ((x < 0) || (x >= NumChannelsX[lay])) continue;
-	  if ((y < 0) || (y >= NumChannelsX[lay])) continue;
+	  if ((y < 0) || (y >= NumChannelsY[lay])) continue;
 
 	  lnode = NODEIPTR(x, y, lay);
 	  if (lnode == NULL) continue;

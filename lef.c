@@ -1525,7 +1525,7 @@ LefReadPort(lefMacro, f, pinName, pinNum, pinDir, pinUse, oscale)
 			nodealloc * 10 * sizeof(DSEG));
 		lefMacro->noderec = (NODE *)realloc(lefMacro->noderec,
 			nodealloc * 10 * sizeof(NODE));
-		lefMacro->direction = (u_char *)realloc(lefMacro->noderec,
+		lefMacro->direction = (u_char *)realloc(lefMacro->direction,
 			nodealloc * 10 * sizeof(u_char));
 		lefMacro->netnum = (int *)realloc(lefMacro->netnum,
 			nodealloc * 10 * sizeof(int));

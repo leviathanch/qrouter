@@ -375,9 +375,6 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        x = ntap->gridx;
        y = ntap->gridy;
 
-       if ((x < 0) || (x >= NumChannelsX[lay])) continue;
-       if ((y < 0) || (y >= NumChannelsX[lay])) continue;
-
        Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
 	  Fprintf(stderr, "Error:  Tap position %d, %d layer %d not "
@@ -443,9 +440,6 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        // or those that are out-of-bounds
 
        if (lay < Pinlayers) {
-	  if ((x < 0) || (x >= NumChannelsX[lay])) continue;
-	  if ((y < 0) || (y >= NumChannelsY[lay])) continue;
-
 	  lnode = NODEIPTR(x, y, lay);
 	  if (lnode == NULL) continue;
 	  if (lnode->nodesav != node) continue;

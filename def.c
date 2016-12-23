@@ -478,6 +478,7 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 
 		    gridx = (int)((drect->x1 - Xlowerbound) /
 				PitchX[drect->layer]) - 1;
+
 		    if (gridx < 0) gridx = 0;
 		    while (1) {
 			dx = (gridx * PitchX[drect->layer]) + Xlowerbound;
@@ -488,10 +489,10 @@ DefReadGatePin(NET net, NODE node, char *instname, char *pinname, double *home)
 			}
 			gridy = (int)((drect->y1 - Ylowerbound) /
 					PitchY[drect->layer]) - 1;
+
 			if (gridy < 0) gridy = 0;
 			while (1) {
-			    dy = (gridy * PitchY[drect->layer])
-					+ Ylowerbound;
+			    dy = (gridy * PitchY[drect->layer]) + Ylowerbound;
 			    if (dy > drect->y2 + home[drect->layer] - EPS) break;
 			    if (dy < drect->y1 - home[drect->layer] + EPS) {
 				gridy++;

@@ -83,38 +83,86 @@ static void helpmessage(void);
 
 int set_num_channels(void)
 {
-   int i;
+    int i, glimitx, glimity;
+    NET net;
+    NODE node;
+    DPOINT ctap, ltap, ntap;
 
-   if (NumChannelsX[0] != 0) return 0;	/* Already been called */
+    if (NumChannelsX[0] != 0) return 0;	/* Already been called */
 
-   for (i = 0; i < Num_layers; i++) {
-      if (PitchX[i] == 0.0 || PitchY[i] == 0.0) {
-	 Fprintf(stderr, "Have a 0 pitch for layer %d (of %d).  "
+    for (i = 0; i < Num_layers; i++) {
+	if (PitchX[i] == 0.0 || PitchY[i] == 0.0) {
+	    Fprintf(stderr, "Have a 0 pitch for layer %d (of %d).  "
 			"Exit.\n", i + 1, Num_layers);
-	 return (-3);
-      }
-      NumChannelsX[i] = (int)(1.5 + (Xupperbound - Xlowerbound) / PitchX[i]);
-      NumChannelsY[i] = (int)(1.5 + (Yupperbound - Ylowerbound) / PitchY[i]);
-      if ((Verbose > 1) || (NumChannelsX[i] <= 0))
-	 Fprintf(stdout, "Number of x channels for layer %d is %d\n",
-		i, NumChannelsX[i]);
-      if ((Verbose > 1) || (NumChannelsY[i] <= 0))
-	 Fprintf(stdout, "Number of y channels for layer %d is %d\n",
-		i, NumChannelsY[i]);
+	    return (-3);
+	}
+	NumChannelsX[i] = (int)(1.5 + (Xupperbound - Xlowerbound) / PitchX[i]);
+	NumChannelsY[i] = (int)(1.5 + (Yupperbound - Ylowerbound) / PitchY[i]);
+	if ((Verbose > 1) || (NumChannelsX[i] <= 0))
+	    Fprintf(stdout, "Number of x channels for layer %d is %d\n",
+				i, NumChannelsX[i]);
+	if ((Verbose > 1) || (NumChannelsY[i] <= 0))
+	    Fprintf(stdout, "Number of y channels for layer %d is %d\n",
+				i, NumChannelsY[i]);
 	
-      if (NumChannelsX[i] <= 0) {
-	 Fprintf(stderr, "Something wrong with layer %d x bounds.\n", i);
-	 return(-3);
-      }
-      if (NumChannelsY[i] <= 0) {
-	 Fprintf(stderr, "Something wrong with layer %d y bounds.\n", i);
-	 return(-3);
-      }
-      Flush(stdout);
-   }
+	if (NumChannelsX[i] <= 0) {
+	    Fprintf(stderr, "Something wrong with layer %d x bounds.\n", i);
+	    return(-3);
+	}
+	if (NumChannelsY[i] <= 0) {
+	    Fprintf(stderr, "Something wrong with layer %d y bounds.\n", i);
+	    return(-3);
+	}
+	Flush(stdout);
+    }
 
-   if (recalc_spacing()) draw_layout();
-   return 0;
+    // Go through all nodes and remove any tap or extend entries that are
+    // out of bounds.
+
+    for (i = 0; i < Numnets; i++) {
+	net = Nlnets[i];
+	for (node = net->netnodes; node != NULL; node = node->next) {
+
+	    ltap = NULL;
+	    for (ctap = node->taps; ctap != NULL; ) {
+		ntap = ctap->next;
+		glimitx = NumChannelsX[ctap->layer];
+		glimity = NumChannelsY[ctap->layer];
+		if (ctap->gridx < 0 || ctap->gridx >= glimitx ||
+				ctap->gridy < 0 || ctap->gridy >= glimity) {
+		    /* Remove ctap */
+		    if (ltap == NULL)
+			node->taps = ntap;
+		    else
+			ltap->next = ntap;
+		}
+		else
+		    ltap = ctap;
+		ctap = ntap;
+	    }
+
+	    ltap = NULL;
+	    for (ctap = node->extend; ctap != NULL; ) {
+		ntap = ctap->next;
+		glimitx = NumChannelsX[ctap->layer];
+		glimity = NumChannelsY[ctap->layer];
+		if (ctap->gridx < 0 || ctap->gridx >= glimitx ||
+				ctap->gridy < 0 || ctap->gridy >= glimity) {
+		    /* Remove ctap */
+		    if (ltap == NULL)
+			node->taps = ntap;
+		    else
+			ltap->next = ntap;
+		}
+		else
+		    ltap = ctap;
+		ctap = ntap;
+	    }
+	}
+    }
+
+    if (recalc_spacing()) draw_layout();
+    return 0;
 }
 
 /*--------------------------------------------------------------*/

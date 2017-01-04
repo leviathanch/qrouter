@@ -1927,7 +1927,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
       if (lseg && ((lseg->segtype & (ST_VIA | ST_OFFSET_END)) ==
 			(ST_VIA | ST_OFFSET_END)))
-	 if (seg->segtype != ST_VIA)
+	 if ((seg->segtype != ST_VIA) && (lnode1 != NULL))
 	    if (((seg->x1 == seg->x2) && (lnode1->flags & NI_OFFSET_NS)) ||
 		((seg->y1 == seg->y2) && (lnode1->flags & NI_OFFSET_EW)))
 	       seg->segtype |= ST_OFFSET_START;
@@ -1939,17 +1939,19 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       // the offset via, and does not extend past it.
 
       if (dir1 & OFFSET_TAP) {
-	 if (((seg->x1 == seg->x2) && (lnode1->flags & NI_OFFSET_NS)) ||
-		((seg->y1 == seg->y2) && (lnode1->flags & NI_OFFSET_EW)))
-	    seg->segtype |= ST_OFFSET_START;
+	 if (lnode1 != NULL)
+	    if (((seg->x1 == seg->x2) && (lnode1->flags & NI_OFFSET_NS)) ||
+			((seg->y1 == seg->y2) && (lnode1->flags & NI_OFFSET_EW)))
+	       seg->segtype |= ST_OFFSET_START;
 
 	 // An offset on a via needs to be applied to the previous route
 	 // segment as well, if that route is a wire, and the offset is
 	 // in the same direction as the wire.
 
-	 if (lseg && (seg->segtype & ST_VIA) && !(lseg->segtype & ST_VIA))
-	    if (((lseg->x1 == lseg->x2) && lnode2 && (lnode2->flags & NI_OFFSET_NS)) ||
-		((lseg->y1 == lseg->y2) && lnode2 && (lnode2->flags & NI_OFFSET_EW)))
+	 if (lseg && (seg->segtype & ST_VIA) && !(lseg->segtype & ST_VIA) &&
+			(lnode2 != NULL))
+	    if (((lseg->x1 == lseg->x2) && (lnode2->flags & NI_OFFSET_NS)) ||
+		((lseg->y1 == lseg->y2) && (lnode2->flags & NI_OFFSET_EW)))
 	       lseg->segtype |= ST_OFFSET_END;
       }
 

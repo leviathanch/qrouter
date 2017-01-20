@@ -1455,133 +1455,142 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       // Check all four positions around the contact for the
 	       // lowest cost, and make sure the position below that
 	       // is available.
-	       dx = cx + 1;	// Check to the right
-	       pri = &OBS2VAL(dx, cy, cl);
-	       pflags = pri->flags;
-	       cost = pri->prdata.cost;
-	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-			(pri->prdata.net < MAXNETNUM)) {
-		  pflags = 0;
-		  cost = ConflictCost;
-	       }
-	       if (pflags & PR_COST) {
-		  pflags &= ~PR_COST;
-		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &OBS2VAL(dx, cy, dl);
-		     p2flags = pri2->flags;
-		     if (p2flags & PR_COST) {
-			p2flags &= ~PR_COST;
-		        if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri2->prdata.cost < MAXRT) {
-		           mincost = cost;
-		           minx = dx;
-		           miny = cy;
-			}
-		     }
-		     else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
+
+	       if (cx < NumChannelsX[cl] - 1) {
+	          dx = cx + 1;	// Check to the right
+	          pri = &OBS2VAL(dx, cy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+	                pri2 = &OBS2VAL(dx, cy, dl);
+		        p2flags = pri2->flags;
+		        if (p2flags & PR_COST) {
+			   p2flags &= ~PR_COST;
+		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri2->prdata.cost < MAXRT) {
+		              mincost = cost;
+		              minx = dx;
+		              miny = cy;
+			   }
+		        }
+		        else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
 				(pri2->prdata.net < MAXNETNUM) &&
 				((cost + ConflictCost) < mincost)) {
-			mincost = cost + ConflictCost;
-			minx = dx;
-			miny = dy;
+			   mincost = cost + ConflictCost;
+			   minx = dx;
+			   miny = dy;
+		        }
 		     }
-		  }
+	          }
 	       }
-	       dx = cx - 1;	// Check to the left
-	       pri = &OBS2VAL(dx, cy, cl);
-	       pflags = pri->flags;
-	       cost = pri->prdata.cost;
-	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-			(pri->prdata.net < MAXNETNUM)) {
-		  pflags = 0;
-		  cost = ConflictCost;
-	       }
-	       if (pflags & PR_COST) {
-		  pflags &= ~PR_COST;
-		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &OBS2VAL(dx, cy, dl);
-		     p2flags = pri2->flags;
-		     if (p2flags & PR_COST) {
-			p2flags &= ~PR_COST;
-		        if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri2->prdata.cost < MAXRT) {
-		           mincost = cost;
-		           minx = dx;
-		           miny = cy;
-			}
-		     }
-		     else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
+	       if (cx > 0) {
+	          dx = cx - 1;	// Check to the left
+	          pri = &OBS2VAL(dx, cy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+	                pri2 = &OBS2VAL(dx, cy, dl);
+		        p2flags = pri2->flags;
+		        if (p2flags & PR_COST) {
+			   p2flags &= ~PR_COST;
+		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri2->prdata.cost < MAXRT) {
+		              mincost = cost;
+		              minx = dx;
+		              miny = cy;
+			   }
+		        }
+		        else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
 				(pri2->prdata.net < MAXNETNUM) &&
 				((cost + ConflictCost) < mincost)) {
-			mincost = cost + ConflictCost;
-			minx = dx;
-			miny = dy;
+			   mincost = cost + ConflictCost;
+			   minx = dx;
+			   miny = dy;
+			}
 		     }
 		  }
 	       }
 
-	       dy = cy + 1;	// Check north
-	       pri = &OBS2VAL(cx, dy, cl);
-	       pflags = pri->flags;
-	       cost = pri->prdata.cost;
-	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-			(pri->prdata.net < MAXNETNUM)) {
-		  pflags = 0;
-		  cost = ConflictCost;
-	       }
-	       if (pflags & PR_COST) {
-		  pflags &= ~PR_COST;
-		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &OBS2VAL(cx, dy, dl);
-		     p2flags = pri2->flags;
-		     if (p2flags & PR_COST) {
-			p2flags &= ~PR_COST;
-		        if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri2->prdata.cost < MAXRT) {
-		           mincost = cost;
-		           minx = cx;
-		           miny = dy;
-			}
-		     }
-		     else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
+	       if (cy < NumChannelsY[cl] - 1) {
+	          dy = cy + 1;	// Check north
+	          pri = &OBS2VAL(cx, dy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+	                pri2 = &OBS2VAL(cx, dy, dl);
+		        p2flags = pri2->flags;
+		        if (p2flags & PR_COST) {
+			   p2flags &= ~PR_COST;
+		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri2->prdata.cost < MAXRT) {
+		              mincost = cost;
+		              minx = cx;
+		              miny = dy;
+			   }
+		        }
+		        else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
 				(pri2->prdata.net < MAXNETNUM) &&
 				((cost + ConflictCost) < mincost)) {
-			mincost = cost + ConflictCost;
-			minx = dx;
-			miny = dy;
+			   mincost = cost + ConflictCost;
+			   minx = dx;
+			   miny = dy;
+			}
 		     }
 		  }
 	       }
 
-	       dy = cy - 1;	// Check south
-	       pri = &OBS2VAL(cx, dy, cl);
-	       pflags = pri->flags;
-	       cost = pri->prdata.cost;
-	       if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
-			(pri->prdata.net < MAXNETNUM)) {
-		  pflags = 0;
-		  cost = ConflictCost;
-	       }
-	       if (pflags & PR_COST) {
-		  pflags &= ~PR_COST;
-		  if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
-	             pri2 = &OBS2VAL(cx, dy, dl);
-		     p2flags = pri2->flags;
-		     if (p2flags & PR_COST) {
-		        p2flags &= ~PR_COST;
-		        if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri2->prdata.cost < MAXRT) {
-		           mincost = cost;
-		           minx = cx;
-		           miny = dy;
-			}
-		     }
-		     else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
+	       if (cy > 0) {
+	          dy = cy - 1;	// Check south
+	          pri = &OBS2VAL(cx, dy, cl);
+	          pflags = pri->flags;
+	          cost = pri->prdata.cost;
+	          if (collide && !(pflags & (PR_COST | PR_SOURCE)) &&
+				(pri->prdata.net < MAXNETNUM)) {
+		     pflags = 0;
+		     cost = ConflictCost;
+	          }
+	          if (pflags & PR_COST) {
+		     pflags &= ~PR_COST;
+		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE && cost < mincost) {
+	                pri2 = &OBS2VAL(cx, dy, dl);
+		        p2flags = pri2->flags;
+		        if (p2flags & PR_COST) {
+		           p2flags &= ~PR_COST;
+		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri2->prdata.cost < MAXRT) {
+		              mincost = cost;
+		              minx = cx;
+		              miny = dy;
+			   }
+		        }
+		        else if (collide && !(p2flags & (PR_COST | PR_SOURCE)) &&
 				(pri2->prdata.net < MAXNETNUM) &&
 				((cost + ConflictCost) < mincost)) {
-			mincost = cost + ConflictCost;
-			minx = dx;
-			miny = dy;
+			   mincost = cost + ConflictCost;
+			   minx = dx;
+			   miny = dy;
+			}
 		     }
 		  }
 	       }
@@ -1638,85 +1647,93 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          mincost = MAXRT;
 	          dl = lrprev->layer;
 
-	          dx = cx + 1;	// Check to the right
-	          pri = &OBS2VAL(dx, cy, cl);
-	          pflags = pri->flags;
-		  if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri->prdata.cost < mincost) {
-	                pri2 = &OBS2VAL(dx, cy, dl);
-		        p2flags = pri2->flags;
-			if (p2flags & PR_COST) {
-			   p2flags &= ~PR_COST;
-		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+		  if (cx < NumChannelsX[cl] - 1) {
+	             dx = cx + 1;	// Check to the right
+	             pri = &OBS2VAL(dx, cy, cl);
+	             pflags = pri->flags;
+		     if (pflags & PR_COST) {
+		        pflags &= ~PR_COST;
+		        if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri->prdata.cost < mincost) {
+	                   pri2 = &OBS2VAL(dx, cy, dl);
+		           p2flags = pri2->flags;
+			   if (p2flags & PR_COST) {
+			      p2flags &= ~PR_COST;
+		              if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
 					pri2->prdata.cost < MAXRT) {
-		              mincost = pri->prdata.cost;
-		              minx = dx;
-		              miny = cy;
+		                 mincost = pri->prdata.cost;
+		                 minx = dx;
+		                 miny = cy;
+			      }
 			   }
 		        }
 		     }
 	          }
 
-	          dx = cx - 1;	// Check to the left
-	          pri = &OBS2VAL(dx, cy, cl);
-	          pflags = pri->flags;
-		  if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri->prdata.cost < mincost) {
-	                pri2 = &OBS2VAL(dx, cy, dl);
-		        p2flags = pri2->flags;
-			if (p2flags & PR_COST) {
-			   p2flags &= ~PR_COST;
-		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+		  if (cx > 0) {
+	             dx = cx - 1;	// Check to the left
+	             pri = &OBS2VAL(dx, cy, cl);
+	             pflags = pri->flags;
+		     if (pflags & PR_COST) {
+		        pflags &= ~PR_COST;
+		        if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri->prdata.cost < mincost) {
+	                   pri2 = &OBS2VAL(dx, cy, dl);
+		           p2flags = pri2->flags;
+			   if (p2flags & PR_COST) {
+			      p2flags &= ~PR_COST;
+		              if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
 					pri2->prdata.cost < MAXRT) {
-		              mincost = pri->prdata.cost;
-		              minx = dx;
-		              miny = cy;
+		                 mincost = pri->prdata.cost;
+		                 minx = dx;
+		                 miny = cy;
+			      }
 			   }
 		        }
 		     }
 	          }
 
-	          dy = cy + 1;	// Check north
-	          pri = &OBS2VAL(cx, dy, cl);
-	          pflags = pri->flags;
-		  if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri->prdata.cost < mincost) {
-	                pri2 = &OBS2VAL(cx, dy, dl);
-		        p2flags = pri2->flags;
-			if (p2flags & PR_COST) {
-			   p2flags &= ~PR_COST;
-		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+		  if (cy < NumChannelsY[cl] - 1) {
+	             dy = cy + 1;	// Check north
+	             pri = &OBS2VAL(cx, dy, cl);
+	             pflags = pri->flags;
+		     if (pflags & PR_COST) {
+		        pflags &= ~PR_COST;
+		        if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri->prdata.cost < mincost) {
+	                   pri2 = &OBS2VAL(cx, dy, dl);
+		           p2flags = pri2->flags;
+			   if (p2flags & PR_COST) {
+			      p2flags &= ~PR_COST;
+		              if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
 					pri2->prdata.cost < MAXRT) {
-		              mincost = pri->prdata.cost;
-		              minx = cx;
-		              miny = dy;
+		                 mincost = pri->prdata.cost;
+		                 minx = cx;
+		                 miny = dy;
+			      }
 			   }
 		        }
 		     }
 	          }
 
-	          dy = cy - 1;	// Check south
-	          pri = &OBS2VAL(cx, dy, cl);
-	          pflags = pri->flags;
-		  if (pflags & PR_COST) {
-		     pflags &= ~PR_COST;
-		     if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
-				pri->prdata.cost < mincost) {
-	                pri2 = &OBS2VAL(cx, dy, dl);
-		        p2flags = pri2->flags;
-			if (p2flags & PR_COST) {
-			   p2flags &= ~PR_COST;
-		           if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
+		  if (cy > 0) {
+	             dy = cy - 1;	// Check south
+	             pri = &OBS2VAL(cx, dy, cl);
+	             pflags = pri->flags;
+		     if (pflags & PR_COST) {
+		        pflags &= ~PR_COST;
+		        if ((pflags & PR_PRED_DMASK) != PR_PRED_NONE &&
+					pri->prdata.cost < mincost) {
+	                   pri2 = &OBS2VAL(cx, dy, dl);
+		           p2flags = pri2->flags;
+			   if (p2flags & PR_COST) {
+			      p2flags &= ~PR_COST;
+		              if ((p2flags & PR_PRED_DMASK) != PR_PRED_NONE &&
 					pri2->prdata.cost < MAXRT) {
-		              mincost = pri->prdata.cost;
-		              minx = cx;
-		              miny = dy;
+		                 mincost = pri->prdata.cost;
+		                 minx = cx;
+		                 miny = dy;
+			      }
 			   }
 		        }
 		     }

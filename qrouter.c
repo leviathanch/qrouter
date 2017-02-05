@@ -2901,13 +2901,11 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 		iroute->nsrctap->x, iroute->nsrctap->y, iroute->net->netname);
   }
   rval = -1;
-  return rval;
 
 done:
 
   // Regenerate the stack of unprocessed nodes
-  iroute->glist = gunproc;
-  gunproc = NULL;
+  if (gunproc != NULL) iroute->glist = gunproc;
   return rval;
   
 } /* route_segs() */

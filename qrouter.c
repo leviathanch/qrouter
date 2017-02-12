@@ -926,9 +926,9 @@ pathto(FILE *cmd, int x, int y, int horizontal, int lastx, int lasty,
 
     if ((x != lastx) && (y != lasty)) {
 	if (horizontal)
-	   pathto(cmd, x, y, FALSE, x, lasty, invscale);
+	   pathto(cmd, lastx, y, FALSE, lastx, lasty, invscale);
 	else
-	   pathto(cmd, x, y, TRUE, lastx, y, invscale);
+	   pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale);
     }
 
     fprintf(cmd, "( ");
@@ -983,9 +983,9 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
        // route to the via.
 
        if (x != lastx)
-	  pathto(cmd, x, y, TRUE, lastx, y, invscale);
+	  pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale);
        if (y != lasty)
-	  pathto(cmd, x, y, FALSE, x, lasty, invscale);
+	  pathto(cmd, lastx, y, FALSE, lastx, lasty, invscale);
     }
     fprintf(cmd, "%s ", s);
     Pathon = 0;

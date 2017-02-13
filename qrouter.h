@@ -93,7 +93,7 @@ struct gridp_ {
 typedef struct proute_ PROUTE;
 
 struct proute_ {        // partial route
-   u_char flags; 	// values PR_PROCESSED and PR_CONFLICT, and others
+   u_short flags; 	// values PR_PROCESSED and PR_CONFLICT, and others
    union {
       u_int cost;	// cost of route coming from predecessor
       u_int net;	// net number at route point
@@ -102,22 +102,24 @@ struct proute_ {        // partial route
 
 // Bit values for "flags" in PROUTE
 
-#define PR_PRED_DMASK	0x07		// Mask for directional bits
+#define PR_PRED_DMASK	0x007		// Mask for directional bits
 
-#define PR_PRED_NONE	0x00		// This node does not have a predecessor
-#define PR_PRED_N	0x01		// Predecessor is north
-#define PR_PRED_S	0x02		// Predecessor is south
-#define PR_PRED_E	0x03		// Predecessor is east
-#define PR_PRED_W	0x04		// Predecessor is west
-#define PR_PRED_U	0x05		// Predecessor is up
-#define PR_PRED_D	0x06		// Predecessor is down
+#define PR_PRED_NONE	0x000		// This node does not have a predecessor
+#define PR_PRED_N	0x001		// Predecessor is north
+#define PR_PRED_S	0x002		// Predecessor is south
+#define PR_PRED_E	0x003		// Predecessor is east
+#define PR_PRED_W	0x004		// Predecessor is west
+#define PR_PRED_U	0x005		// Predecessor is up
+#define PR_PRED_D	0x006		// Predecessor is down
 
-#define PR_PROCESSED	0x08		// Tag to avoid visiting more than once
-#define PR_NO_EVAL	0x08		// Used only for making calls to eval_pt()
-#define PR_CONFLICT	0x10		// Two nets collide here during stage 2
-#define PR_SOURCE	0x20		// This is a source node
-#define PR_TARGET	0x40		// This is a target node
-#define PR_COST		0x80		// if 1, use prdata.cost, not prdata.net
+#define PR_PROCESSED	0x008		// Tag to avoid visiting more than once
+#define PR_NO_EVAL	0x008		// Used only for making calls to eval_pt()
+#define PR_CONFLICT	0x010		// Two nets collide here during stage 2
+#define PR_SOURCE	0x020		// This is a source node
+#define PR_TARGET	0x040		// This is a target node
+#define PR_COST		0x080		// if 1, use prdata.cost, not prdata.net
+#define PR_ON_STACK	0x100		// if 1, position has been recorded for
+					// pending evalutaion
 
 // Linked string list
 
@@ -317,7 +319,7 @@ struct routeinfo_ {
 // The Stub[] vector indicates the distance needed to avoid the obstruction.
 //
 // The maximum number of nets must not overrun the area used by flags, so
-// the maximum number of nets is 0x1fffff, or 2,097,151 nets
+// the maximum number of nets is 0x3fffff, or 4,194,303 nets
 
 #define OFFSET_TAP	((u_int)0x80000000)  // tap position needs to be offset
 #define STUBROUTE	((u_int)0x40000000)  // route stub to reach terminal

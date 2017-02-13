@@ -921,11 +921,13 @@ u_char ripup_net(NET net, u_char restore)
 /*	route this one.						*/
 /*								*/
 /*  ARGS: none							*/
-/*  RETURNS: 1 if node needs to be (re)processed, 0 if not.	*/
+/*  RETURNS: pointer to a new POINT record to put on the stack	*/
+/*	if the node needs to be (re)processed and isn't	already	*/
+/*	on the stack, NULL otherwise.				*/
 /*  SIDE EFFECTS: none (get this right or else)			*/
 /*--------------------------------------------------------------*/
 
-int eval_pt(GRIDP *ept, u_char flags, u_char stage)
+POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 {
     int thiscost = 0;
     int netnum;
@@ -934,6 +936,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
     NETLIST nl;
     PROUTE *Pr, *Pt;
     GRIDP newpt;
+    POINT ptret = NULL;
 
     newpt = *ept;
 
@@ -976,13 +979,13 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
        netnum = Pr->prdata.net;
        if (stage && (netnum < MAXNETNUM)) {
 	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
-	     return 0;			// But cannot route over terminals!
+	     return NULL;		// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
 
 	  for (nl = CurNet->noripup; nl; nl = nl->next) {
 	     if (nl->net->netnum == netnum)
-		return 0;
+		return NULL;
 	  }
 
 	  // In case of a collision, we change the grid point to be routable
@@ -996,7 +999,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
        }
        else if (stage && (netnum == DRC_BLOCKAGE)) {
 	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
-	     return 0;			// But cannot route over terminals!
+	     return NULL;		// But cannot route over terminals!
 
 	  // Position does not contain the net number, so we have to
 	  // go looking for it.  Fortunately this is a fairly rare
@@ -1013,7 +1016,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	              // Is net k in the "noripup" list?  If so, don't route it */
 	              for (nl = CurNet->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
-		            return 0;
+		            return NULL;
 		}
 	     }
 
@@ -1025,7 +1028,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	              // Is net k in the "noripup" list?  If so, don't route it */
 	              for (nl = CurNet->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
-		            return 0;
+		            return NULL;
 		}
 	     }
 	  } 
@@ -1038,7 +1041,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	              // Is net k in the "noripup" list?  If so, don't route it */
 	              for (nl = CurNet->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
-		            return 0;
+		            return NULL;
 		}
 	     }
 
@@ -1050,7 +1053,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	              // Is net k in the "noripup" list?  If so, don't route it */
 	              for (nl = CurNet->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
-		            return 0;
+		            return NULL;
 		}
 	     }
 	  }
@@ -1065,7 +1068,7 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  thiscost += ConflictCost;
        }
        else
-          return 0;		// Position is not routeable
+          return NULL;		// Position is not routeable
     }
 
     // Compute the cost to step from the current point to the new point.
@@ -1141,9 +1144,17 @@ int eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  Fprintf(stdout, "New cost %d at (%d %d %d)\n", thiscost,
 		newpt.x, newpt.y, newpt.lay);
        }
-       return 1;
+       if (~(Pr->flags & PR_ON_STACK)) {
+	  ptret = (POINT)malloc(sizeof(struct point_));
+	  ptret->x1 = newpt.x;
+	  ptret->y1 = newpt.y;
+	  ptret->layer = newpt.lay;
+	  ptret->next = NULL;
+	  Pr->flags |= PR_ON_STACK;
+	  return ptret;
+       }
     }
-    return 0;	// New position did not get a lower cost
+    return NULL;	// New position did not get a lower cost
 
 } /* eval_pt() */
 

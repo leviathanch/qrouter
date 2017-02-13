@@ -2592,12 +2592,12 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
-  POINT gpoint, gunproc;
+  POINT gpoint, gunproc, newpt;
   int  i, o;
   int  pass, maskpass;
   u_int forbid;
   GRIDP best, curpt;
-  int  result, rval;
+  int rval;
   u_char first = (u_char)1;
   u_char check_order[6];
   u_char max_reached;
@@ -2638,6 +2638,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
       // ignore grid positions that have already been processed
       if (Pr->flags & PR_PROCESSED) {
+	 Pr->flags &= ~PR_ON_STACK;
 	 free(gpoint);
 	 continue;
       }
@@ -2678,6 +2679,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
          // Don't continue processing from the target
 	 Pr->flags |= PR_PROCESSED;
+	 Pr->flags &= ~PR_ON_STACK;
 	 free(gpoint);
 	 continue;
       }
@@ -2705,6 +2707,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    continue;
 	 }
       }
+      Pr->flags &= ~PR_ON_STACK;
       free(gpoint);
 
       // check east/west/north/south, and bottom to top
@@ -2747,11 +2750,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case EAST:
 	       predecessor |= PR_PRED_W;
                if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
-         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
-         	     gpoint = (POINT)malloc(sizeof(struct point_));
-         	     gpoint->x1 = curpt.x + 1;
-         	     gpoint->y1 = curpt.y;
-         	     gpoint->layer = curpt.lay;
+         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -2763,11 +2762,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case WEST:
 	       predecessor |= PR_PRED_E;
                if ((curpt.x - 1) >= 0) {
-         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
-         	     gpoint = (POINT)malloc(sizeof(struct point_));
-         	     gpoint->x1 = curpt.x - 1;
-         	     gpoint->y1 = curpt.y;
-         	     gpoint->layer = curpt.lay;
+         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -2779,11 +2774,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
                if ((curpt.y - 1) >= 0) {
-         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
-         	     gpoint = (POINT)malloc(sizeof(struct point_));
-         	     gpoint->x1 = curpt.x;
-         	     gpoint->y1 = curpt.y - 1;
-         	     gpoint->layer = curpt.lay;
+         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                    }
@@ -2795,11 +2786,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
                if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
-         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
-         	     gpoint = (POINT)malloc(sizeof(struct point_));
-         	     gpoint->x1 = curpt.x;
-         	     gpoint->y1 = curpt.y + 1;
-         	     gpoint->layer = curpt.lay;
+         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -2811,11 +2798,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case DOWN:
 	       predecessor |= PR_PRED_U;
                if (curpt.lay > 0) {
-         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
-         	     gpoint = (POINT)malloc(sizeof(struct point_));
-         	     gpoint->x1 = curpt.x;
-         	     gpoint->y1 = curpt.y;
-         	     gpoint->layer = curpt.lay - 1;
+         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
          	  }
@@ -2827,11 +2810,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case UP:
 	       predecessor |= PR_PRED_D;
                if (curpt.lay < (Num_layers - 1)) {
-         	  if ((result = eval_pt(&curpt, predecessor, stage)) == 1) {
-         	     gpoint = (POINT)malloc(sizeof(struct point_));
-         	     gpoint->x1 = curpt.x;
-         	     gpoint->y1 = curpt.y;
-         	     gpoint->layer = curpt.lay + 1;
+         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
          	  }
@@ -2847,6 +2826,9 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     while (iroute->glist) {
        gpoint = iroute->glist;
+       Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
+       Pr->flags &= ~PR_ON_STACK;
+
        iroute->glist = iroute->glist->next;
        free(gpoint);
     }

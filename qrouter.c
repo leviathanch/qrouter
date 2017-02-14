@@ -985,7 +985,7 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
        if (x != lastx)
 	  pathto(cmd, x, lasty, TRUE, lastx, lasty, invscale);
        if (y != lasty)
-	  pathto(cmd, lastx, y, FALSE, lastx, lasty, invscale);
+	  pathto(cmd, x, y, FALSE, x, lasty, invscale);
     }
     fprintf(cmd, "%s ", s);
     Pathon = 0;
@@ -2110,6 +2110,26 @@ static void fillMask(u_char value) {
 }
 
 /*--------------------------------------------------------------*/
+/* Free memory of an iroute glist and clear the Obs2		*/
+/* PR_ON_STACK flag for each location in the list.		*/
+/*--------------------------------------------------------------*/
+
+void
+free_glist(struct routeinfo_ *iroute)
+{
+   POINT gpoint;
+   PROUTE *Pr;
+
+   while (iroute->glist) {
+      gpoint = iroute->glist;
+      iroute->glist = iroute->glist->next;
+      Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
+      Pr->flags &= ~PR_ON_STACK;
+      free(gpoint);
+  }
+}
+
+/*--------------------------------------------------------------*/
 /* doroute - basic route call					*/
 /*								*/
 /*	stage = 0 is normal routing				*/
@@ -2202,25 +2222,14 @@ int doroute(NET net, u_char stage, u_char graphdebug)
      // For power routing, clear the list of existing pending route
      // solutions---they will not be relevant.
 
-     if (iroute.do_pwrbus) {
-        while (iroute.glist) {
-           gpoint = iroute.glist;
-           iroute.glist = iroute.glist->next;
-           free(gpoint);
-        }
-     }
+     if (iroute.do_pwrbus) free_glist(&iroute);
 
      /* Set up for next route and check if routing is done */
      result = next_route_setup(&iroute, stage);
   }
 
   /* Finished routing (or error occurred) */
-
-  while (iroute.glist) {
-     gpoint = iroute.glist;
-     iroute.glist = iroute.glist->next;
-     free(gpoint);
-  }
+  free_glist(&iroute);
 
   /* Route failure due to no taps or similar error---Log it */
   if ((result < 0) || (unroutable > 0)) {
@@ -2336,11 +2345,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
         }
      }
 
-     while (iroute->glist) {
-	gpoint = iroute->glist;
-	iroute->glist = iroute->glist->next;
-	free(gpoint);
-     }
+     free_glist(iroute);
      return 0;
   }
 
@@ -2512,11 +2517,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
         }
      }
 
-     while (iroute->glist) {
-	gpoint = iroute->glist;
-	iroute->glist = iroute->glist->next;
-	free(gpoint);
-     }
+     free_glist(iroute);
      return 0;
   }
 
@@ -2824,14 +2825,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     } // while stack is not empty
 
-    while (iroute->glist) {
-       gpoint = iroute->glist;
-       Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
-       Pr->flags &= ~PR_ON_STACK;
-
-       iroute->glist = iroute->glist->next;
-       free(gpoint);
-    }
+    free_glist(iroute);
 
     // If we found a route, save it and return
 

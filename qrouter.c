@@ -4412,6 +4412,7 @@ GATE
 FindGateNode(NODE node, int *ridx)
 {
     GATE g;
+    int i;
 
     /* This is a slow lookup;  Tcl/Tk compile and hashing is preferred */ 
 

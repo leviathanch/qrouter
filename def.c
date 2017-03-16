@@ -896,6 +896,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
     GATE gate;
     int curlayer;
     double hwidth;
+    u_char pin_use;
 
     static char *pin_keys[] = {
 	"-",
@@ -923,6 +924,21 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 	"FEEDTHRU",
 	NULL
     };
+
+    static char *pin_uses[] = {
+	"DEFAULT",
+	"SIGNAL",
+	"ANALOG",
+	"POWER",
+	"GROUND",
+	"CLOCK",
+	"TIEOFF",
+	"SCAN",
+	"RESET",
+	NULL
+    };
+
+    pin_use = PORT_USE_DEFAULT;
 
     while ((token = LefNextToken(f, TRUE)) != NULL)
     {
@@ -964,12 +980,14 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		/* Pin record has one node;  allocate memory for it */
 		gate->taps = (DSEG *)malloc(sizeof(DSEG));
 		gate->noderec = (NODE *)malloc(sizeof(NODE));
+		gate->direction = (u_char *)malloc(sizeof(u_char));
 		gate->netnum = (int *)malloc(sizeof(int));
 		gate->node = (char **)malloc(sizeof(char *));
 		gate->taps[0] = NULL;
 		gate->noderec[0] = NULL;
 		gate->netnum[0] = -1;
 		gate->node[0] = NULL;
+		gate->direction = PORT_CLASS_DEFAULT;
 
 		/* Now do a search through the line for "+" entries	*/
 		/* And process each.					*/
@@ -999,7 +1017,9 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 			    token = LefNextToken(f, TRUE);
 			    subkey = Lookup(token, pin_classes);
 			    if (subkey < 0)
-				LefError("Unknown pin class\n");
+				LefError("Unknown pin class %s\n", token);
+			    else
+				gate->direction[0] = subkey;
 			    break;
 			case DEF_PINS_PROP_LAYER:
 			    curlayer = LefReadLayer(f, FALSE);
@@ -1008,7 +1028,12 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 			    gate->height = currect->y2 - currect->y1;
 			    break;
 			case DEF_PINS_PROP_USE:
-			    /* Ignore this, for now */
+			    token = LefNextToken(f, TRUE);
+			    subkey = Lookup(token, pin_uses);
+			    if (subkey < 0)
+				LefError("Unknown pin use %s\n", token);
+			    else
+				pin_use = subkey;
 			    break;
 			case DEF_PINS_PROP_PLACED:
 			case DEF_PINS_PROP_FIXED:
@@ -1051,6 +1076,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 				pinname);
 		    free(gate->taps);
 		    free(gate->noderec);
+		    free(gate->direction);
 		    free(gate->netnum);
 		    free(gate->node);
 		    free(gate);
@@ -1063,6 +1089,26 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		{
 		    LefError("Pins END statement missing.\n");
 		    keyword = -1;
+		}
+		if (pin_use != PORT_USE_DEFAULT && gate->direction[0] ==
+			PORT_CLASS_DEFAULT)
+		{
+		    /* Derive pin use from pin class, if needed */
+		    switch (pin_use) {
+			case PORT_USE_SIGNAL:
+			case PORT_USE_RESET:
+			case PORT_USE_CLOCK:
+			case PORT_USE_SCAN:
+			    gate->direction[0] = PORT_CLASS_INPUT;
+			    break;
+
+			case PORT_USE_POWER:
+			case PORT_USE_GROUND:
+			case PORT_USE_TIEOFF:
+			case PORT_USE_ANALOG:
+			    gate->direction[0] = PORT_CLASS_BIDIRECTIONAL;
+			    break;
+		    }
 		}
 		break;
 	}
@@ -1473,6 +1519,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 
                     gate->taps = (DSEG *)malloc(gate->nodes * sizeof(DSEG));
                     gate->noderec = (NODE *)malloc(gate->nodes * sizeof(NODE));
+                    gate->direction = (u_char *)malloc(gate->nodes * sizeof(u_char));
                     gate->netnum = (int *)malloc(gate->nodes * sizeof(int));
                     gate->node = (char **)malloc(gate->nodes * sizeof(char *));
 
@@ -1484,6 +1531,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			/* disconnected.				*/
 
 			gate->node[i] = gateginfo->node[i];  /* copy pointer */
+			gate->direction[i] = gateginfo->direction[i];  /* copy */
 			gate->taps[i] = (DSEG)NULL;
 
 			/* Global power/ground bus check */

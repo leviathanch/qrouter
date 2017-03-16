@@ -2142,6 +2142,7 @@ void create_obstructions_outside_nodes(void)
 				   // part of the box.
 
 			           for (ds2 = g->taps[i]; ds2; ds2 = ds2->next) {
+				      if (ds2 == ds) continue;
 				      if (ds2->layer != ds->layer) continue;
 
 				      if (ds2->x1 <= de.x1 && ds2->x2 >= de.x2 &&
@@ -2155,40 +2156,40 @@ void create_obstructions_outside_nodes(void)
 				      // two conditionals, so we have to keep
 				      // evaluating those conditionals.
 
-				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
+				      // ds2 covers left side of de
+				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1 + EPS)
 				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
-					    // if (ds2->x1 < de.x1 - EPS &&
 					    if (ds2->x1 < de.x1 + EPS &&
 							ds2->x2 < de.x2 - EPS) {
 					       de.x1 = ds2->x2;
-					       if (ds2->x2 >= ds->x2) errbox = FALSE;
+					       if (de.x1 > de.x2 - EPS) errbox = FALSE;
 					    }
 
-				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
+				      // ds2 covers right side of de
+				      if (ds2->x1 < de.x2 - EPS && ds2->x2 > de.x1)
 				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
-					    // if (ds2->x2 > de.x2 + EPS &&
 					    if (ds2->x2 > de.x2 - EPS &&
 							ds2->x1 > de.x1 + EPS) {
 					       de.x2 = ds2->x1;
-					       if (ds2->x1 <= ds->x1) errbox = FALSE;
+					       if (de.x2 < de.x1 + EPS) errbox = FALSE;
 					    }
 
-				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
-				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
-					    // if (ds2->y1 < de.y1 - EPS &&
+				      // ds2 covers bottom side of de
+				      if (ds2->y1 < de.y2 && ds2->y2 > de.y1 + EPS)
+				         if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
 					    if (ds2->y1 < de.y1 + EPS &&
 							ds2->y2 < de.y2 - EPS) {
 					       de.y1 = ds2->y2;
-					       if (ds2->y2 >= ds->y2) errbox = FALSE;
+					       if (de.y1 > de.y2 - EPS) errbox = FALSE;
 					    }
 
-				      if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
-				         if (ds2->y1 < de.y2 && ds2->y2 > de.y1)
-					    // if (ds2->y2 > de.y2 + EPS &&
+				      // ds2 covers top side of de
+				      if (ds2->y1 < de.y2 - EPS && ds2->y2 > de.y1)
+				         if (ds2->x1 < de.x2 && ds2->x2 > de.x1)
 					    if (ds2->y2 > de.y2 - EPS &&
 							ds2->y1 > de.y1 + EPS) {
 					       de.y2 = ds2->y1;
-					       if (ds2->y1 <= ds->y1) errbox = FALSE;
+					       if (de.y2 < de.y1 + EPS) errbox = FALSE;
 					    }
 			           }
 

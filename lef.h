@@ -34,13 +34,14 @@ typedef struct
 
 /* Port classes */
 enum port_classes {PORT_CLASS_DEFAULT = 0, PORT_CLASS_INPUT,
-        PORT_CLASS_TRISTATE, PORT_CLASS_OUTPUT, PORT_CLASS_BIDIRECTIONAL,
+	PORT_CLASS_OUTPUT, PORT_CLASS_TRISTATE, PORT_CLASS_BIDIRECTIONAL,
         PORT_CLASS_FEEDTHROUGH};
 
 /* Port uses */
 enum port_uses {PORT_USE_DEFAULT = 0, PORT_USE_SIGNAL,
         PORT_USE_ANALOG, PORT_USE_POWER, PORT_USE_GROUND,
-        PORT_USE_CLOCK};
+        PORT_USE_CLOCK, PORT_USE_TIEOFF, PORT_USE_SCAN,
+	PORT_USE_RESET};
 
 /* Structure to hold information about spacing rules */
 typedef struct _lefSpacingRule *lefSpacingPtr;
@@ -135,6 +136,9 @@ double LefGetRouteSpacing(int layer);
 double LefGetRouteWideSpacing(int layer, double width);
 double LefGetRoutePitch(int layer);
 double LefGetRouteOffset(int layer);
+int    LefGetRouteRCvalues(int layer, double *areacap, double *edgecap,
+		double *respersq);
+int    LefGetViaResistance(int layer, double *respervia);
 char  *LefGetRouteName(int layer);
 int    LefGetRouteOrientation(int layer);
 int    LefGetMaxLayer(void);

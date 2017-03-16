@@ -39,6 +39,11 @@ typedef unsigned long  u_long;
 #endif
 #endif /* _SYS_TYPES_H */
 
+/* Compare functions aren't defined in the Mac's standard library */
+#if defined(__APPLE__)
+typedef int (*__compar_fn_t)(const void*, const void*);
+#endif
+
 /* Maximum number of route layers */
 #define MAX_LAYERS    9
 
@@ -446,7 +451,10 @@ int    runqrouter(int argc, char *argv[]);
 
 void   read_def(char *filename);
 int    write_def(char *filename);
+
+#ifdef TCL_QROUTER
 int    write_delays(char *filename);
+#endif
 
 char  *print_node_name(NODE node);
 void   print_nets(char *filename);

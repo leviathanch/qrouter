@@ -898,6 +898,62 @@ LefGetRouteOrientation(int layer)
 
 /*
  *------------------------------------------------------------
+ * Get the route resistance and capacitance information.
+ * Fill in the pointer values with the relevant information.
+ * Return 0 on success, -1 if the layer is not found.
+ *------------------------------------------------------------
+ */
+
+int
+LefGetRouteRCvalues(int layer, double *areacap, double *edgecap,
+	double *respersq)
+{
+    LefList lefl;
+
+    lefl = LefFindLayerByNum(layer);
+    if (lefl) {
+	if (lefl->lefClass == CLASS_ROUTE) {
+	    *areacap = (double)lefl->info.route.areacap;
+	    *edgecap = (double)lefl->info.route.edgecap;
+	    *respersq = (double)lefl->info.route.respersq;
+	    return 0;
+	}
+    }
+    return -1;
+}
+
+/*
+ *------------------------------------------------------------
+ * Get resistance per via for a via layer.
+ * Return 0 on success, -1 if the layer is not found.
+ * Fill in the pointer value with the resistance.
+ *------------------------------------------------------------
+ */
+
+int
+LefGetViaResistance(int layer, double *respervia)
+{
+    DSEG lrect;
+    LefList lefl;
+    double width;
+    char **viatable = ViaX;
+
+    lefl = LefFindLayer(*(viatable + layer));
+    if (!lefl) {
+	viatable = ViaY;
+	lefl = LefFindLayer(*(viatable + layer));
+    }
+    if (lefl) {
+	if (lefl->lefClass == CLASS_VIA) {
+	    *respervia = (double)lefl->info.via.respervia;
+	    return 0;
+	}
+    }
+    return -1;
+}
+
+/*
+ *------------------------------------------------------------
  * LefReadLayers --
  *
  *	Read a LEF "LAYER" record from the file.
@@ -1595,8 +1651,8 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
     static char *pin_classes[] = {
 	"DEFAULT",
 	"INPUT",
-	"OUTPUT TRISTATE",
 	"OUTPUT",
+	"OUTPUT TRISTATE",
 	"INOUT",
 	"FEEDTHRU",
 	NULL
@@ -1605,8 +1661,8 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
     static int lef_class_to_bitmask[] = {
 	PORT_CLASS_DEFAULT,
 	PORT_CLASS_INPUT,
-	PORT_CLASS_TRISTATE,
 	PORT_CLASS_OUTPUT,
+	PORT_CLASS_TRISTATE,
 	PORT_CLASS_BIDIRECTIONAL,
 	PORT_CLASS_FEEDTHROUGH
     };
@@ -1618,6 +1674,10 @@ LefReadPin(lefMacro, f, pinname, pinNum, oscale)
 	"POWER",
 	"GROUND",
 	"CLOCK",
+	"TIEOFF",
+	"ANALOG",
+	"SCAN",
+	"RESET",
 	NULL
     };
 

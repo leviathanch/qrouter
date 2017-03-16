@@ -28,6 +28,7 @@ void make_routable(NODE node);
 void adjust_stub_lengths(void);
 void block_route(int x, int y, int lay, u_char dir);
 void find_route_blocks();
+void clip_gate_taps(void);
 
 #define NODE_H
 #endif 

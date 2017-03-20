@@ -987,7 +987,7 @@ DefReadPins(FILE *f, char *sname, float oscale, int total)
 		gate->noderec[0] = NULL;
 		gate->netnum[0] = -1;
 		gate->node[0] = NULL;
-		gate->direction = PORT_CLASS_DEFAULT;
+		gate->direction[0] = PORT_CLASS_DEFAULT;
 
 		/* Now do a search through the line for "+" entries	*/
 		/* And process each.					*/

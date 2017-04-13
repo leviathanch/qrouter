@@ -22,11 +22,15 @@ EXEEXT = @EXEEXT@
 X_LIBS = @X_LIBS@
 X_EXTRA_LIBS = @X_EXTRA_LIBS@
 X_PRE_LIBS = @X_PRE_LIBS@
-QROUTER_LIB_DIR = @QROUTER_LIB_DIR@
 WISH_EXE = @WISH_EXE@
 VERSION = @VERSION@
 REVISION = @REVISION@
 prefix = @prefix@
+datarootdir = @datarootdir@
+datadir = @datadir@
+libdir = @libdir@
+bindir = @bindir@
+QROUTER_LIB_DIR = @libdir@
 
 INSTALL_TARGET := @INSTALL_TARGET@
 ALL_TARGET := @ALL_TARGET@
@@ -46,9 +50,10 @@ OBJECTS4 := $(patsubst %.c,%.o,$(SOURCES4))
 SOURCES5 = main.c
 OBJECTS5 := $(patsubst %.c,%.o,$(SOURCES5))
 
-BININSTALL = ${prefix}/bin
-LIBINSTALL = ${prefix}/${QROUTER_LIB_DIR}
-EXTRA_DEFS = -DQROUTER_PATH=\"${LIBINSTALL}\"
+BININSTALL = ${bindir}
+LIBINSTALL = ${libdir}
+DATAINSTALL = ${datadir}/qrouter
+EXTRA_DEFS = -DQROUTER_PATH=\"${DATAINSTALL}\"
 
 all: $(ALL_TARGET)
 
@@ -68,6 +73,7 @@ qrouter.tcl: qrouter.tcl.in
 qrouter.sh: qrouter.sh.in
 	sed -e '/WISH_EXE/s#WISH_EXE#${WISH_EXE}#' \
 	    -e '/LIBDIR/s#LIBDIR#${LIBINSTALL}#' \
+	    -e '/DATADIR/s#DATADIR#${DATAINSTALL}#' \
 		qrouter.sh.in > $@
 	chmod 0755 $@
 
@@ -104,13 +110,14 @@ install-tcl: qrouter.sh qrouter.tcl qrouter$(SHDLIB_EXT) \
 	@echo "Installing qrouter"
 	$(INSTALL) -d $(DESTDIR)${BININSTALL}
 	$(INSTALL) -d $(DESTDIR)${LIBINSTALL}
+	$(INSTALL) -d $(DESTDIR)${DATAINSTALL}
 	$(INSTALL) qrouter.sh $(DESTDIR)${BININSTALL}/qrouter
 	$(INSTALL) qrouter$(SHDLIB_EXT) $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouterexec$(EXEEXT) $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouternullg$(EXEEXT) $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) console.tcl $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) tkcon.tcl $(DESTDIR)${LIBINSTALL}
-	$(INSTALL) qrouter.tcl $(DESTDIR)${LIBINSTALL}
+	$(INSTALL) qrouterexec$(EXEEXT) $(DESTDIR)${BININSTALL}
+	$(INSTALL) qrouternullg$(EXEEXT) $(DESTDIR)${BININSTALL}
+	$(INSTALL) console.tcl $(DESTDIR)${DATAINSTALL}
+	$(INSTALL) tkcon.tcl $(DESTDIR)${DATAINSTALL}
+	$(INSTALL) qrouter.tcl $(DESTDIR)${DATAINSTALL}
 
 uninstall:
 	$(RM) $(DESTDIR)${BININSTALL}/qrouter

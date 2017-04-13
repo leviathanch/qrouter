@@ -11,14 +11,11 @@
 # Parse for the argument "-noc[onsole]".  If it exists, run qrouter
 # without the TkCon console.  Strip this argument from the argument list.
 
-loclibdir=${QROUTER_LIB_DIR:=LIBDIR}
-export QROUTER_LIB_DIR
-QROUTER_WISH=WISH_EXE
-export QROUTER_WISH
+loclibdir=DATADIR
 
 # Hacks for Cygwin
 if [ ${TERM:=""} = "cygwin" ]; then
-   export PATH="$PATH:$loclibdir"
+   export PATH="$PATH"
    export DISPLAY=${DISPLAY:=":0"}
 fi
 
@@ -70,8 +67,8 @@ else
 # capable of sourcing the startup script.
 #
    if [ $NULLG ]; then
-      exec ${loclibdir}/qrouternullg -- $@
+      exec qrouternullg -- $@
    else
-      exec ${loclibdir}/qrouterexec -- $@
+      exec qrouterexec -- $@
    fi
 fi

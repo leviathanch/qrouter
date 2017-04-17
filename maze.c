@@ -17,6 +17,7 @@
 
 #include "qrouter.h"
 #include "qconfig.h"
+#include "point.h"
 #include "node.h"
 #include "maze.h"
 #include "lef.h"
@@ -195,7 +196,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	 if (Pr->flags & PR_TARGET) {
 	    if (Pr->flags & PR_PROCESSED) {
 		Pr->flags &= ~PR_PROCESSED;
-		gpoint = (POINT)malloc(sizeof(struct point_));
+		gpoint = allocPOINT();
 		gpoint->x1 = x;
 		gpoint->y1 = y;
 		gpoint->layer = lay;
@@ -214,7 +215,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_TARGET) {
 		if (Pr->flags & PR_PROCESSED) {
 		    Pr->flags &= ~PR_PROCESSED;
-		    gpoint = (POINT)malloc(sizeof(struct point_));
+		    gpoint = allocPOINT();
 		    gpoint->x1 = x;
 		    gpoint->y1 = y;
 		    gpoint->layer = lay;
@@ -408,7 +409,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
-	     gpoint = (POINT)malloc(sizeof(struct point_));
+	     gpoint = allocPOINT();
 	     gpoint->x1 = x;
 	     gpoint->y1 = y;
 	     gpoint->layer = lay;
@@ -461,7 +462,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
-	     gpoint = (POINT)malloc(sizeof(struct point_));
+	     gpoint = allocPOINT();
 	     gpoint->x1 = x;
 	     gpoint->y1 = y;
 	     gpoint->layer = lay;
@@ -581,7 +582,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// push this point on the stack to process
 
 		if (pushlist != NULL) {
-	  	   gpoint = (POINT)malloc(sizeof(struct point_));
+	  	   gpoint = allocPOINT();
 	  	   gpoint->x1 = x;
 	  	   gpoint->y1 = y;
 	  	   gpoint->layer = lay;
@@ -1145,7 +1146,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 		newpt.x, newpt.y, newpt.lay);
        }
        if (~(Pr->flags & PR_ON_STACK)) {
-	  ptret = (POINT)malloc(sizeof(struct point_));
+	  ptret = allocPOINT();
 	  ptret->x1 = newpt.x;
 	  ptret->y1 = newpt.y;
 	  ptret->layer = newpt.lay;

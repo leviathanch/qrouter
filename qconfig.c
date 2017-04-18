@@ -474,6 +474,36 @@ int read_config(FILE *fconfig, int is_info)
 	    }
 	}
 
+	if (strstr(lineptr, "vdd")) {
+		OK = 1;
+		int lenstrT = 0;
+		char *vddname = lineptr+strlen("vdd")+1;
+		for(int c=0;c<strlen(vddname);c++) {
+			if(isspace(vddname[c]))
+				break;
+			lenstrT++;
+		}
+		vddnet=malloc(lenstrT);
+		strncpy(vddnet,vddname,lenstrT);
+		vddnet[lenstrT]=0;
+		printf("vddnet %s\n",vddnet);
+	}
+
+	if (strstr(lineptr, "gnd")) {
+		OK = 1;
+		int lenstrT = 0;
+		char *gndname = lineptr+strlen("gnd")+1;
+		for(int c=0;c<strlen(gndname);c++) {
+			if(isspace(gndname[c]))
+				break;
+			lenstrT++;
+		}
+		gndnet=malloc(lenstrT);
+		strncpy(gndnet,gndname,lenstrT);
+		gndnet[lenstrT]=0;
+		printf("gndnet %s\n",gndnet);
+	}
+
 	if (OK == 0) {
 	    if (!(lineptr[0] == '\n' || lineptr[0] == '#' || lineptr[0] == 0)) {
 		if (!is_info)	// Don't report errors on info file generation

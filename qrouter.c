@@ -7,12 +7,15 @@
 /* Beccue, 2003							*/
 /*--------------------------------------------------------------*/
 
+#define MAX_NUM_THREADS 12
+
 #include <ctype.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #ifdef TCL_QROUTER
 #include <tk.h>
@@ -753,9 +756,55 @@ void read_def(char *filename)
 /*--------------------------------------------------------------*/
 /*--------------------------------------------------------------*/
 
+typedef struct {
+	int i;
+	int thnum;
+	int *remaining;
+	u_char graphdebug;
+	NET net;
+} qThreadData;
+
+pthread_t cThreads[MAX_NUM_THREADS];
+qThreadData *thread_params_list[MAX_NUM_THREADS];
+int threadnum = 0;
+
+void *dofirststage_thread(void *parm)
+{
+	NET net;
+	qThreadData *thread_params = (qThreadData*)parm;
+	int i = thread_params->i;
+	int thnum = thread_params->thnum;
+	int result=0;
+	int *remaining = thread_params->remaining;
+	u_char graphdebug = thread_params->graphdebug;
+	printf("got parameters: i=%d remaining=%d thnum=%d \n",i,*remaining,thnum);
+	net = thread_params->net;
+	if ((net != NULL) && (net->netnodes != NULL)) {
+		result = doroute(net, (u_char)0, graphdebug);
+		if (result == 0) {
+			(*remaining)--;
+			if (Verbose > 0) {
+				printf( "Finished routing net %s\n", net->netname);
+			}
+			printf( "Nets remaining: %d\n", (*remaining));
+		} else {
+			if (Verbose > 0) {
+				printf( "Failed to route net %s\n", net->netname);
+			}
+		}
+	} else {
+		if (net && (Verbose > 0)) {
+			printf( "Nothing to do for net %s\n", net->netname);
+		}
+		(*remaining)--;
+	}
+
+	pthread_exit(&result);
+}
+
 int dofirststage(u_char graphdebug, int debug_netnum)
 {
-   int i, failcount, remaining, result;
+   int i, failcount, remaining, result, result_code = 0;
    NET net;
    NETLIST nl;
 
@@ -776,26 +825,31 @@ int dofirststage(u_char graphdebug, int debug_netnum)
  
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 
-      net = getnettoroute(i);
-      if ((net != NULL) && (net->netnodes != NULL)) {
-	 result = doroute(net, (u_char)0, graphdebug);
-	 if (result == 0) {
-	    remaining--;
-	    if (Verbose > 0)
-	       Fprintf(stdout, "Finished routing net %s\n", net->netname);
-	    Fprintf(stdout, "Nets remaining: %d\n", remaining);
-	 }
-	 else {
-	    if (Verbose > 0)
-	       Fprintf(stdout, "Failed to route net %s\n", net->netname);
-	 }
-      }
-      else {
-	 if (net && (Verbose > 0)) {
-	    Fprintf(stdout, "Nothing to do for net %s\n", net->netname);
-	 }
-	 remaining--;
-      }
+		pthread_t cThread;
+		qThreadData *thread_params = malloc(sizeof(qThreadData));
+		thread_params->i=i;
+		thread_params->remaining=&remaining;
+		thread_params->graphdebug=graphdebug;
+		thread_params->thnum=threadnum;
+		thread_params->net = getnettoroute(i);
+		thread_params_list[threadnum]=thread_params;
+
+		if(pthread_create(&cThread, NULL, dofirststage_thread, thread_params)) {
+			printf("Couldn't start thread!\n");
+			break;
+		} else {
+			cThreads[threadnum]=cThread;
+			printf("Started thread %d\n",threadnum);
+			if((threadnum+1)==MAX_NUM_THREADS) {
+				for(int c=0;c<MAX_NUM_THREADS;c++) {
+					result_code = pthread_join( cThreads[c], NULL );
+					free(thread_params_list[c]);
+				}
+				threadnum=0;
+			} else {
+				threadnum++;
+			}
+		}
       if (debug_netnum >= 0) break;
    }
    failcount = countlist(FailedNets);

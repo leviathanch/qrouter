@@ -669,6 +669,7 @@ fi
 
 AC_CHECK_LIB(Xt, XtToolkitInitialize,,[
 AC_CHECK_LIB(Xt, XtDisplayInitialize,,,-lSM -lICE -lXpm -lX11)])
+AC_CHECK_HEADERS(sys/mman.h)
 
 dnl ----------------------------------------------------------------
 dnl Once we're sure what, if any, interpreter is being compiled,

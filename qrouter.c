@@ -20,6 +20,7 @@
 
 #include "qrouter.h"
 #include "qconfig.h"
+#include "point.h"
 #include "node.h"
 #include "maze.h"
 #include "lef.h"
@@ -2127,7 +2128,7 @@ free_glist(struct routeinfo_ *iroute)
       iroute->glist = iroute->glist->next;
       Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
       Pr->flags &= ~PR_ON_STACK;
-      free(gpoint);
+      freePOINT(gpoint);
   }
 }
 
@@ -2145,7 +2146,6 @@ free_glist(struct routeinfo_ *iroute)
 
 int doroute(NET net, u_char stage, u_char graphdebug)
 {
-  POINT gpoint;
   ROUTE rt1, lrt;
   NETLIST nlist;
   int result, lastlayer, unroutable;
@@ -2277,7 +2277,6 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
   NODE node;
-  POINT gpoint;
   int  i, j;
   int  rval, result;
 
@@ -2382,7 +2381,6 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
 static int route_setup(struct routeinfo_ *iroute, u_char stage)
 {
-  POINT gpoint;
   int  i, j;
   u_int netnum, dir;
   int  result, rval, unroutable;
@@ -2642,7 +2640,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       // ignore grid positions that have already been processed
       if (Pr->flags & PR_PROCESSED) {
 	 Pr->flags &= ~PR_ON_STACK;
-	 free(gpoint);
+	 freePOINT(gpoint);
 	 continue;
       }
 
@@ -2683,7 +2681,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
          // Don't continue processing from the target
 	 Pr->flags |= PR_PROCESSED;
 	 Pr->flags &= ~PR_ON_STACK;
-	 free(gpoint);
+	 freePOINT(gpoint);
 	 continue;
       }
 
@@ -2711,7 +2709,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 }
       }
       Pr->flags &= ~PR_ON_STACK;
-      free(gpoint);
+      freePOINT(gpoint);
 
       // check east/west/north/south, and bottom to top
 

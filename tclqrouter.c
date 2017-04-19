@@ -211,7 +211,7 @@ char *Tcl_Strdup(const char *s)
 /* various characters like brackets, braces, dollar signs, etc., that	*/
 /* will otherwise be modified by the interpreter.			*/
 /*----------------------------------------------------------------------*/
-pthread_mutex_t tcl_vprintf_mutex;
+TCL_DECLARE_MUTEX(tcl_vprintf_mutex)
 void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
 {
    va_list args;
@@ -223,13 +223,17 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
    /* to it by mapping the console window and raising it, as necessary.	*/
    /* I'd rather do this internally than by Tcl_Eval(), but I can't	*/
    /* find the right window ID to map!					*/
-   pthread_mutex_lock(&tcl_vprintf_mutex);
    if ((f == stderr) && (consoleinterp != qrouterinterp)) {
       Tk_Window tkwind;
       tkwind = Tk_MainWindow(consoleinterp);
-      if ((tkwind != NULL) && (!Tk_IsMapped(tkwind)))
-         Tcl_Eval(consoleinterp, "wm deiconify .\n");
-      Tcl_Eval(consoleinterp, "raise .\n");
+      if ((tkwind != NULL) && (!Tk_IsMapped(tkwind))) {
+	 Tcl_MutexLock(&tcl_vprintf_mutex);
+	 //Tcl_Eval(consoleinterp, "wm deiconify .\n");
+	 Tcl_MutexUnlock(&tcl_vprintf_mutex);
+      }
+      Tcl_MutexLock(&tcl_vprintf_mutex);
+      //Tcl_Eval(consoleinterp, "raise .\n");
+      Tcl_MutexUnlock(&tcl_vprintf_mutex);
    }
 
    strcpy (outstr + 19, (f == stderr) ? "err \"" : "out \"");
@@ -279,46 +283,43 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
     *(outptr + 24 + nchars + escapes) = '\"';
     *(outptr + 25 + nchars + escapes) = '\0';
 
-    Tcl_Eval(consoleinterp, outptr);
+    Tcl_MutexLock(&tcl_vprintf_mutex);
+    //Tcl_Eval(consoleinterp, outptr);
+    Tcl_MutexUnlock(&tcl_vprintf_mutex);
 
     if (bigstr != NULL) Tcl_Free(bigstr);
     if (finalstr != NULL) Tcl_Free(finalstr);
-    pthread_mutex_unlock(&tcl_vprintf_mutex);
 }
     
 /*------------------------------------------------------*/
 /* Console output flushing which goes along with the	*/
 /* routine tcl_vprintf() above.				*/
 /*------------------------------------------------------*/
-
-pthread_mutex_t tcl_stdflush_mutex;
+TCL_DECLARE_MUTEX(tcl_stdflush_mutex)
 void tcl_stdflush(FILE *f)
 {   
    Tcl_SavedResult state;
    static char stdstr[] = "::flush stdxxx";
    char *stdptr = stdstr + 11;
-   
-   pthread_mutex_lock(&tcl_stdflush_mutex);
+
    Tcl_SaveResult(qrouterinterp, &state);
    strcpy(stdptr, (f == stderr) ? "err" : "out");
-   Tcl_Eval(qrouterinterp, stdstr);
+   Tcl_MutexLock(&tcl_stdflush_mutex);
+   //Tcl_Eval(qrouterinterp, stdstr);
+   Tcl_MutexUnlock(&tcl_stdflush_mutex);
    Tcl_RestoreResult(qrouterinterp, &state);
-   pthread_mutex_unlock(&tcl_stdflush_mutex);
 }
 
 /*----------------------------------------------------------------------*/
 /* Reimplement fprintf() as a call to Tcl_Eval().			*/
 /*----------------------------------------------------------------------*/
-pthread_mutex_t tcl_printf_mutex;
 void tcl_printf(FILE *f, const char *format, ...)
 {
   va_list ap;
   
-  pthread_mutex_lock(&tcl_printf_mutex);
   va_start(ap, format);
   tcl_vprintf(f, format, ap);
   va_end(ap);
-  pthread_mutex_unlock(&tcl_printf_mutex);
 }
 
 /*----------------------------------------------------------------------*/

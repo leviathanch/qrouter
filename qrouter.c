@@ -7,8 +7,6 @@
 /* Beccue, 2003							*/
 /*--------------------------------------------------------------*/
 
-#define MAX_NUM_THREADS 12
-
 #include <ctype.h>
 #include <stdio.h>
 #include <math.h>

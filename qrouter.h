@@ -5,6 +5,10 @@
 /* Modified by Tim Edwards 2011-2013				*/
 /*--------------------------------------------------------------*/
 
+#define TCL_THREADS
+#define THREADS
+#define MAX_NUM_THREADS 12
+
 #ifndef QROUTER_H
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))

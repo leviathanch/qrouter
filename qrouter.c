@@ -32,7 +32,7 @@ int  Pathon = -1;
 int  TotalRoutes = 0;
 
 NET     *Nlnets;	// list of nets in the design
-NET	CurNet;		// current net to route, used by 2nd stage
+NET	CurNet[MAX_NUM_THREADS];		// current net to route, used by 2nd stage
 STRING  DontRoute;      // a list of nets not to route (e.g., power)
 STRING  CriticalNet;    // list of critical nets to route first
 GATE    GateInfo;       // standard cell macro information
@@ -72,7 +72,7 @@ static void initMask(void);
 static void fillMask(u_char value);
 static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
 static int route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
 static void helpmessage(void);
@@ -762,11 +762,12 @@ typedef struct {
 	NET net;
 } qThreadData;
 
-pthread_t cThreads[MAX_NUM_THREADS];
+Tcl_ThreadId threadIDs[MAX_NUM_THREADS];
 qThreadData *thread_params_list[MAX_NUM_THREADS];
-int threadnum = 0;
+int threadnum;
 
-void *dofirststage_thread(void *parm)
+TCL_DECLARE_MUTEX(dofirststage_threadMutex)
+void dofirststage_thread(ClientData parm)
 {
 	NET net;
 	qThreadData *thread_params = (qThreadData*)parm;
@@ -775,36 +776,40 @@ void *dofirststage_thread(void *parm)
 	int result=0;
 	int *remaining = thread_params->remaining;
 	u_char graphdebug = thread_params->graphdebug;
-	printf("got parameters: i=%d remaining=%d thnum=%d \n",i,*remaining,thnum);
 	net = thread_params->net;
+	//if(Verbose > 1)
+	//	FprintfT(stdout, "%s: got parameters: i=%d remaining=%d thnum=%d netname %s \n",__FUNCTION__,i,*remaining,thnum,net->netname);
 	if ((net != NULL) && (net->netnodes != NULL)) {
-		result = doroute(net, (u_char)0, graphdebug);
+		result = doroute(thnum, net, (u_char)0, graphdebug);
 		if (result == 0) {
+			Tcl_MutexLock(&dofirststage_threadMutex);
 			(*remaining)--;
+			Tcl_MutexUnlock(&dofirststage_threadMutex);
 			if (Verbose > 0) {
-				printf( "Finished routing net %s\n", net->netname);
+				FprintfT(stdout, "%s: Finished routing net %s\n",__FUNCTION__, net->netname);
 			}
-			printf( "Nets remaining: %d\n", (*remaining));
+			FprintfT(stdout, "%s: Nets remaining: %d\n",__FUNCTION__, (*remaining));
 		} else {
 			if (Verbose > 0) {
-				printf( "Failed to route net %s\n", net->netname);
+				FprintfT(stdout, "%s: Failed to route net %s\n",__FUNCTION__, net->netname);
 			}
 		}
 	} else {
 		if (net && (Verbose > 0)) {
-			printf( "Nothing to do for net %s\n", net->netname);
+			FprintfT(stdout, "%s: Nothing to do for net %s\n",__FUNCTION__, net->netname);
 		}
+		Tcl_MutexLock(&dofirststage_threadMutex);
 		(*remaining)--;
+		Tcl_MutexUnlock(&dofirststage_threadMutex);
 	}
-
-	pthread_exit(&result);
+	return TCL_THREAD_CREATE_RETURN;
 }
 
 int dofirststage(u_char graphdebug, int debug_netnum)
 {
-   int i, failcount, remaining, result, result_code = 0;
-   NET net;
+   int i, failcount, remaining;
    NETLIST nl;
+   Tcl_ThreadId idPtr;
 
    // Clear the lists of failed routes, in case first
    // stage is being called more than once.
@@ -820,27 +825,41 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    // Now find and route all the nets
 
    remaining = Numnets;
+   threadnum=0;
  
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
-
-		pthread_t cThread;
 		qThreadData *thread_params = malloc(sizeof(qThreadData));
-		thread_params->i=i;
-		thread_params->remaining=&remaining;
-		thread_params->graphdebug=graphdebug;
-		thread_params->thnum=threadnum;
-		thread_params->net = getnettoroute(i);
-		thread_params_list[threadnum]=thread_params;
-
-		if(pthread_create(&cThread, NULL, dofirststage_thread, thread_params)) {
-			printf("Couldn't start thread!\n");
+		if(thread_params) {
+			thread_params->i=i;
+			thread_params->remaining=&remaining;
+			thread_params->graphdebug=graphdebug;
+			thread_params->thnum=threadnum;
+			thread_params->net=getnettoroute(i);
+			if(!(thread_params->net)) {
+				free(thread_params);
+				continue;
+			} else {
+				thread_params_list[threadnum]=thread_params;
+			}
+		} else {
+			Fprintf(stdout,"%s: Out of memory. Dying\n",__FUNCTION__);
+			exit(0);
+		}
+		Fprintf(stdout,"%s: netname: %s\n",__FUNCTION__,thread_params->net->netname);
+		int thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params, TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
+		Fprintf(stdout,"thret %d\n",thret);
+		if( thret != TCL_OK) {
+			Fprintf(stdout,"Couldn't start thread!\n");
 			break;
 		} else {
-			cThreads[threadnum]=cThread;
-			printf("Started thread %d\n",threadnum);
+			threadIDs[threadnum]=idPtr;
+			Fprintf(stdout,"Started thread %d\n",threadnum);
 			if((threadnum+1)==MAX_NUM_THREADS) {
 				for(int c=0;c<MAX_NUM_THREADS;c++) {
-					result_code = pthread_join( cThreads[c], NULL );
+					Fprintf(stdout,"%s: waiting for thread %d to finish\n",__FUNCTION__,threadnum);
+					Tcl_JoinThread( threadIDs[c], NULL );
+				}
+				for(int c=0;c<MAX_NUM_THREADS;c++) {
 					free(thread_params_list[c]);
 				}
 				threadnum=0;
@@ -1398,7 +1417,7 @@ static int ripup_colliding(NET net)
 /* net "net".							*/
 /*--------------------------------------------------------------*/
 
-int route_net_ripup(NET net, u_char graphdebug)
+int route_net_ripup(int thnum, NET net, u_char graphdebug)
 {
     int result;
     NETLIST nl, nl2;
@@ -1421,7 +1440,7 @@ int route_net_ripup(NET net, u_char graphdebug)
 	}
     }
 
-    result = doroute(net, (u_char)1, graphdebug);
+    result = doroute(thnum, net, (u_char)1, graphdebug);
     if (result != 0) {
 	if (net->noripup != NULL) {
 	    if ((net->flags & NET_PENDING) == 0) {
@@ -1432,7 +1451,7 @@ int route_net_ripup(NET net, u_char graphdebug)
 		    free(net->noripup);
 		    net->noripup = nl;
 		}
-		result = doroute(net, (u_char)1, graphdebug);
+		result = doroute(thnum, net, (u_char)1, graphdebug);
 		net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	}
@@ -1470,6 +1489,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
    NETLIST Abandoned;	// Abandoned routes---not even trying any more.
    ROUTE rt, rt2;
    SEG seg;
+   int thnum = 0;
 
    origcount = countlist(FailedNets);
    if (FailedNets)
@@ -1498,7 +1518,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
       // Diagnostic:  how are we doing?
       failcount = countlist(FailedNets);
       if (Verbose > 1) Fprintf(stdout, "------------------------------\n");
-      Fprintf(stdout, "Nets remaining: %d\n", failcount);
+      if (Verbose > 1) Fprintf(stdout, "%s: Nets remaining: %d\n", __FUNCTION__, failcount);
       if (Verbose > 1) Fprintf(stdout, "------------------------------\n");
 
       net = FailedNets->net;
@@ -1515,7 +1535,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 Fprintf(stdout, "Routing net %s with collisions\n", net->netname);
       Flush(stdout);
 
-      result = doroute(net, (u_char)1, graphdebug);
+      result = doroute(thnum, net, (u_char)1, graphdebug);
 
       if (result != 0) {
 	 if (net->noripup != NULL) {
@@ -1527,7 +1547,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	          free(net->noripup);
 	          net->noripup = nl;
 	       }
-	       result = doroute(net, (u_char)1, graphdebug);
+	       result = doroute(thnum, net, (u_char)1, graphdebug);
 	       net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	 }
@@ -1543,6 +1563,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 // the colliding nets.
 
 	 result = ripup_colliding(net);
+	 if (Verbose > 1) Fprintf(stdout, "%s: ripped up net %s with collisions\n", __FUNCTION__, net->netname);
 	 if (result > 0) result = 0;
       }
 
@@ -1678,6 +1699,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
    int i, failcount, remaining, result;
    NET net;
    NETLIST nl;
+   int thnum = 0;
 
    // Clear the lists of failed routes, in case first
    // stage is being called more than once.
@@ -1699,21 +1721,21 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
 	 ripup_net(net, (u_char)0);
-	 result = doroute(net, (u_char)0, graphdebug);
+	 result = doroute(thnum, net, (u_char)0, graphdebug);
 	 if (result == 0) {
 	    remaining--;
 	    if (Verbose > 0)
 	       Fprintf(stdout, "Finished routing net %s\n", net->netname);
-	    Fprintf(stdout, "Nets remaining: %d\n", remaining);
+	    Fprintf(stdout, "%s: Nets remaining: %d\n", __FUNCTION__, remaining);
 	 }
 	 else {
 	    if (Verbose > 0)
-	       Fprintf(stdout, "Failed to route net %s\n", net->netname);
+	       Fprintf(stdout, "%s: Failed to route net %s\n", __FUNCTION__, net->netname);
 	 }
       }
       else {
 	 if (net && (Verbose > 0)) {
-	    Fprintf(stdout, "Nothing to do for net %s\n", net->netname);
+	    Fprintf(stdout, "%s: Nothing to do for net %s\n", __FUNCTION__, net->netname);
 	 }
 	 remaining--;
       }
@@ -2144,10 +2166,10 @@ static void createMask(NET net, u_char slack, u_char halo)
 
   if (Verbose > 2) {
      if (net->numnodes == 2)
-        Fprintf(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
+        FprintfT(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
      else
-        Fprintf(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
+        FprintfT(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
   }
 }
@@ -2195,8 +2217,8 @@ free_glist(struct routeinfo_ *iroute)
 /*   SIDE EFFECTS: 						*/
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
-
-int doroute(NET net, u_char stage, u_char graphdebug)
+TCL_DECLARE_MUTEX(dorouteMutex)
+int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 {
   ROUTE rt1, lrt;
   NETLIST nlist;
@@ -2204,11 +2226,11 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   struct routeinfo_ iroute;
 
   if (!net) {
-     Fprintf(stderr, "doroute():  no net to route.\n");
+     FprintfT(stderr, "doroute():  no net to route.\n");
      return 0;
   }
 
-  CurNet = net;				// Global, used by 2nd stage
+  CurNet[thnum] = net;				// Global, used by 2nd stage
 
   // Fill out route information record
   iroute.net = net;
@@ -2224,7 +2246,9 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   /* Set up Obs2[] matrix for first route */
 
+  Tcl_MutexLock(&dorouteMutex);
   result = route_setup(&iroute, stage);
+  Tcl_MutexUnlock(&dorouteMutex);
   unroutable = result - 1;
   if (graphdebug) highlight_mask();
 
@@ -2235,17 +2259,18 @@ int doroute(NET net, u_char stage, u_char graphdebug)
      if (graphdebug) highlight_source();
      if (graphdebug) highlight_dest();
      if (graphdebug) highlight_starts(iroute.glist);
-
-     rt1 = createemptyroute();
+     rt1 = createemptyroute(); // only one calloc at a time
      rt1->netnum = net->netnum;
      iroute.rt = rt1;
 
      if (Verbose > 3) {
-        Fprintf(stdout,"doroute(): added net %d path start %d\n", 
+        FprintfT(stdout,"doroute(): added net %d path start %d\n", 
 	       net->netnum, net->netnodes->nodenum);
      }
 
-     result = route_segs(&iroute, stage, graphdebug);
+     //Tcl_MutexLock(&dorouteMutex);
+     result = route_segs(thnum, &iroute, stage, graphdebug);
+     //Tcl_MutexUnlock(&dorouteMutex);
 
      if (result < 0) {		// Route failure.
 
@@ -2261,7 +2286,9 @@ int doroute(NET net, u_char stage, u_char graphdebug)
      }
      else {
 
+//         Tcl_MutexLock(&dorouteMutex);
         TotalRoutes++;
+//         Tcl_MutexUnlock(&dorouteMutex);
 
         if (net->routes) {
            for (lrt = net->routes; lrt->next; lrt = lrt->next);
@@ -2324,7 +2351,7 @@ static void unable_to_route(char *netname, NODE node, unsigned char forced)
 /* next_route_setup --						*/
 /*								*/
 /*--------------------------------------------------------------*/
-
+TCL_DECLARE_MUTEX(next_route_setupMutex)
 static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
@@ -2415,9 +2442,9 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
   }
 
   if (Verbose > 1) {
-     Fprintf(stdout, "netname = %s, route number %d\n",
-		iroute->net->netname, TotalRoutes );
-     Flush(stdout);
+     Tcl_MutexLock(&next_route_setupMutex);
+     FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes );
+     Tcl_MutexUnlock(&next_route_setupMutex);
   }
 
   if (iroute->maxcost > 2)
@@ -2475,7 +2502,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
      if (iroute->net->netnodes != NULL)
 	 iroute->nsrc = iroute->net->netnodes;
      else {
-	 Fprintf(stderr, "Net %s has no nodes, unable to route!\n",
+	 FprintfT(stderr, "Net %s has no nodes, unable to route!\n",
 			iroute->net->netname);
 	 return -1;
      }
@@ -2614,15 +2641,13 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   }
 
   if (Verbose > 2) {
-     Fprintf(stdout, "Source node @ %gum %gum layer=%d grid=(%d %d)\n",
+     FprintfT(stdout, "Source node @ %gum %gum layer=%d grid=(%d %d)\n",
 	  iroute->nsrctap->x, iroute->nsrctap->y, iroute->nsrctap->layer,
 	  iroute->nsrctap->gridx, iroute->nsrctap->gridy);
   }
 
   if (Verbose > 1) {
-     Fprintf(stdout, "netname = %s, route number %d\n", iroute->net->netname,
-		TotalRoutes );
-     Flush(stdout);
+     FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes );
   }
 
   // Successful setup, although if nodes were marked unroutable,
@@ -2643,9 +2668,9 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
+static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
-  POINT gpoint, gunproc, newpt;
+  POINT gpoint, gunproc;
   int  i, o;
   int  pass, maskpass;
   u_int forbid;
@@ -2669,16 +2694,15 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     max_reached = (u_char)0;
     if (!first && (Verbose > 2)) {
-       Fprintf(stdout, "\n");
+       FprintfT(stdout, "\n");
        first = (u_char)1;
     }
     if (Verbose > 2) {
-       Fprintf(stdout, "Pass %d", pass + 1);
-       Fprintf(stdout, " (maxcost is %d)\n", iroute->maxcost);
+       FprintfT(stdout, "%s: Pass %d",__FUNCTION__, pass + 1);
+       FprintfT(stdout, " (maxcost is %d)\n", iroute->maxcost);
     }
 
     while ((gpoint = iroute->glist) != NULL) {
-
       iroute->glist = gpoint->next;
 
       curpt.x = gpoint->x1;
@@ -2709,13 +2733,12 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
  	 if (curpt.cost < best.cost) {
 	    if (first) {
 	       if (Verbose > 2)
-		  Fprintf(stdout, "Found a route of cost ");
+		  FprintfT(stdout, "%s: Found a route of cost \n",__FUNCTION__);
 	       first = (u_char)0;
 	    }
 	    else if (Verbose > 2) {
-	       Fprintf(stdout, "|");
-	       Fprintf(stdout, "%d", curpt.cost);
-	       Flush(stdout);
+	       FprintfT(stdout, "|");
+	       FprintfT(stdout, "%d", curpt.cost);
 	    }
 
 	    // This position may be on a route, not at a terminal, so
@@ -2803,7 +2826,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case EAST:
 	       predecessor |= PR_PRED_W;
                if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
-         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -2815,7 +2838,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case WEST:
 	       predecessor |= PR_PRED_E;
                if ((curpt.x - 1) >= 0) {
-         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -2827,7 +2850,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
                if ((curpt.y - 1) >= 0) {
-         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                    }
@@ -2839,7 +2862,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
                if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
-         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -2851,7 +2874,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case DOWN:
 	       predecessor |= PR_PRED_U;
                if (curpt.lay > 0) {
-         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
          	  }
@@ -2863,7 +2886,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case UP:
 	       predecessor |= PR_PRED_D;
                if (curpt.lay < (Num_layers - 1)) {
-         	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
          	  }
@@ -2887,8 +2910,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	curpt.lay = best.lay;
 	if ((rval = commit_proute(iroute->rt, &curpt, stage)) != 1) break;
 	if (Verbose > 2) {
-	   Fprintf(stdout, "\nCommit to a route of cost %d\n", best.cost);
-	   Fprintf(stdout, "Between positions (%d %d) and (%d %d)\n",
+	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
+	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n",
 			best.x, best.y, curpt.x, curpt.y);
 	}
 	goto done;	/* route success */
@@ -2918,20 +2941,19 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
   } // pass
   
   if (!first && (Verbose > 2)) {
-     Fprintf(stdout, "\n");
-     Flush(stdout);
+     FprintfT(stdout, "\n");
   }
   if (Verbose > 1) {
-     Fprintf(stderr, "Fell through %d passes\n", pass);
+     FprintfT(stderr, "%s: Fell through %d passes\n",__FUNCTION__, pass);
   }
   if (!iroute->do_pwrbus && (Verbose > 2)) {
-     Fprintf(stderr, "(%g,%g) net=%s\n",
-		iroute->nsrctap->x, iroute->nsrctap->y, iroute->net->netname);
+     FprintfT(stderr, "%s: (%g,%g) net=%s\n",__FUNCTION__,iroute->nsrctap->x, iroute->nsrctap->y, iroute->net->netname);
   }
   rval = -1;
 
 done:
 
+  FprintfT(stdout, "%s: Exiting\n",__FUNCTION__);
   // Regenerate the stack of unprocessed nodes
   if (gunproc != NULL) iroute->glist = gunproc;
   return rval;
@@ -2947,11 +2969,14 @@ done:
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
+TCL_DECLARE_MUTEX(createemptyrouteMutex)
 static ROUTE createemptyroute(void)
 {
    ROUTE rt;
 
+   Tcl_MutexLock(&createemptyrouteMutex);
    rt = (ROUTE)calloc(1, sizeof(struct route_));
+   Tcl_MutexUnlock(&createemptyrouteMutex);
    rt->netnum = 0;
    rt->segments = (SEG)NULL;
    rt->flags = (u_char)0;

@@ -211,7 +211,6 @@ char *Tcl_Strdup(const char *s)
 /* various characters like brackets, braces, dollar signs, etc., that	*/
 /* will otherwise be modified by the interpreter.			*/
 /*----------------------------------------------------------------------*/
-TCL_DECLARE_MUTEX(tcl_vprintf_mutex)
 void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
 {
    va_list args;
@@ -227,13 +226,9 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
       Tk_Window tkwind;
       tkwind = Tk_MainWindow(consoleinterp);
       if ((tkwind != NULL) && (!Tk_IsMapped(tkwind))) {
-	 Tcl_MutexLock(&tcl_vprintf_mutex);
-	 //Tcl_Eval(consoleinterp, "wm deiconify .\n");
-	 Tcl_MutexUnlock(&tcl_vprintf_mutex);
+	 Tcl_Eval(consoleinterp, "wm deiconify .\n");
       }
-      Tcl_MutexLock(&tcl_vprintf_mutex);
-      //Tcl_Eval(consoleinterp, "raise .\n");
-      Tcl_MutexUnlock(&tcl_vprintf_mutex);
+      Tcl_Eval(consoleinterp, "raise .\n");
    }
 
    strcpy (outstr + 19, (f == stderr) ? "err \"" : "out \"");
@@ -283,9 +278,7 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
     *(outptr + 24 + nchars + escapes) = '\"';
     *(outptr + 25 + nchars + escapes) = '\0';
 
-    Tcl_MutexLock(&tcl_vprintf_mutex);
-    //Tcl_Eval(consoleinterp, outptr);
-    Tcl_MutexUnlock(&tcl_vprintf_mutex);
+    Tcl_Eval(consoleinterp, outptr);
 
     if (bigstr != NULL) Tcl_Free(bigstr);
     if (finalstr != NULL) Tcl_Free(finalstr);
@@ -295,7 +288,6 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
 /* Console output flushing which goes along with the	*/
 /* routine tcl_vprintf() above.				*/
 /*------------------------------------------------------*/
-TCL_DECLARE_MUTEX(tcl_stdflush_mutex)
 void tcl_stdflush(FILE *f)
 {   
    Tcl_SavedResult state;
@@ -304,9 +296,7 @@ void tcl_stdflush(FILE *f)
 
    Tcl_SaveResult(qrouterinterp, &state);
    strcpy(stdptr, (f == stderr) ? "err" : "out");
-   Tcl_MutexLock(&tcl_stdflush_mutex);
-   //Tcl_Eval(qrouterinterp, stdstr);
-   Tcl_MutexUnlock(&tcl_stdflush_mutex);
+   Tcl_Eval(qrouterinterp, stdstr);
    Tcl_RestoreResult(qrouterinterp, &state);
 }
 
@@ -917,8 +907,10 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	failcount = dofirststage(dodebug, stepnet);
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
-	    result = doroute(net, (u_char)0, dodebug);
-	    failcount = (result == 0) ? 0 : 1;
+	    for(int thnum=0;thnum<MAX_NUM_THREADS;thnum++) {
+			result = doroute(thnum, net, (u_char)0, dodebug);
+			failcount += (result == 0) ? 0 : 1;
+	    }
 
 	    /* Remove from FailedNets list if routing	*/
 	    /* was successful				*/
@@ -1102,8 +1094,11 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
     if (net == NULL)
 	failcount = dosecondstage(dodebug, dostep);
-    else
-	failcount = route_net_ripup(net, dodebug);
+    else {
+	failcount = 0;
+	for (int c = 0;c<MAX_NUM_THREADS;c++)
+		failcount += route_net_ripup(c, net, dodebug);
+    }
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
     draw_layout();
@@ -1244,8 +1239,10 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 	failcount = dothirdstage(dodebug, stepnet);
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
-	    result = doroute(net, (u_char)0, dodebug);
-	    failcount = (result == 0) ? 0 : 1;
+	    for(int thnum=0;thnum<MAX_NUM_THREADS;thnum++) {
+			result = doroute(thnum, net, (u_char)0, dodebug);
+			failcount += (result == 0) ? 0 : 1;
+	    }
 
 	    /* Remove from FailedNets list if routing	*/
 	    /* was successful				*/

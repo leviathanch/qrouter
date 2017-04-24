@@ -5,9 +5,9 @@
 /* Modified by Tim Edwards 2011-2013				*/
 /*--------------------------------------------------------------*/
 
-#define TCL_THREADS
-#define THREADS
-#define MAX_NUM_THREADS 12
+#define THREADS 6
+#define TCL_THREADS THREADS
+#define MAX_NUM_THREADS THREADS
 
 #ifndef QROUTER_H
 
@@ -391,7 +391,7 @@ struct routeinfo_ {
 
 extern STRING  DontRoute;
 extern STRING  CriticalNet;
-extern NET     CurNet;
+extern NET     CurNet[MAX_NUM_THREADS];
 extern NETLIST FailedNets;	// nets that have failed the first pass
 extern char    *DEFfilename;
 extern char    *delayfilename;
@@ -440,10 +440,16 @@ extern char *gndnet;
    #define Fprintf tcl_printf
    #define Flush   tcl_stdflush
    #define Vprintf tcl_vprintf
+   #define FprintfT fprintf
+   #define FlushT   fflush
+   #define VprintfT vfprintf
 #else
    #define Fprintf fprintf
    #define Flush   fflush
    #define Vprintf vfprintf
+   #define FprintfT fprintf
+   #define FlushT   fflush
+   #define VprintfT vfprintf
 #endif
 
 /* Function prototypes */
@@ -471,9 +477,9 @@ int    dofirststage(u_char graphdebug, int debug_netnum);
 int    dosecondstage(u_char graphdebug, u_char singlestep);
 int    dothirdstage(u_char graphdebug, int debug_netnum);
 
-int    doroute(NET net, u_char stage, u_char graphdebug);
+int    doroute(int thnum, NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
-int    route_net_ripup(NET net, u_char graphdebug);
+int    route_net_ripup(int thnum, NET net, u_char graphdebug);
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

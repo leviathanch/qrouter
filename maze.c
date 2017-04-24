@@ -13,6 +13,8 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <tcl.h>
+
 #define  MAZE
 
 #include "qrouter.h"
@@ -928,7 +930,7 @@ u_char ripup_net(NET net, u_char restore)
 /*  SIDE EFFECTS: none (get this right or else)			*/
 /*--------------------------------------------------------------*/
 
-POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
+POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
 {
     int thiscost = 0;
     int netnum;
@@ -984,7 +986,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
 
-	  for (nl = CurNet->noripup; nl; nl = nl->next) {
+	  for (nl = CurNet[thnum]->noripup; nl; nl = nl->next) {
 	     if (nl->net->netnum == netnum)
 		return NULL;
 	  }
@@ -1013,9 +1015,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x + 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1025,9 +1027,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x - 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1038,9 +1040,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x, newpt.y + 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1050,9 +1052,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x, newpt.y - 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1351,6 +1353,7 @@ void writeback_segment(SEG seg, int netnum)
 /*  SIDE EFFECTS: Obs update, RT llseg added			*/
 /*--------------------------------------------------------------*/
 
+TCL_DECLARE_MUTEX(commit_proute_threadMutex)
 int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
@@ -1365,22 +1368,23 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    POINT newlr, newlr2, lrtop, lrend, lrnext, lrcur, lrprev;
 
    if (Verbose > 1) {
-      Flush(stdout);
-      Fprintf(stdout, "\nCommit: TotalRoutes = %d\n", TotalRoutes);
+      FprintfT(stdout, "\n%s: commit: TotalRoutes = %d\n", __FUNCTION__, TotalRoutes);
    }
 
    netnum = rt->netnum;
 
    Pr = &OBS2VAL(ept->x, ept->y, ept->lay);
    if (!(Pr->flags & PR_COST)) {
-      Fprintf(stderr, "commit_proute(): impossible - terminal is not routable!\n");
+      FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
       return -1;
    }
 
    // Generate an indexed route, recording the series of predecessors and their
    // positions.
 
+   Tcl_MutexLock(&commit_proute_threadMutex);
    lrtop = (POINT)malloc(sizeof(struct point_));
+   Tcl_MutexUnlock(&commit_proute_threadMutex);
    lrtop->x1 = ept->x;
    lrtop->y1 = ept->y;
    lrtop->layer = ept->lay;
@@ -1393,7 +1397,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       dmask = Pr->flags & PR_PRED_DMASK;
       if (dmask == PR_PRED_NONE) break;
 
+      Tcl_MutexLock(&commit_proute_threadMutex);
       newlr = (POINT)malloc(sizeof(struct point_));
+      Tcl_MutexUnlock(&commit_proute_threadMutex);
       newlr->x1 = lrend->x1;
       newlr->y1 = lrend->y1;
       newlr->layer = lrend->layer;
@@ -1614,14 +1620,18 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       if (mincost < MAXRT) {
 	          pri = &OBS2VAL(minx, miny, cl);
 
+		  Tcl_MutexLock(&commit_proute_threadMutex);
 		  newlr = (POINT)malloc(sizeof(struct point_));
+		  Tcl_MutexUnlock(&commit_proute_threadMutex);
 		  newlr->x1 = minx;
 		  newlr->y1 = miny;
 		  newlr->layer = cl;
 
 	          pri2 = &OBS2VAL(minx, miny, dl);
 
+		  Tcl_MutexLock(&commit_proute_threadMutex);
 		  newlr2 = (POINT)malloc(sizeof(struct point_));
+		  Tcl_MutexUnlock(&commit_proute_threadMutex);
 		  newlr2->x1 = minx;
 		  newlr2->y1 = miny;
 		  newlr2->layer = dl;
@@ -1752,12 +1762,16 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          }
 
 		  if (mincost < MAXRT) {
+		     Tcl_MutexLock(&commit_proute_threadMutex);
 		     newlr = (POINT)malloc(sizeof(struct point_));
+		     Tcl_MutexUnlock(&commit_proute_threadMutex);
 		     newlr->x1 = minx;
 		     newlr->y1 = miny;
 		     newlr->layer = cl;
 
+		     Tcl_MutexLock(&commit_proute_threadMutex);
 		     newlr2 = (POINT)malloc(sizeof(struct point_));
+		     Tcl_MutexUnlock(&commit_proute_threadMutex);
 		     newlr2->x1 = minx;
 		     newlr2->y1 = miny;
 		     newlr2->layer = dl;
@@ -1805,7 +1819,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     // via is a rare occurrance.
 
 		     if (Verbose > 0)
-			Fprintf(stderr, "Failed to remove stacked via "
+			FprintfT(stderr, "Failed to remove stacked via "
 				"at grid point %d %d.\n",
 				lrcur->x1, lrcur->y1);
 		     stacks = 0;
@@ -1814,7 +1828,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		  }
 		  else {
 		     if (collide == TRUE) {
-		        Fprintf(stderr, "Failed to remove stacked via "
+		        FprintfT(stderr, "Failed to remove stacked via "
 				"at grid point %d %d;  position may "
 				"not be routable.\n",
 				lrcur->x1, lrcur->y1);
@@ -1844,7 +1858,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    lseg = (SEG)NULL;
 
    while (1) {
+      Tcl_MutexLock(&commit_proute_threadMutex);
       seg = (SEG)malloc(sizeof(struct seg_));
+      Tcl_MutexUnlock(&commit_proute_threadMutex);
       seg->next = NULL;
 
       seg->segtype = (lrcur->layer == lrprev->layer) ? ST_WIRE : ST_VIA;
@@ -1888,18 +1904,17 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       }
 
       if (Verbose > 3) {
-         Fprintf(stdout, "commit: index = %d, net = %d\n",
+         FprintfT(stdout, "commit: index = %d, net = %d\n",
 		Pr->prdata.net, netnum);
 
 	 if (seg->segtype == ST_WIRE) {
-            Fprintf(stdout, "commit: wire layer %d, (%d,%d) to (%d,%d)\n",
+            FprintfT(stdout, "commit: wire layer %d, (%d,%d) to (%d,%d)\n",
 		seg->layer, seg->x1, seg->y1, seg->x2, seg->y2);
 	 }
 	 else {
-            Fprintf(stdout, "commit: via %d to %d\n", seg->layer,
+            FprintfT(stdout, "commit: via %d to %d\n", seg->layer,
 			seg->layer + 1);
 	 }
-	 Flush(stdout);
       }
 
       // now fill in the Obs structure with this route....

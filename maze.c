@@ -195,13 +195,16 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	 Pr = &OBS2VAL(x, y, lay);
 	 if (Pr->flags & PR_TARGET) {
 	    if (Pr->flags & PR_PROCESSED) {
-		Pr->flags &= ~PR_PROCESSED;
-		gpoint = allocPOINT();
-		gpoint->x1 = x;
-		gpoint->y1 = y;
-		gpoint->layer = lay;
-		gpoint->next = *pushlist;
-		*pushlist = gpoint;
+	       Pr->flags &= ~PR_PROCESSED;
+	       if (~(Pr->flags & PR_ON_STACK)) {
+		  if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		  gpoint = allocPOINT();
+		  gpoint->x1 = x;
+		  gpoint->y1 = y;
+		  gpoint->layer = lay;
+		  gpoint->next = *pushlist;
+		  *pushlist = gpoint;
+	       }
 	    }
 	 }
       }
@@ -214,13 +217,16 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    Pr = &OBS2VAL(x, y, lay);
 	    if (Pr->flags & PR_TARGET) {
 		if (Pr->flags & PR_PROCESSED) {
-		    Pr->flags &= ~PR_PROCESSED;
-		    gpoint = allocPOINT();
-		    gpoint->x1 = x;
-		    gpoint->y1 = y;
-		    gpoint->layer = lay;
-		    gpoint->next = *pushlist;
-		    *pushlist = gpoint;
+		   Pr->flags &= ~PR_PROCESSED;
+		   if (~(Pr->flags & PR_ON_STACK)) {
+		      if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		      gpoint = allocPOINT();
+		      gpoint->x1 = x;
+		      gpoint->y1 = y;
+		      gpoint->layer = lay;
+		      gpoint->next = *pushlist;
+		      *pushlist = gpoint;
+		   }
 		}
 	    }
          }
@@ -409,12 +415,15 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
-	     gpoint = allocPOINT();
-	     gpoint->x1 = x;
-	     gpoint->y1 = y;
-	     gpoint->layer = lay;
-	     gpoint->next = *pushlist;
-	     *pushlist = gpoint;
+	     if (~(Pr->flags & PR_ON_STACK)) {
+		if (!highOverhead) Pr->flags |= PR_ON_STACK;
+	        gpoint = allocPOINT();
+	        gpoint->x1 = x;
+	        gpoint->y1 = y;
+	        gpoint->layer = lay;
+	        gpoint->next = *pushlist;
+	        *pushlist = gpoint;
+	     }
 	  }
 	  found_one = (u_char)1;
 
@@ -462,12 +471,15 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
-	     gpoint = allocPOINT();
-	     gpoint->x1 = x;
-	     gpoint->y1 = y;
-	     gpoint->layer = lay;
-	     gpoint->next = *pushlist;
-	     *pushlist = gpoint;
+	     if (~(Pr->flags & PR_ON_STACK)) {
+		if (!highOverhead) Pr->flags |= PR_ON_STACK;
+	        gpoint = allocPOINT();
+	        gpoint->x1 = x;
+	        gpoint->y1 = y;
+	        gpoint->layer = lay;
+	        gpoint->next = *pushlist;
+	        *pushlist = gpoint;
+	     }
 	  }
 	  found_one = (u_char)1;
 
@@ -582,12 +594,15 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// push this point on the stack to process
 
 		if (pushlist != NULL) {
-	  	   gpoint = allocPOINT();
-	  	   gpoint->x1 = x;
-	  	   gpoint->y1 = y;
-	  	   gpoint->layer = lay;
-	  	   gpoint->next = *pushlist;
-	 	   *pushlist = gpoint;
+		   if (~(Pr->flags & PR_ON_STACK)) {
+		      if (!highOverhead) Pr->flags |= PR_ON_STACK;
+	  	      gpoint = allocPOINT();
+	  	      gpoint->x1 = x;
+	  	      gpoint->y1 = y;
+	  	      gpoint->layer = lay;
+	  	      gpoint->next = *pushlist;
+	 	      *pushlist = gpoint;
+		   }
 		}
 
 		// record extents
@@ -1146,12 +1161,12 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 		newpt.x, newpt.y, newpt.lay);
        }
        if (~(Pr->flags & PR_ON_STACK)) {
+	  if (!highOverhead) Pr->flags |= PR_ON_STACK;
 	  ptret = allocPOINT();
 	  ptret->x1 = newpt.x;
 	  ptret->y1 = newpt.y;
 	  ptret->layer = newpt.lay;
 	  ptret->next = NULL;
-	  Pr->flags |= PR_ON_STACK;
 	  return ptret;
        }
     }

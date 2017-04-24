@@ -56,6 +56,7 @@ int    Pinlayers = 0;
 u_char Verbose = 3;	// Default verbose level
 u_char keepTrying = (u_char)0;
 u_char forceRoutable = FALSE;
+u_char highOverhead = FALSE;
 u_char maskMode = MASK_AUTO;
 u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
 u_char ripLimit = 10;	// Fail net rather than rip up more than
@@ -303,7 +304,10 @@ runqrouter(int argc, char *argv[])
 	       return 1;
 	       break;
 	    case 'f':
-	       forceRoutable = 1;
+	       forceRoutable = TRUE;
+	       break;
+	    case 'm':
+	       highOverhead = TRUE;
 	       break;
 	    case 'k':
 	       keepTrying = (u_char)atoi(optarg);

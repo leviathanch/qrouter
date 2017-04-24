@@ -423,6 +423,7 @@ extern int    Pinlayers;		// Number of layers containing pin info.
 extern u_char Verbose;
 extern u_char keepTrying;
 extern u_char forceRoutable;
+extern u_char highOverhead;
 extern u_char maskMode;
 extern u_char mapType;
 extern u_char ripLimit;

@@ -30,6 +30,7 @@
 
 int  Pathon = -1;
 int  TotalRoutes = 0;
+TCL_DECLARE_MUTEX(TotalRoutesMutex)
 
 NET     *Nlnets;	// list of nets in the design
 NET	CurNet[MAX_NUM_THREADS];		// current net to route, used by 2nd stage
@@ -70,8 +71,8 @@ ScaleRec Scales;	// record of input and output scales
 /* Prototypes for some local functions */
 static void initMask(void);
 static void fillMask(u_char value);
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static int next_route_setup(int thnum, struct routeinfo_ *iroute, u_char stage);
+static int route_setup(int thnum, struct routeinfo_ *iroute, u_char stage);
 static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
@@ -1492,9 +1493,11 @@ dosecondstage(u_char graphdebug, u_char singlestep)
    int thnum = 0;
 
    origcount = countlist(FailedNets);
-   if (FailedNets)
+   if (FailedNets) {
+      Tcl_MutexLock(&TotalRoutesMutex);
       maxtries = TotalRoutes + ((origcount < 20) ? 20 : origcount) * 8;
-   else
+      Tcl_MutexUnlock(&TotalRoutesMutex);
+   } else
       maxtries = 0;
 
    fillMask((u_char)0);
@@ -1633,7 +1636,9 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 
       if (TotalRoutes >= maxtries) {
 	 if (failcount <= (origcount / 2)) {
+	    Tcl_MutexLock(&TotalRoutesMutex);
 	    maxtries = TotalRoutes + failcount * 8;
+	    Tcl_MutexUnlock(&TotalRoutesMutex);
 	    origcount = failcount;
 	 }
 	 else if (keepTrying == 0) {
@@ -1643,7 +1648,9 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 else {
 	    keepTrying--;
 	    Fprintf(stderr, "\nQrouter is stuck, but I was told to keep trying.\n");
+	    Tcl_MutexLock(&TotalRoutesMutex);
 	    maxtries = TotalRoutes + failcount * 8;
+	    Tcl_MutexUnlock(&TotalRoutesMutex);
 	    origcount = failcount;
 	 }
       }
@@ -2246,14 +2253,15 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 
   /* Set up Obs2[] matrix for first route */
 
-  Tcl_MutexLock(&dorouteMutex);
-  result = route_setup(&iroute, stage);
-  Tcl_MutexUnlock(&dorouteMutex);
+//   Tcl_MutexLock(&dorouteMutex);
+  result = route_setup(thnum, &iroute, stage);
+//   Tcl_MutexUnlock(&dorouteMutex);
   unroutable = result - 1;
   if (graphdebug) highlight_mask();
 
   // Keep going until we are unable to route to a terminal
 
+//   Tcl_MutexLock(&dorouteMutex);
   while (net && (result > 0)) {
 
      if (graphdebug) highlight_source();
@@ -2286,9 +2294,9 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      }
      else {
 
-//         Tcl_MutexLock(&dorouteMutex);
+        Tcl_MutexLock(&TotalRoutesMutex);
         TotalRoutes++;
-//         Tcl_MutexUnlock(&dorouteMutex);
+        Tcl_MutexUnlock(&TotalRoutesMutex);
 
         if (net->routes) {
            for (lrt = net->routes; lrt->next; lrt = lrt->next);
@@ -2306,8 +2314,9 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      if (iroute.do_pwrbus) free_glist(&iroute);
 
      /* Set up for next route and check if routing is done */
-     result = next_route_setup(&iroute, stage);
+     result = next_route_setup(thnum, &iroute, stage);
   }
+//   Tcl_MutexUnlock(&dorouteMutex);
 
   /* Finished routing (or error occurred) */
   free_glist(&iroute);
@@ -2352,7 +2361,7 @@ static void unable_to_route(char *netname, NODE node, unsigned char forced)
 /*								*/
 /*--------------------------------------------------------------*/
 TCL_DECLARE_MUTEX(next_route_setupMutex)
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
+static int next_route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
   NODE node;
@@ -2443,7 +2452,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
   if (Verbose > 1) {
      Tcl_MutexLock(&next_route_setupMutex);
-     FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes );
+     FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes);
      Tcl_MutexUnlock(&next_route_setupMutex);
   }
 
@@ -2458,7 +2467,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 /*								*/
 /*--------------------------------------------------------------*/
 
-static int route_setup(struct routeinfo_ *iroute, u_char stage)
+static int route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
 {
   int  i, j;
   u_int netnum, dir;
@@ -2647,7 +2656,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   }
 
   if (Verbose > 1) {
-     FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes );
+     FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes);
   }
 
   // Successful setup, although if nodes were marked unroutable,
@@ -2908,7 +2917,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	curpt.x = best.x;
 	curpt.y = best.y;
 	curpt.lay = best.lay;
-	if ((rval = commit_proute(iroute->rt, &curpt, stage)) != 1) break;
+	if ((rval = commit_proute(thnum, iroute->rt, &curpt, stage)) != 1) break;
 	if (Verbose > 2) {
 	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
 	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n",

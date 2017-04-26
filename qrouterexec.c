@@ -44,6 +44,7 @@ main(argc, argv)
    int argc;
    char **argv;
 {
+    XInitThreads();
     Tk_Main(argc, argv, qrouter_AppInit);
     return 0;
 }

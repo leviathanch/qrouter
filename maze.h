@@ -14,7 +14,7 @@ int     set_routes_to_net(NET net, int newnet, POINT *pushlist, SEG bbox, u_char
 NODE    find_unrouted_node(NET net);
 u_char  ripup_net(NET net, u_char restore);
 POINT   eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage);
-int     commit_proute(ROUTE rt, GRIDP *ept, u_char stage);
+int     commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage);
 void	writeback_segment(SEG seg, int netnum);
 int     writeback_route(ROUTE rt);
 int     writeback_all_routes(NET net);

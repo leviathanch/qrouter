@@ -1353,8 +1353,8 @@ void writeback_segment(SEG seg, int netnum)
 /*  SIDE EFFECTS: Obs update, RT llseg added			*/
 /*--------------------------------------------------------------*/
 
-TCL_DECLARE_MUTEX(commit_proute_threadMutex)
-int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
+//TCL_DECLARE_MUTEX(commit_proute_threadMutex)
+int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
    NODEINFO lnode1, lnode2;
@@ -1858,9 +1858,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    lseg = (SEG)NULL;
 
    while (1) {
-      Tcl_MutexLock(&commit_proute_threadMutex);
+      //Tcl_MutexLock(&commit_proute_threadMutex);
       seg = (SEG)malloc(sizeof(struct seg_));
-      Tcl_MutexUnlock(&commit_proute_threadMutex);
+      //Tcl_MutexUnlock(&commit_proute_threadMutex);
       seg->next = NULL;
 
       seg->segtype = (lrcur->layer == lrprev->layer) ? ST_WIRE : ST_VIA;

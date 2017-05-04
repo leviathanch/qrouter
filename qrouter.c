@@ -2221,11 +2221,32 @@ free_glist(struct routeinfo_ *iroute)
 BOOL checkSubContainsPoint(NET net, BBOX subpnt, BBOX pnt)
 {
 	BBOX box;
+	int x = subpnt->x, y = subpnt->y;
+	BOOL foundX=FALSE,foundY=FALSE;
+	int x1, x2, y1, y2;
+	subpnt->checked = TRUE;
+
 	box = net->bbox;
 	while(box) {
-		// TODO: Do complicated stuff here for the squares
+		if(box->x==x) {
+			y1 = (box->y<y) ? box->y : y;
+			y2 = (box->y>y) ? box->y : y;
+			box->checked = TRUE;
+			foundY=TRUE;
+		}
+		if(box->y==y) {
+			x1 = (box->x<x) ? box->x : x;
+			x2 = (box->x>x) ? box->x : x;
+			box->checked = TRUE;
+			foundX=TRUE;
+		}
 		box = box->next;
 	}
+	if(foundX&&foundY) {
+		if((pnt->x>x1)&&(pnt->x<x2)&&(pnt->y>y1)&&(pnt->x<y2))
+				return TRUE;
+	}
+	return FALSE;
 }
 
 BOOL checkContainsPoint(NET net, BBOX pnt)
@@ -2244,6 +2265,7 @@ BOOL checkContainsPoint(NET net, BBOX pnt)
 		}
 		box = box->next;
 	}
+	return FALSE;
 }
 
 BOOL checkCollisions(int thnum, NET net)
@@ -2253,8 +2275,9 @@ BOOL checkCollisions(int thnum, NET net)
 	while(pnt) {
 		for(int i=0; i<MAX_NUM_THREADS; i++) {
 			if(thnum!=i)
-				if(checkContainsPoint(CurNet[i],pnt))
-					return TRUE;
+				if(CurNet[i])
+					if(checkContainsPoint(CurNet[i],pnt))
+						return TRUE;
 		}
 		pnt = pnt->next;
 	}
@@ -2285,8 +2308,12 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      return 0;
   }
 
+  Tcl_MutexLock(&dorouteMutex);
   CurNet[thnum] = net; // Global, used by 2nd stage
+  Tcl_MutexUnlock(&dorouteMutex);
+
   if(checkCollisions(thnum,net)) {
+	  printf("collision detected\n");
   }
 
   // Fill out route information record

@@ -74,12 +74,14 @@ BBOX getRightUpperPoint(NET net)
 	return retpt;
 }
 
-int get_sub_bbox_area(NET net, int x, int y)
+int get_sub_bbox_area(NET net, BBOX pnt)
 {
 	int area=0;
+	int x = pnt->x, y = pnt->y;
 	BBOX recent_pt;
 	int x2=0,y2=0,dx=0,dy=0;
 	BOOL foundX=FALSE,foundY=FALSE;
+	pnt->checked=TRUE;
 
 	recent_pt = net->bbox;
 	while(recent_pt) {
@@ -117,7 +119,7 @@ int get_bbox_area(NET net)
 	recent_pt = net->bbox;
 	while(recent_pt) {
 		if(!(recent_pt->checked))
-			area+=get_sub_bbox_area(net,recent_pt->x,recent_pt->y);
+			area+=get_sub_bbox_area(net,recent_pt);
 		recent_pt = recent_pt->next;
 	}
 
@@ -138,7 +140,10 @@ int net_manhattan_distance(NET net)
 
 void add_point_to_bbox(NET net, int x, int y)
 {
-	BBOX box = malloc(sizeof(BBOX));
+	BBOX box = malloc(sizeof(struct bbox_pt_));
+	if(!box) {
+		exit(0);
+	}
 	box->x=x;
 	box->y=y;
 	box->next = NULL;

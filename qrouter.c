@@ -778,6 +778,7 @@ void dofirststage_thread(ClientData parm)
 	int *remaining = thread_params->remaining;
 	u_char graphdebug = thread_params->graphdebug;
 	net = thread_params->net;
+	net->locked = TRUE;
 	//if(Verbose > 1)
 	//	FprintfT(stdout, "%s: got parameters: i=%d remaining=%d thnum=%d netname %s \n",__FUNCTION__,i,*remaining,thnum,net->netname);
 	if ((net != NULL) && (net->netnodes != NULL)) {
@@ -803,6 +804,7 @@ void dofirststage_thread(ClientData parm)
 		(*remaining)--;
 		Tcl_MutexUnlock(&dofirststage_threadMutex);
 	}
+	net->locked = FALSE;
 	return TCL_THREAD_CREATE_RETURN;
 }
 
@@ -1243,9 +1245,6 @@ void print_net(NET net) {
             );
         }
     }
-    Fprintf(stdout, "\n  bbox: (%d,%d)-(%d,%d)\n",
-            net->xmin, net->ymin, net->xmax, net->ymax
-    );
 }
 
 
@@ -1896,13 +1895,16 @@ static void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
+    BBOX pt1, pt2;
+    pt1 = getLeftLowerPoint(net);
+    pt2 = getRightUpperPoint(net);
 
     fillMask((u_char)halo);
-
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
+    
+    xmin = pt1->x;
+    xmax = pt2->x;
+    ymin = pt1->y;
+    ymax = pt2->y;
   
     for (gx1 = xmin; gx1 <= xmax; gx1++)
 	for (gy1 = ymin; gy1 <= ymax; gy1++)
@@ -2009,13 +2011,16 @@ static void createMask(NET net, u_char slack, u_char halo)
   int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
+  BBOX pt1, pt2;
+  pt1 = getLeftLowerPoint(net);
+  pt2 = getRightUpperPoint(net);
 
   fillMask((u_char)halo);
 
-  xmin = net->xmin;
-  xmax = net->xmax;
-  ymin = net->ymin;
-  ymax = net->ymax;
+  xmin = pt1->x;
+  xmax = pt2->x;
+  ymin = pt1->y;
+  ymax = pt2->y;
 
   xcent = net->trunkx;
   ycent = net->trunky;
@@ -2213,6 +2218,14 @@ free_glist(struct routeinfo_ *iroute)
   }
 }
 
+BOOL checkCollisions(NET net)
+{
+	for(int i=0; i<MAX_NUM_THREADS; i++) {
+		//CurNet[i];
+	}
+	return FALSE;
+}
+
 /*--------------------------------------------------------------*/
 /* doroute - basic route call					*/
 /*								*/
@@ -2237,7 +2250,9 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      return 0;
   }
 
-  CurNet[thnum] = net;				// Global, used by 2nd stage
+  CurNet[thnum] = net; // Global, used by 2nd stage
+  if(checkCollisions(net)) {
+  }
 
   // Fill out route information record
   iroute.net = net;

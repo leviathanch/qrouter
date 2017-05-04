@@ -639,8 +639,8 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->netnodes = (NODE)NULL;
 		net->noripup = (NETLIST)NULL;
 		net->routes = (ROUTE)NULL;
-		net->xmin = net->ymin = 0;
-		net->xmax = net->ymax = 0;
+		net->bbox = NULL;
+		net->locked = FALSE;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,
 		// use VDD_NET and GND_NET for power and ground, and 0

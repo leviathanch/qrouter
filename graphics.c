@@ -318,20 +318,13 @@ map_estimate()
 
     for (i = 0; i < Numnets; i++) {
 	net = Nlnets[i];
-	nwidth = (net->xmax - net->xmin + 1);
-	nheight = (net->ymax - net->ymin + 1);
-	area = nwidth * nheight;
-	if (nwidth > nheight) {
-	    length = nwidth + (nheight >> 1) * net->numnodes;
-	}
-	else {
-	    length = nheight + (nwidth >> 1) * net->numnodes;
-	}
+	area = get_bbox_area(net);
+	length = net_manhattan_distance(net);
 	density = (float)length / (float)area;
 
-	for (x = net->xmin; x < net->xmax; x++)
+	/*for (x = net->xmin; x < net->xmax; x++)
 	    for (y = net->ymin; y < net->ymax; y++)
-		CONGEST(x, y) += density;
+		CONGEST(x, y) += density;*/
     }
 
     maxval = 0.0;

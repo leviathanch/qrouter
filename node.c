@@ -50,6 +50,108 @@ int compNets(NET *a, NET *b)
    return 0;
 }
 
+BBOX getLeftLowerPoint(NET net)
+{
+	BBOX retpt = net->bbox;
+	BBOX curpt = net->bbox;
+	while(curpt) {
+		if((curpt->x<retpt->x)&&(curpt->y<retpt->y))
+			retpt = curpt;
+		curpt=curpt->next;
+	}
+	return retpt;
+}
+
+BBOX getRightUpperPoint(NET net)
+{
+	BBOX retpt = net->bbox;
+	BBOX curpt = net->bbox;
+	while(curpt) {
+		if((curpt->x>retpt->x)&&(curpt->y>retpt->y))
+			retpt = curpt;
+		curpt=curpt->next;
+	}
+	return retpt;
+}
+
+int get_sub_bbox_area(NET net, int x, int y)
+{
+	int area=0;
+	BBOX recent_pt;
+	int x2=0,y2=0,dx=0,dy=0;
+	BOOL foundX=FALSE,foundY=FALSE;
+
+	recent_pt = net->bbox;
+	while(recent_pt) {
+		if(recent_pt->x==x) {
+			y2=recent_pt->y;
+			recent_pt->checked = TRUE;
+			foundY=TRUE;
+		}
+		if(recent_pt->y==y) {
+			x2=recent_pt->x;
+			recent_pt->checked = TRUE;
+			foundX=TRUE;
+		}
+		recent_pt = recent_pt->next;
+	}
+	if(foundX&&foundY) {
+		dx = (x<x2) ? (x2-x) : (x-x2); 
+		dy = (y<y2) ? (y2-y) : (y-y2);
+		area = dx * dy;
+	}
+	return area;
+}
+
+int get_bbox_area(NET net)
+{
+	int area = 0;
+	BBOX recent_pt;
+
+	recent_pt = net->bbox;
+	while(recent_pt) {
+		recent_pt->checked = FALSE;
+		recent_pt = recent_pt->next;
+	}
+
+	recent_pt = net->bbox;
+	while(recent_pt) {
+		if(!(recent_pt->checked))
+			area+=get_sub_bbox_area(net,recent_pt->x,recent_pt->y);
+		recent_pt = recent_pt->next;
+	}
+
+	return area;
+}
+
+int net_manhattan_distance(NET net)
+{
+	BBOX pt1, pt2;
+	int distance, x, y;
+	pt1 = getRightUpperPoint(net);
+	pt2 = getLeftLowerPoint(net);
+	x = pt1->x - pt2->x;
+	y = pt1->y - pt2->y;
+	distance = sqrt((x*x)+(y*y));
+	return distance;
+}
+
+void add_point_to_bbox(NET net, int x, int y)
+{
+	BBOX box = malloc(sizeof(BBOX));
+	box->x=x;
+	box->y=y;
+	box->next = NULL;
+	box->last = NULL;
+	box->checked = FALSE;
+	if(net->bbox) {
+		box->last = net->bbox;
+		net->bbox->next = box;
+	} else {
+		net->bbox = box;
+	}
+}
+
 /*--------------------------------------------------------------*/
 /* Alternative net comparison used for qsort.  Sort nets by	*/
 /* minimum dimension of the bounding box, and if equal, by the	*/
@@ -62,6 +164,10 @@ int altCompNets(NET *a, NET *b)
 {
    NET p = *a;
    NET q = *b;
+   BBOX llpt_p = getLeftLowerPoint(p);
+   BBOX rupt_p = getRightUpperPoint(p);
+   BBOX llpt_q = getLeftLowerPoint(q);
+   BBOX rupt_q = getRightUpperPoint(q);
 
    int pwidth, qwidth, pheight, qheight, pdim, qdim;
 
@@ -80,12 +186,12 @@ int altCompNets(NET *a, NET *b)
 
    // Otherwise sort as described above.
 
-   pwidth = p->xmax - p->xmin;
-   pheight = p->ymax - p->ymin;
+   pwidth = rupt_p->x - llpt_p->x;
+   pheight = rupt_p->y - llpt_p->y;
    pdim = (pwidth > pheight) ? pheight : pwidth;
 
-   qwidth = q->xmax - q->xmin;
-   qheight = q->ymax - q->ymin;
+   qwidth = rupt_q->x - llpt_q->x;
+   qheight =  rupt_q->y - llpt_p->y;
    qdim = (qwidth > qheight) ? qheight : qwidth;
 
    if (pdim < qdim)
@@ -221,24 +327,38 @@ void find_bounding_box(NET net)
       }
       d1tap = mintap;
 
-      net->xmin = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      net->xmax = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      net->ymin = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      net->ymax = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
+      int x1,y1;
+      x1 = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
+      y1 = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
+      add_point_to_bbox(net, x1, y1);
+      
+      int x2,y2;
+      x2 = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
+      y2 = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
+      add_point_to_bbox(net, x2, y2);
+      
+      add_point_to_bbox(net, x1, y2);
+      add_point_to_bbox(net, x2, y1);
    }
    else {	// Net with more than 2 nodes
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
-      net->xmax = net->ymax = -(MAXRT);
-      net->xmin = net->ymin = MAXRT;
+      add_point_to_bbox(net, MAXRT, MAXRT);
+      add_point_to_bbox(net, MAXRT, -MAXRT);
+      add_point_to_bbox(net, -MAXRT, -MAXRT);
+      add_point_to_bbox(net, -MAXRT, MAXRT);
+
+      BBOX pt1, pt2;
+      pt1 = getLeftLowerPoint(net);
+      pt2 = getRightUpperPoint(net);
       for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
-            if (dtap->gridx > net->xmax) net->xmax = dtap->gridx;
-            if (dtap->gridx < net->xmin) net->xmin = dtap->gridx;
-            if (dtap->gridy > net->ymax) net->ymax = dtap->gridy;
-            if (dtap->gridy < net->ymin) net->ymin = dtap->gridy;
+            if (dtap->gridx > pt2->x) pt2->x = dtap->gridx;
+            if (dtap->gridx < pt1->x) pt1->x = dtap->gridx;
+            if (dtap->gridy > pt2->y) pt2->y = dtap->gridy;
+            if (dtap->gridy < pt1->y) pt1->y = dtap->gridy;
 	 }
       }
    }
@@ -270,11 +390,14 @@ void defineRouteTree(NET net)
 
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
-
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
+    BBOX p1, p2;
+    p1 = getLeftLowerPoint(net);
+    p2 = getRightUpperPoint(net);
+    
+    xmin = p1->x;
+    xmax = p2->x;
+    ymin = p1->y;
+    ymax = p2->y;
 
     if (net->numnodes == 2) {
 

@@ -48,6 +48,8 @@ typedef unsigned long  u_long;
 typedef int (*__compar_fn_t)(const void*, const void*);
 #endif
 
+typedef int BOOL;
+
 /* Maximum number of route layers */
 #define MAX_LAYERS    9
 
@@ -268,6 +270,21 @@ struct gate_ {
 
 typedef struct net_ *NET;
 typedef struct netlist_ *NETLIST;
+typedef struct bbox_pt_ *BBOX;
+
+struct bbox_pt_ {
+	int  x;
+	int y;
+	BBOX last;
+	BBOX next;
+	BOOL checked;
+};
+
+BBOX getLeftLowerPoint(NET net);
+BBOX getRightUpperPoint(NET net);
+int get_bbox_area(NET net);
+int net_manhattan_distance(NET net);
+void add_point_to_bbox(NET net, int x, int y);
 
 struct net_ {
    int  netnum;		// a unique number for this net
@@ -277,14 +294,14 @@ struct net_ {
    u_char flags;	// flags for this net (see below)
    int  netorder;	// to be assigned by route strategy (critical
 			// nets first, then order by number of nodes).
-   int  xmin, ymin;	// Bounding box lower left corner
-   int  xmax, ymax;	// Bounding box upper right corner
    int  trunkx;		// X position of the net's trunk line (see flags)
    int  trunky;		// Y position of the net's trunk line (see flags)
    NETLIST noripup;	// list of nets that have been ripped up to
 			// route this net.  This will not be allowed
 			// a second time, to avoid looping.
    ROUTE   routes;	// routes for this net
+   BBOX bbox;
+   BOOL locked;
 };
 
 // Flags used by NET "flags" record

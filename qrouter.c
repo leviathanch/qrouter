@@ -2218,10 +2218,45 @@ free_glist(struct routeinfo_ *iroute)
   }
 }
 
-BOOL checkCollisions(NET net)
+BOOL checkSubContainsPoint(NET net, BBOX subpnt, BBOX pnt)
 {
-	for(int i=0; i<MAX_NUM_THREADS; i++) {
-		//CurNet[i];
+	BBOX box;
+	box = net->bbox;
+	while(box) {
+		// TODO: Do complicated stuff here for the squares
+		box = box->next;
+	}
+}
+
+BOOL checkContainsPoint(NET net, BBOX pnt)
+{
+	BBOX box;
+	box = net->bbox;
+	while(box) {
+		box->checked = FALSE;
+		box = box->next;
+	}
+	box = net->bbox;
+	while(box) {
+		if(!(box->checked)) {
+			if(checkSubContainsPoint(net, box, pnt))
+				return TRUE;
+		}
+		box = box->next;
+	}
+}
+
+BOOL checkCollisions(int thnum, NET net)
+{
+	BBOX pnt;
+	pnt = net->bbox;
+	while(pnt) {
+		for(int i=0; i<MAX_NUM_THREADS; i++) {
+			if(thnum!=i)
+				if(checkContainsPoint(CurNet[i],pnt))
+					return TRUE;
+		}
+		pnt = pnt->next;
 	}
 	return FALSE;
 }
@@ -2251,7 +2286,7 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
   }
 
   CurNet[thnum] = net; // Global, used by 2nd stage
-  if(checkCollisions(net)) {
+  if(checkCollisions(thnum,net)) {
   }
 
   // Fill out route information record

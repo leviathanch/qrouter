@@ -569,7 +569,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
     NODE n2;
     PROUTE *Pr;
 
-    if (rt && rt->segments) {
+    if (rt) if(rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
 	    lay = seg->layer;
 	    x = seg->x1;

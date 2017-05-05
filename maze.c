@@ -1858,9 +1858,12 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
    lseg = (SEG)NULL;
 
    while (1) {
-      //Tcl_MutexLock(&commit_proute_threadMutex);
+      if((!lrcur)||(!lrprev))
+	      break;
       seg = (SEG)malloc(sizeof(struct seg_));
-      //Tcl_MutexUnlock(&commit_proute_threadMutex);
+      if(!seg)
+	      exit(0);
+
       seg->next = NULL;
 
       seg->segtype = (lrcur->layer == lrprev->layer) ? ST_WIRE : ST_VIA;

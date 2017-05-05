@@ -126,7 +126,7 @@ int get_bbox_area(NET net)
 	return area;
 }
 
-int net_manhattan_distance(NET net)
+int net_absolute_distance(NET net)
 {
 	BBOX pt1, pt2;
 	int distance, x, y;

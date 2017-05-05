@@ -77,7 +77,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
 static void helpmessage(void);
-
+BOOL checkCollisions(int thnum, NET net);
 
 /*--------------------------------------------------------------*/
 /* Check track pitch and set the number of channels (may be	*/
@@ -813,6 +813,8 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    int i, failcount, remaining;
    NETLIST nl;
    Tcl_ThreadId idPtr;
+   int thret;
+   NET postponed = NULL, pstptmp = NULL;
 
    // Clear the lists of failed routes, in case first
    // stage is being called more than once.
@@ -833,42 +835,60 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 		qThreadData *thread_params = malloc(sizeof(qThreadData));
 		if(thread_params) {
-			thread_params->i=i;
-			thread_params->remaining=&remaining;
-			thread_params->graphdebug=graphdebug;
-			thread_params->thnum=threadnum;
-			thread_params->net=getnettoroute(i);
-			if(!(thread_params->net)) {
+			CurNet[threadnum]=getnettoroute(i);
+			Fprintf(stdout,"%s: threadnum: %d CurNet[threadnum]: %p \n",__FUNCTION__,threadnum,CurNet[threadnum]);
+			if(CurNet[threadnum]) {
+				Fprintf(stdout,"%s: netname: %s\n",__FUNCTION__,CurNet[threadnum]->netname);
+			} else {
+				free(thread_params);
+				continue;
+			}
+			if(checkCollisions(threadnum, CurNet[threadnum])) {
+				Fprintf(stdout,"%s: Boxes of %s overlap. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
+				CurNet[threadnum]->locked=TRUE;
+				if(postponed) {
+					postponed->next = CurNet[threadnum];
+					postponed->next->last=postponed;
+				} else {
+					postponed = CurNet[threadnum];
+					postponed->next = FALSE;
+					postponed->last = FALSE;
+				}
 				free(thread_params);
 				continue;
 			} else {
+				thread_params->i=i;
+				thread_params->remaining=&remaining;
+				thread_params->graphdebug=graphdebug;
+				thread_params->thnum=threadnum;
+				thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
 				thread_params_list[threadnum]=thread_params;
+				threadnum++;
 			}
 		} else {
 			Fprintf(stdout,"%s: Out of memory. Dying\n",__FUNCTION__);
 			exit(0);
 		}
-		Fprintf(stdout,"%s: netname: %s\n",__FUNCTION__,thread_params->net->netname);
-		int thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params, TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
-		Fprintf(stdout,"thret %d\n",thret);
-		if( thret != TCL_OK) {
-			Fprintf(stdout,"Couldn't start thread!\n");
-			break;
-		} else {
-			threadIDs[threadnum]=idPtr;
-			Fprintf(stdout,"Started thread %d\n",threadnum);
-			if((threadnum+1)==MAX_NUM_THREADS) {
-				for(int c=0;c<MAX_NUM_THREADS;c++) {
-					Fprintf(stdout,"%s: waiting for thread %d to finish\n",__FUNCTION__,threadnum);
-					Tcl_JoinThread( threadIDs[c], NULL );
+
+		if(threadnum==MAX_NUM_THREADS) {
+			for(int c=0;c<MAX_NUM_THREADS;c++) {
+				thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
+				if( thret != TCL_OK) {
+					Fprintf(stdout,"Couldn't start thread!\n");
+					exit(0);
+				} else {
+					threadIDs[c]=idPtr;
+					Fprintf(stdout,"Started thread %d\n",c);
 				}
-				for(int c=0;c<MAX_NUM_THREADS;c++) {
-					free(thread_params_list[c]);
-				}
-				threadnum=0;
-			} else {
-				threadnum++;
 			}
+			for(int c=0;c<MAX_NUM_THREADS;c++) {
+				Fprintf(stdout,"%s: waiting for thread %d to finish\n",__FUNCTION__,threadnum);
+				Tcl_JoinThread( threadIDs[c], NULL );
+			}
+			for(int c=0;c<MAX_NUM_THREADS;c++) {
+				free(thread_params_list[c]);
+			}
+			threadnum=0;
 		}
       if (debug_netnum >= 0) break;
    }
@@ -1083,11 +1103,10 @@ char *print_node_name(NODE node)
     for (g = Nlgates; g; g = g->next) {
 	for (i = 0; i < g->nodes; i++) {
 	    if (g->noderec[i] == node) {
-		if (nodestr != NULL)
-		   free(nodestr);
-
+		if(nodestr) free(nodestr);
 		nodestr = (char *)malloc(strlen(g->gatename)
 			+ strlen(g->node[i]) + 2);
+		if(nodestr==NULL) exit(0);
 		if (!strcmp(g->node[i], "pin"))
 		    sprintf(nodestr, "PIN/%s", g->gatename);
 		else
@@ -2243,8 +2262,11 @@ BOOL checkSubContainsPoint(NET net, BBOX subpnt, BBOX pnt)
 		box = box->next;
 	}
 	if(foundX&&foundY) {
-		if((pnt->x>x1)&&(pnt->x<x2)&&(pnt->y>y1)&&(pnt->x<y2))
-				return TRUE;
+		FprintfT(stdout,"%s: Checking whether (%d,%d) between (%d,%d)<->(%d,%d) (net: %s)\n", __FUNCTION__, pnt->x, pnt->y, x1, y1, x2, y2, net->netname);
+		if((pnt->x>=x1)&&(pnt->x<=x2)&&(pnt->y>=y1)&&(pnt->y<=y2)) {
+			FprintfT(stdout,"%s: yes. boxes overlap\n", __FUNCTION__);
+			return TRUE;
+		}
 	}
 	return FALSE;
 }
@@ -2260,8 +2282,10 @@ BOOL checkContainsPoint(NET net, BBOX pnt)
 	box = net->bbox;
 	while(box) {
 		if(!(box->checked)) {
-			if(checkSubContainsPoint(net, box, pnt))
+			if(checkSubContainsPoint(net, box, pnt)) {
+				FprintfT(stdout,"%s: yes. boxes overlap\n", __FUNCTION__);
 				return TRUE;
+			}
 		}
 		box = box->next;
 	}
@@ -2271,13 +2295,18 @@ BOOL checkContainsPoint(NET net, BBOX pnt)
 BOOL checkCollisions(int thnum, NET net)
 {
 	BBOX pnt;
+	if(!net) return TRUE;
 	pnt = net->bbox;
 	while(pnt) {
 		for(int i=0; i<MAX_NUM_THREADS; i++) {
-			if(thnum!=i)
-				if(CurNet[i])
-					if(checkContainsPoint(CurNet[i],pnt))
+			if(thnum!=i) {
+				if(CurNet[i]) {
+					if(checkContainsPoint(CurNet[i],pnt)) {
+						FprintfT(stdout,"%s: yes. boxes overlap\n", __FUNCTION__);
 						return TRUE;
+					}
+				}
+			}
 		}
 		pnt = pnt->next;
 	}
@@ -2308,14 +2337,6 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      return 0;
   }
 
-  Tcl_MutexLock(&dorouteMutex);
-  CurNet[thnum] = net; // Global, used by 2nd stage
-  Tcl_MutexUnlock(&dorouteMutex);
-
-  if(checkCollisions(thnum,net)) {
-	  printf("collision detected\n");
-  }
-
   // Fill out route information record
   iroute.net = net;
   iroute.rt = NULL;
@@ -2330,15 +2351,12 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 
   /* Set up Obs2[] matrix for first route */
 
-//   Tcl_MutexLock(&dorouteMutex);
   result = route_setup(thnum, &iroute, stage);
-//   Tcl_MutexUnlock(&dorouteMutex);
   unroutable = result - 1;
   if (graphdebug) highlight_mask();
 
   // Keep going until we are unable to route to a terminal
 
-//   Tcl_MutexLock(&dorouteMutex);
   while (net && (result > 0)) {
 
      if (graphdebug) highlight_source();
@@ -2353,9 +2371,7 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 	       net->netnum, net->netnodes->nodenum);
      }
 
-     //Tcl_MutexLock(&dorouteMutex);
      result = route_segs(thnum, &iroute, stage, graphdebug);
-     //Tcl_MutexUnlock(&dorouteMutex);
 
      if (result < 0) {		// Route failure.
 
@@ -2393,7 +2409,6 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      /* Set up for next route and check if routing is done */
      result = next_route_setup(thnum, &iroute, stage);
   }
-//   Tcl_MutexUnlock(&dorouteMutex);
 
   /* Finished routing (or error occurred) */
   free_glist(&iroute);
@@ -2421,16 +2436,16 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 static void unable_to_route(char *netname, NODE node, unsigned char forced)
 {
     if (node)
-	Fprintf(stderr, "Node %s of net %s has no tap points---",
+	FprintfT(stderr, "Node %s of net %s has no tap points---",
 		print_node_name(node), netname);
     else
-	Fprintf(stderr, "Node of net %s has no tap points---",
+	FprintfT(stderr, "Node of net %s has no tap points---",
 		netname);
 
     if (forced)
-	Fprintf(stderr, "forcing a tap point.\n");
+	FprintfT(stderr, "forcing a tap point.\n");
     else
-	Fprintf(stderr, "unable to route!\n");
+	FprintfT(stderr, "unable to route!\n");
 }
 
 /*--------------------------------------------------------------*/

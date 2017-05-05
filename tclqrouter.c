@@ -2423,7 +2423,7 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
     for (i = 0; i < Numnets; i++) {
 	net = Nlnets[i];
 	area = get_bbox_area(net);
-	length = net_manhattan_distance(net);
+	length = net_absolute_distance(net);
 	density = (float)length / (float)area;
 
 	/*for (x = net->xmin; x < net->xmax; x++)

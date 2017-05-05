@@ -152,6 +152,7 @@ struct string_ {
 typedef struct seg_ *SEG;
 
 struct seg_ {
+   SEG last;
    SEG next;
    int layer;
    int x1, y1, x2, y2;
@@ -164,6 +165,7 @@ struct seg_ {
 typedef struct dseg_ *DSEG;
 
 struct dseg_ {
+   DSEG   last;
    DSEG   next;
    int    layer;
    double x1, y1, x2, y2;
@@ -176,7 +178,8 @@ struct dseg_ {
 typedef struct point_ *POINT;
 
 struct point_ {
-  POINT next; 
+  POINT last;
+  POINT next;
   int layer;
   int x1, y1;
 };
@@ -188,6 +191,7 @@ struct point_ {
 typedef struct dpoint_ *DPOINT;
 
 struct dpoint_ {
+   DPOINT last;
    DPOINT next;
    int layer;
    double x, y;
@@ -198,6 +202,7 @@ typedef struct route_ *ROUTE;
 typedef struct node_ *NODE;
 
 struct route_ {
+  ROUTE  last;
   ROUTE  next;
   int    netnum;
   SEG    segments;
@@ -231,6 +236,7 @@ struct nodeinfo_ {
 #define NI_OFFSET_MASK   0x0c	// Tap offset mask (N/S + E/W)
 
 struct node_ {
+  NODE    last;
   NODE    next;
   int     nodenum;		// node ordering within its net
   DPOINT  taps;			// point position for node taps
@@ -250,6 +256,7 @@ struct node_ {
 typedef struct gate_ *GATE;
 
 struct gate_ {
+    GATE last;
     GATE next;
     char *gatename;	// Name of instance
     GATE  gatetype;	// Pointer to macro record
@@ -273,7 +280,7 @@ typedef struct netlist_ *NETLIST;
 typedef struct bbox_pt_ *BBOX;
 
 struct bbox_pt_ {
-	int  x;
+	int x;
 	int y;
 	BBOX last;
 	BBOX next;
@@ -283,7 +290,7 @@ struct bbox_pt_ {
 BBOX getLeftLowerPoint(NET net);
 BBOX getRightUpperPoint(NET net);
 int get_bbox_area(NET net);
-int net_manhattan_distance(NET net);
+int net_absolute_distance(NET net);
 void add_point_to_bbox(NET net, int x, int y);
 
 struct net_ {
@@ -302,6 +309,8 @@ struct net_ {
    ROUTE   routes;	// routes for this net
    BBOX bbox;
    BOOL locked;
+   NET last;
+   NET next;
 };
 
 // Flags used by NET "flags" record

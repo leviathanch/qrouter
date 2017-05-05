@@ -308,6 +308,7 @@ map_estimate()
     int xspc, yspc, hspc;
     int i, x, y, nwidth, nheight, area, length, value;
     float density, *Congestion, norm, maxval;
+    BBOX pt1, pt2;
 
     hspc = spacing >> 1;
 
@@ -319,12 +320,14 @@ map_estimate()
     for (i = 0; i < Numnets; i++) {
 	net = Nlnets[i];
 	area = get_bbox_area(net);
-	length = net_manhattan_distance(net);
+	length = net_absolute_distance(net);
 	density = (float)length / (float)area;
 
-	/*for (x = net->xmin; x < net->xmax; x++)
-	    for (y = net->ymin; y < net->ymax; y++)
-		CONGEST(x, y) += density;*/
+	pt1 = getLeftLowerPoint(net);
+	pt2 = getRightUpperPoint(net);
+	for (x = pt1->x; x < pt2->x; x++)
+	    for (y = pt1->y; y < pt2->y; y++)
+		CONGEST(x, y) += density;
     }
 
     maxval = 0.0;

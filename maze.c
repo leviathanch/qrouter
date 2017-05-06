@@ -199,8 +199,8 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_PROCESSED) {
 		Pr->flags &= ~PR_PROCESSED;
 		gpoint = allocPOINT();
-		gpoint->x1 = x;
-		gpoint->y1 = y;
+		gpoint->x = x;
+		gpoint->y = y;
 		gpoint->layer = lay;
 		gpoint->next = *pushlist;
 		*pushlist = gpoint;
@@ -218,8 +218,8 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 		if (Pr->flags & PR_PROCESSED) {
 		    Pr->flags &= ~PR_PROCESSED;
 		    gpoint = allocPOINT();
-		    gpoint->x1 = x;
-		    gpoint->y1 = y;
+		    gpoint->x = x;
+		    gpoint->y = y;
 		    gpoint->layer = lay;
 		    gpoint->next = *pushlist;
 		    *pushlist = gpoint;
@@ -246,6 +246,7 @@ void clear_target_node(NODE node)
     /* Process tap points of the node */
 
     for (ntap = node->taps; ntap; ntap = ntap->next) {
+       if(!ntap) continue;
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
@@ -380,7 +381,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
        Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
-	  Fprintf(stderr, "Error:  Tap position %d, %d layer %d not "
+	  FprintfT(stderr, "Error:  Tap position %d, %d layer %d not "
 			"marked as source!\n", x, y, lay);
 	  return -1;	// This should not happen.
        }
@@ -412,8 +413,8 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     gpoint = allocPOINT();
-	     gpoint->x1 = x;
-	     gpoint->y1 = y;
+	     gpoint->x = x;
+	     gpoint->y = y;
 	     gpoint->layer = lay;
 	     gpoint->next = *pushlist;
 	     *pushlist = gpoint;
@@ -465,8 +466,8 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     gpoint = allocPOINT();
-	     gpoint->x1 = x;
-	     gpoint->y1 = y;
+	     gpoint->x = x;
+	     gpoint->y = y;
 	     gpoint->layer = lay;
 	     gpoint->next = *pushlist;
 	     *pushlist = gpoint;
@@ -585,8 +586,8 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 
 		if (pushlist != NULL) {
 	  	   gpoint = allocPOINT();
-	  	   gpoint->x1 = x;
-	  	   gpoint->y1 = y;
+	  	   gpoint->x = x;
+	  	   gpoint->y = y;
 	  	   gpoint->layer = lay;
 	  	   gpoint->next = *pushlist;
 	 	   *pushlist = gpoint;
@@ -1149,8 +1150,8 @@ POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
        }
        if (~(Pr->flags & PR_ON_STACK)) {
 	  ptret = allocPOINT();
-	  ptret->x1 = newpt.x;
-	  ptret->y1 = newpt.y;
+	  ptret->x = newpt.x;
+	  ptret->y = newpt.y;
 	  ptret->layer = newpt.lay;
 	  ptret->next = NULL;
 	  Pr->flags |= PR_ON_STACK;
@@ -1385,39 +1386,39 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
    Tcl_MutexLock(&commit_proute_threadMutex);
    lrtop = (POINT)malloc(sizeof(struct point_));
    Tcl_MutexUnlock(&commit_proute_threadMutex);
-   lrtop->x1 = ept->x;
-   lrtop->y1 = ept->y;
+   lrtop->x = ept->x;
+   lrtop->y = ept->y;
    lrtop->layer = ept->lay;
    lrtop->next = NULL;
    lrend = lrtop;
 
    while (1) {
 
-      Pr = &OBS2VAL(lrend->x1, lrend->y1, lrend->layer);
+      Pr = &OBS2VAL(lrend->x, lrend->y, lrend->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
       if (dmask == PR_PRED_NONE) break;
 
       Tcl_MutexLock(&commit_proute_threadMutex);
       newlr = (POINT)malloc(sizeof(struct point_));
       Tcl_MutexUnlock(&commit_proute_threadMutex);
-      newlr->x1 = lrend->x1;
-      newlr->y1 = lrend->y1;
+      newlr->x = lrend->x;
+      newlr->y = lrend->y;
       newlr->layer = lrend->layer;
       lrend->next = newlr;
       newlr->next = NULL;
 
       switch (dmask) {
          case PR_PRED_N:
-	    (newlr->y1)++;
+	    (newlr->y)++;
 	    break;
          case PR_PRED_S:
-	    (newlr->y1)--;
+	    (newlr->y)--;
 	    break;
          case PR_PRED_E:
-	    (newlr->x1)++;
+	    (newlr->x)++;
 	    break;
          case PR_PRED_W:
-	    (newlr->x1)--;
+	    (newlr->x)--;
 	    break;
          case PR_PRED_U:
 	    (newlr->layer)++;
@@ -1464,8 +1465,8 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 	       stacks++;
 
 	       // Try to move the second contact in the path
-	       cx = lrprev->x1;
-	       cy = lrprev->y1;
+	       cx = lrprev->x;
+	       cy = lrprev->y;
 	       cl = lrprev->layer;
 	       mincost = MAXRT;
 	       dl = lrppre->layer;
@@ -1623,8 +1624,8 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		  Tcl_MutexLock(&commit_proute_threadMutex);
 		  newlr = (POINT)malloc(sizeof(struct point_));
 		  Tcl_MutexUnlock(&commit_proute_threadMutex);
-		  newlr->x1 = minx;
-		  newlr->y1 = miny;
+		  newlr->x = minx;
+		  newlr->y = miny;
 		  newlr->layer = cl;
 
 	          pri2 = &OBS2VAL(minx, miny, dl);
@@ -1632,8 +1633,8 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		  Tcl_MutexLock(&commit_proute_threadMutex);
 		  newlr2 = (POINT)malloc(sizeof(struct point_));
 		  Tcl_MutexUnlock(&commit_proute_threadMutex);
-		  newlr2->x1 = minx;
-		  newlr2->y1 = miny;
+		  newlr2->x = minx;
+		  newlr2->y = miny;
 		  newlr2->layer = dl;
 
 		  lrprev->next = newlr;
@@ -1643,7 +1644,7 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		  // lrppre->next.  If so, bypass lrppre.
 
 		  if ((lrnext = lrppre->next) != NULL) {
-		     if (lrnext->x1 == minx && lrnext->y1 == miny &&
+		     if (lrnext->x == minx && lrnext->y == miny &&
 				lrnext->layer == dl) {
 			newlr->next = lrnext;
 			free(lrppre);
@@ -1663,8 +1664,8 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		  // If we couldn't offset lrprev position, then try
 		  // offsetting lrcur.
 
-	          cx = lrcur->x1;
-	          cy = lrcur->y1;
+	          cx = lrcur->x;
+	          cy = lrcur->y;
 	          cl = lrcur->layer;
 	          mincost = MAXRT;
 	          dl = lrprev->layer;
@@ -1765,15 +1766,15 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		     Tcl_MutexLock(&commit_proute_threadMutex);
 		     newlr = (POINT)malloc(sizeof(struct point_));
 		     Tcl_MutexUnlock(&commit_proute_threadMutex);
-		     newlr->x1 = minx;
-		     newlr->y1 = miny;
+		     newlr->x = minx;
+		     newlr->y = miny;
 		     newlr->layer = cl;
 
 		     Tcl_MutexLock(&commit_proute_threadMutex);
 		     newlr2 = (POINT)malloc(sizeof(struct point_));
 		     Tcl_MutexUnlock(&commit_proute_threadMutex);
-		     newlr2->x1 = minx;
-		     newlr2->y1 = miny;
+		     newlr2->x = minx;
+		     newlr2->y = miny;
 		     newlr2->layer = dl;
 
 		     // If newlr is a source or target, then make it
@@ -1782,7 +1783,7 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		     // original endpoint position is not needed.
 
 	             pri = &OBS2VAL(minx, miny, cl);
-	             pri2 = &OBS2VAL(lrcur->x1, lrcur->y1, lrcur->layer);
+	             pri2 = &OBS2VAL(lrcur->x, lrcur->y, lrcur->layer);
 		     if ((((pri->flags & PR_SOURCE) && (pri2->flags & PR_SOURCE)) ||
 			 ((pri->flags & PR_TARGET) && (pri2->flags & PR_TARGET)))
                          && (lrcur == lrtop)
@@ -1800,7 +1801,7 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		     // Check if point at pri2 is equal to position of
 		     // lrprev->next.  If so, bypass lrprev.
 
-		     if (lrppre->x1 == minx && lrppre->y1 == miny &&
+		     if (lrppre->x == minx && lrppre->y == miny &&
 				lrppre->layer == dl) {
 			newlr->next = lrppre;
 			free(lrprev);
@@ -1821,7 +1822,7 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		     if (Verbose > 0)
 			FprintfT(stderr, "Failed to remove stacked via "
 				"at grid point %d %d.\n",
-				lrcur->x1, lrcur->y1);
+				lrcur->x, lrcur->y);
 		     stacks = 0;
 		     rval = 0;
 		     goto cleanup;
@@ -1831,7 +1832,7 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 		        FprintfT(stderr, "Failed to remove stacked via "
 				"at grid point %d %d;  position may "
 				"not be routable.\n",
-				lrcur->x1, lrcur->y1);
+				lrcur->x, lrcur->y);
 			stacks = 0;
 			rval = 0;
 			goto cleanup;
@@ -1868,13 +1869,13 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 
       seg->segtype = (lrcur->layer == lrprev->layer) ? ST_WIRE : ST_VIA;
 
-      seg->x1 = lrcur->x1;
-      seg->y1 = lrcur->y1;
+      seg->x1 = lrcur->x;
+      seg->y1 = lrcur->y;
 
       seg->layer = MIN(lrcur->layer, lrprev->layer);
 
-      seg->x2 = lrprev->x1;
-      seg->y2 = lrprev->y1;
+      seg->x2 = lrprev->x;
+      seg->y2 = lrprev->y;
 
       dx = seg->x2 - seg->x1;
       dy = seg->y2 - seg->y1;
@@ -1893,13 +1894,13 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
       if (seg->segtype == ST_WIRE) {
 	 while ((lrnext = lrprev->next) != NULL) {
 	    lrnext = lrprev->next;
-	    if (((lrnext->x1 - lrprev->x1) == dx) &&
-			((lrnext->y1 - lrprev->y1) == dy) &&
+	    if (((lrnext->x - lrprev->x) == dx) &&
+			((lrnext->y - lrprev->y) == dy) &&
 			(lrnext->layer == lrprev->layer)) {
 	       lrcur = lrprev;
 	       lrprev = lrnext;
-	       seg->x2 = lrprev->x1;
-	       seg->y2 = lrprev->y1;
+	       seg->x2 = lrprev->x;
+	       seg->y2 = lrprev->y;
 	    }
 	    else
 	       break;
@@ -2005,13 +2006,13 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
       if (dir2 & OFFSET_TAP) seg->segtype |= ST_OFFSET_END;
 
       lrend = lrcur;		// Save the last route position
-      lrend->x1 = lrcur->x1;
-      lrend->y1 = lrcur->y1;
+      lrend->x = lrcur->x;
+      lrend->y = lrcur->y;
       lrend->layer = lrcur->layer;
 
       lrcur = lrprev;		// Move to the next route position
-      lrcur->x1 = seg->x2;
-      lrcur->y1 = seg->y2;
+      lrcur->x = seg->x1;
+      lrcur->y = seg->y1;
       lrprev = lrcur->next;
 
       if (lrprev == NULL) {
@@ -2026,8 +2027,8 @@ int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
 
 	 // Before returning, set *ept to the endpoint
 	 // position.  This is for diagnostic purposes only.
-	 ept->x = lrend->x1;
-	 ept->y = lrend->y1;
+	 ept->x = lrend->x;
+	 ept->y = lrend->y;
 	 ept->lay = lrend->layer;
 
 	 // Clean up allocated memory for the route. . .

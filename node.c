@@ -18,6 +18,9 @@
 #include "qconfig.h"
 #include "lef.h"
 
+#define BOX_ROOM_X 0
+#define BOX_ROOM_Y 0
+
 /*--------------------------------------------------------------*/
 /* Comparison routine used for qsort.  Sort nets by number of	*/
 /* nodes.							*/
@@ -72,6 +75,18 @@ BBOX getRightUpperPoint(NET net)
 		curpt=curpt->next;
 	}
 	return retpt;
+}
+
+BOOL check_bbox_infinite(BBOX p)
+{
+	while(p) {
+		if(p->x<=-MAXRT) return TRUE;
+		if(p->x>=MAXRT) return TRUE;
+		if(p->y<=-MAXRT) return TRUE;
+		if(p->y>=MAXRT) return TRUE;
+		p=p->next;
+	}
+	return FALSE;
 }
 
 int get_sub_bbox_area(NET net, BBOX pnt)
@@ -138,23 +153,56 @@ int net_absolute_distance(NET net)
 	return distance;
 }
 
-void add_point_to_bbox(NET net, int x, int y)
+int get_num_points_of_bbox(BBOX box)
 {
-	BBOX box = malloc(sizeof(struct bbox_pt_));
-	if(!box) {
+	int ret=0;
+	BBOX pt;
+	if(!box) return 0;
+	pt=box;
+	while(pt) {
+		pt=pt->next;
+		ret++;
+	}
+	return ret;
+}
+
+BBOX add_point_to_bbox(BBOX bbox, int x, int y)
+{
+	BBOX pt; // point to add
+	//BBOX cpt; // additional corner point
+	BBOX tmp;
+	//BOOL foundX = FALSE, foundY = FALSE;
+	//int num_pts;
+
+	// checking for collision
+	tmp = bbox;
+	while(tmp) {
+		if((tmp->x==x)&&(tmp->y==y)) return bbox; // point already exists!
+		tmp=tmp->next;
+	}
+
+	//num_pts = get_num_points_of_bbox(net->bbox);
+
+	pt = malloc(sizeof(struct bbox_pt_)); // creating requested point
+	if(!pt) {
+		printf("%s: memory leak. dying!\n",__FUNCTION__);
 		exit(0);
 	}
-	box->x=x;
-	box->y=y;
-	box->next = NULL;
-	box->last = NULL;
-	box->checked = FALSE;
-	if(net->bbox) {
-		box->last = net->bbox;
-		net->bbox->next = box;
-	} else {
-		net->bbox = box;
+	pt->x=x;
+	pt->y=y;
+	pt->next = NULL;
+	pt->last = NULL;
+	pt->checked = FALSE;
+
+	if(bbox) {
+		pt->last = NULL;
+		pt->next = bbox;
+		bbox->last=pt;
 	}
+
+	bbox = pt;
+	
+	return bbox;
 }
 
 /*--------------------------------------------------------------*/
@@ -288,6 +336,7 @@ void find_bounding_box(NET net)
 {
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
+   BBOX pt1, pt2;
    int mindist, dist, dx, dy;
 
    if (net->numnodes == 2) {
@@ -332,31 +381,26 @@ void find_bounding_box(NET net)
       }
       d1tap = mintap;
 
-      int x1,y1;
-      x1 = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      y1 = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      add_point_to_bbox(net, x1, y1);
+      int x1=-BOX_ROOM_X,y1=-BOX_ROOM_Y,x2=BOX_ROOM_X,y2=BOX_ROOM_Y;
+      x1 += (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
+      y1 += (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
+      x2 += (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
+      y2 += (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
       
-      int x2,y2;
-      x2 = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      y2 = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
-      add_point_to_bbox(net, x2, y2);
-      
-      add_point_to_bbox(net, x1, y2);
-      add_point_to_bbox(net, x2, y1);
-   }
-   else {	// Net with more than 2 nodes
+      net->bbox = add_point_to_bbox(net->bbox, x1, y1);
+      net->bbox = add_point_to_bbox(net->bbox, x2, y2);
+      net->bbox = add_point_to_bbox(net->bbox, x1, y2);
+      net->bbox = add_point_to_bbox(net->bbox, x2, y1);
+   } else { // Net with more than 2 nodes
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
-      add_point_to_bbox(net, MAXRT, MAXRT);
-      add_point_to_bbox(net, MAXRT, -MAXRT);
-      add_point_to_bbox(net, -MAXRT, -MAXRT);
-      add_point_to_bbox(net, -MAXRT, MAXRT);
+      net->bbox = add_point_to_bbox(net->bbox, MAXRT, MAXRT); // right upper point
+      net->bbox = add_point_to_bbox(net->bbox, -MAXRT, -MAXRT); // left lower point
 
-      BBOX pt1, pt2;
       pt1 = getLeftLowerPoint(net);
       pt2 = getRightUpperPoint(net);
+
       for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
@@ -366,6 +410,9 @@ void find_bounding_box(NET net)
             if (dtap->gridy < pt1->y) pt1->y = dtap->gridy;
 	 }
       }
+
+      net->bbox = add_point_to_bbox(net->bbox, pt2->x, pt1->y); // right lower point
+      net->bbox = add_point_to_bbox(net->bbox, pt1->x, pt2->y); // left upper point
    }
 }
 
@@ -393,6 +440,7 @@ void defineRouteTree(NET net)
     DPOINT dtap;
     int xcent, ycent, xmin, ymin, xmax, ymax;
 
+    if(!get_num_points_of_bbox(net->bbox)) return;
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
     BBOX p1, p2;

@@ -181,7 +181,7 @@ struct point_ {
   POINT last;
   POINT next;
   int layer;
-  int x1, y1;
+  int x, y;
 };
 
 /* DPOINT is a point location with  coordinates given *both* as an	*/
@@ -290,8 +290,9 @@ struct bbox_pt_ {
 BBOX getLeftLowerPoint(NET net);
 BBOX getRightUpperPoint(NET net);
 int get_bbox_area(NET net);
+BOOL check_bbox_infinite(BBOX p);
 int net_absolute_distance(NET net);
-void add_point_to_bbox(NET net, int x, int y);
+BBOX  add_point_to_bbox(BBOX bbox, int x, int y);
 
 struct net_ {
    int  netnum;		// a unique number for this net
@@ -343,7 +344,7 @@ struct routeinfo_ {
    struct seg_ bbox;
 };
 
-#define MAXRT		10000000		// "Infinite" route cost
+#define MAXRT		10000		// "Infinite" route cost
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect

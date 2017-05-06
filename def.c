@@ -151,8 +151,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     LefList lefl;
     ROUTE routednet = NULL;
 
-    refp.x1 = 0;
-    refp.y1 = 0;
+    refp.x = 0;
+    refp.y = 0;
 
     /* Set pitches and allocate memory for Obs[] if we haven't yet. */
     set_num_channels();
@@ -200,6 +200,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    if (special == (char)0) {
 	       routednet = (ROUTE)malloc(sizeof(struct route_));
 	       routednet->next = net->routes;
+	       routednet->last = net->routes;
 	       net->routes = routednet;
 
 	       routednet->netnum = net->netnum;
@@ -259,10 +260,10 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 
 		    newRoute = (SEG)malloc(sizeof(struct seg_));
 		    newRoute->segtype = ST_VIA;
-		    newRoute->x1 = refp.x1;
-		    newRoute->x2 = refp.x1;
-		    newRoute->y1 = refp.y1;
-		    newRoute->y2 = refp.y1;
+		    newRoute->x1 = refp.x;
+		    newRoute->x2 = refp.x;
+		    newRoute->y1 = refp.y;
+		    newRoute->y2 = refp.y;
 		    newRoute->layer = paintLayer;
 
 		    if (routednet == NULL) {
@@ -289,8 +290,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    paintLayer = routeLayer;
 
 	    /* Record current reference point */
-	    locarea.x1 = refp.x1;
-	    locarea.y1 = refp.y1;
+	    locarea.x1 = refp.x;
+	    locarea.y1 = refp.y;
 	    lx = x;
 	    ly = y;
 
@@ -307,7 +308,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &x) == 1)
 	    {
 		x /= oscale;		// In microns
-		refp.x1 = (int)((x - Xlowerbound + EPS) / PitchX[paintLayer]);
+		refp.x = (int)((x - Xlowerbound + EPS) / PitchX[paintLayer]);
 	    }
 	    else
 	    {
@@ -330,7 +331,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &y) == 1)
 	    {
 		y /= oscale;		// In microns
-		refp.y1 = (int)((y - Ylowerbound + EPS) / PitchY[paintLayer]);
+		refp.y = (int)((y - Ylowerbound + EPS) / PitchY[paintLayer]);
 	    }
 	    else
 	    {
@@ -344,21 +345,21 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    {
 		valid = TRUE;
 	    }
-	    else if ((locarea.x1 != refp.x1) && (locarea.y1 != refp.y1))
+	    else if ((locarea.x1 != refp.x) && (locarea.y1 != refp.y))
 	    {
 		/* Skip over nonmanhattan segments, reset the reference	*/
 		/* point, and output a warning.				*/
 
 		LefError("Can't deal with nonmanhattan geometry in route.\n");
-		locarea.x1 = refp.x1;
-		locarea.y1 = refp.y1;
+		locarea.x1 = refp.x;
+		locarea.y1 = refp.y;
 		lx = x;
 		ly = y;
 	    }
 	    else
 	    {
-		locarea.x2 = refp.x1;
-		locarea.y2 = refp.y1;
+		locarea.x2 = refp.x;
+		locarea.y2 = refp.y;
 		lx = x;
 		ly = y;
 

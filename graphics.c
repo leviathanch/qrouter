@@ -164,8 +164,8 @@ void highlight_starts(POINT glist) {
 
     XSetForeground(dpy, gc, greenyellowpix);
     for (gpoint = glist; gpoint; gpoint = gpoint->next) {
-	xspc = (gpoint->x1 + 1) * spacing - hspc;
-	yspc = height - (gpoint->y1 + 1) * spacing - hspc;
+	xspc = (gpoint->x + 1) * spacing - hspc;
+	yspc = height - (gpoint->y + 1) * spacing - hspc;
 	XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
     }
     XFlush(dpy);
@@ -414,6 +414,96 @@ void draw_net(NET net, u_char single, int *lastlayer) {
     }
 }
 
+// check whether still unchecked points exist
+int num_points_checked(BBOX p)
+{
+	BBOX pts = p;
+	int ret = 0;
+	while(pts) {
+		if(pts->checked) ret++;
+		pts=pts->next;
+	}
+	return ret;
+}
+
+void uncheck_all_points(BBOX p)
+{
+	BBOX pts = p;
+	while(pts) {
+		pts->checked=FALSE;
+		pts=pts->next;
+	}
+}
+
+void print_all_points(NET net)
+{
+	printf("%s: printing bounding box for net %s with %d corners\n",__FUNCTION__,net->netname,get_num_points_of_bbox(net->bbox));
+	BBOX t = net->bbox;
+	while(t) {
+		printf("(%d,%d) ",t->x,t->y);
+		t = t->next;
+	}
+	printf("\n");
+}
+
+/*--------------------------------------*/
+/* Draw the boundary box of the net on the display	*/
+/*--------------------------------------*/
+#define MAX_CYCLES 100
+static void
+draw_net_bbox(NET net) {
+	BBOX tmp;
+	int x0, x1, x2, y0, y1, y2;
+	int num_total_pts;
+	int num_done_pts = 1;
+	int cycles = 0;
+	BOOL found_p1;
+
+	if (dpy == NULL) return;
+	if (net == NULL) return;
+	num_total_pts = get_num_points_of_bbox(net->bbox);
+	if (!num_total_pts) return;
+	print_all_points(net);
+
+	XSetForeground(dpy, gc, redpix); // set box colour to red
+	uncheck_all_points(net->bbox);
+
+	x0=x1=net->bbox->x; // save for the end
+	y0=y1=net->bbox->y; // save for the end
+	net->bbox->checked=TRUE;
+
+	while((num_done_pts<num_total_pts)&&(cycles<MAX_CYCLES)) {
+		tmp=net->bbox;
+		while(tmp) {
+			if(!(tmp->checked)) {
+				if((tmp->x==x1)&&(tmp->y!=y1)) {
+					x2=tmp->x;
+					y2=tmp->y;
+					printf("%s: drawing vertical bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
+					XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
+					x1=tmp->x;
+					y1=tmp->y;
+					tmp->checked=TRUE;
+					num_done_pts++;
+				} else if((tmp->x!=x1)&&(tmp->y==y1)) {
+					x2=tmp->x;
+					y2=tmp->y;
+					printf("%s: drawing horizontal bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
+					XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
+					x1=tmp->x;
+					y1=tmp->y;
+					tmp->checked=TRUE;
+					num_done_pts++;
+				}
+			}
+			tmp=tmp->next;
+		}
+		cycles++;
+	}
+	printf("%s: drawing final bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x0,y0,x1,y1,net->netname);
+	XDrawLine(dpy, buffer, gc,spacing*x0,height - spacing*y0,spacing*x1,height - spacing*y1);
+}
+
 /*--------------------------------------*/
 /* Draw one unrouted net on the display	*/
 /*--------------------------------------*/
@@ -477,19 +567,19 @@ draw_net_nodes(NET net) {
     else if (n > 2) {
         /* Compute center point */
         POINT midpoint = (POINT)malloc(sizeof(struct point_));
-        midpoint->x1 = midpoint->y1 = 0;
+        midpoint->x = midpoint->y = 0;
 
         for (bboxit = bboxlist; bboxit != NULL; bboxit = bboxit->next) {
-            midpoint->x1 += (bboxit->x1 + bboxit->x2)/2;
-            midpoint->y1 += (bboxit->y1 + bboxit->y2)/2;
+            midpoint->x += (bboxit->x1 + bboxit->x2)/2;
+            midpoint->y += (bboxit->y1 + bboxit->y2)/2;
         }
-        midpoint->x1 /= n;
-        midpoint->y1 /= n;
+        midpoint->x /= n;
+        midpoint->y /= n;
 
         for (bboxit = bboxlist; bboxit != NULL; bboxit = bboxit->next) {
             XDrawLine(
                 dpy, buffer, gc,
-                midpoint->x1, midpoint->y1,
+                midpoint->x, midpoint->y,
                 (bboxit->x1 + bboxit->x2)/2, (bboxit->y1 + bboxit->y2)/2
             );
         }
@@ -562,6 +652,15 @@ void draw_layout() {
             }
         }
     }
+
+	if (mapType) {
+		for (i = 0; i < Numnets; i++) {
+			net = Nlnets[i];
+			//if (strcmp(net->netname, gndnet) || strcmp(net->netname, vddnet)) continue;
+			draw_net_bbox(net);
+			
+		}
+	}
 
     /* Copy double-buffer onto display window */
     XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);

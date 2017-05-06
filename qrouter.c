@@ -78,6 +78,7 @@ static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
 static void helpmessage(void);
 BOOL checkCollisions(int thnum, NET net);
+BOOL resolveCollisions(int thnum, NET net);
 
 /*--------------------------------------------------------------*/
 /* Check track pitch and set the number of channels (may be	*/
@@ -844,7 +845,26 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 				continue;
 			}
 			if(checkCollisions(threadnum, CurNet[threadnum])) {
-				Fprintf(stdout,"%s: Boxes of %s overlap. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
+				Fprintf(stdout,"%s: Boxes of %s overlap.Trying to find alternative shapes\n", __FUNCTION__, CurNet[threadnum]->netname);
+				if(resolveCollisions(threadnum, CurNet[threadnum])) {
+					Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__, CurNet[threadnum]->netname);
+				} else {
+					Fprintf(stdout,"%s: Boxes of %s still overlap. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
+					CurNet[threadnum]->locked=TRUE;
+					if(postponed) {
+						postponed->next = CurNet[threadnum];
+						postponed->next->last=postponed;
+					} else {
+						postponed = CurNet[threadnum];
+						postponed->next = FALSE;
+						postponed->last = FALSE;
+					}
+					free(thread_params);
+					continue;
+				}
+			}
+			if(check_bbox_infinite(CurNet[threadnum]->bbox)) {
+				Fprintf(stdout,"%s: Box of %s is infinit. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
 				CurNet[threadnum]->locked=TRUE;
 				if(postponed) {
 					postponed->next = CurNet[threadnum];
@@ -856,22 +876,22 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 				}
 				free(thread_params);
 				continue;
-			} else {
-				thread_params->i=i;
-				thread_params->remaining=&remaining;
-				thread_params->graphdebug=graphdebug;
-				thread_params->thnum=threadnum;
-				thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
-				thread_params_list[threadnum]=thread_params;
-				threadnum++;
 			}
+			thread_params->i=i;
+			thread_params->remaining=&remaining;
+			thread_params->graphdebug=graphdebug;
+			thread_params->thnum=threadnum;
+			thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
+			thread_params_list[threadnum]=thread_params;
+			threadnum++;
 		} else {
 			Fprintf(stdout,"%s: Out of memory. Dying\n",__FUNCTION__);
 			exit(0);
 		}
 
-		if(threadnum==MAX_NUM_THREADS) {
-			for(int c=0;c<MAX_NUM_THREADS;c++) {
+		if((threadnum==MAX_NUM_THREADS)||!(i<Numnets)) {
+			Fprintf(stdout,"%s: counter i is %d\n",__FUNCTION__,Numnets);
+			for(int c=0;c<threadnum;c++) {
 				thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 				if( thret != TCL_OK) {
 					Fprintf(stdout,"Couldn't start thread!\n");
@@ -881,11 +901,11 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 					Fprintf(stdout,"Started thread %d\n",c);
 				}
 			}
-			for(int c=0;c<MAX_NUM_THREADS;c++) {
+			for(int c=0;c<threadnum;c++) {
 				Fprintf(stdout,"%s: waiting for thread %d to finish\n",__FUNCTION__,threadnum);
 				Tcl_JoinThread( threadIDs[c], NULL );
 			}
-			for(int c=0;c<MAX_NUM_THREADS;c++) {
+			for(int c=0;c<threadnum;c++) {
 				free(thread_params_list[c]);
 			}
 			threadnum=0;
@@ -2231,7 +2251,7 @@ free_glist(struct routeinfo_ *iroute)
    while (iroute->glist) {
       gpoint = iroute->glist;
       iroute->glist = iroute->glist->next;
-      Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
+      Pr = &OBS2VAL(gpoint->x, gpoint->y, gpoint->layer);
       Pr->flags &= ~PR_ON_STACK;
       freePOINT(gpoint);
   }
@@ -2295,17 +2315,42 @@ BOOL checkContainsPoint(NET net, BBOX pnt)
 BOOL checkCollisions(int thnum, NET net)
 {
 	BBOX pnt;
+	NET n;
 	if(!net) return TRUE;
 	pnt = net->bbox;
 	while(pnt) {
-		for(int i=0; i<MAX_NUM_THREADS; i++) {
-			if(thnum!=i) {
-				if(CurNet[i]) {
-					if(checkContainsPoint(CurNet[i],pnt)) {
-						FprintfT(stdout,"%s: yes. boxes overlap\n", __FUNCTION__);
-						return TRUE;
-					}
+		for(int i=0; i<thnum; i++) {
+			n = CurNet[i];
+			if(net!=n) {
+				if(checkContainsPoint(n,pnt)) {
+					FprintfT(stdout,"%s: yes. boxes overlap\n", __FUNCTION__);
+					return TRUE;
 				}
+			}
+		}
+		pnt = pnt->next;
+	}
+	return FALSE;
+}
+
+BOOL resolveCollisions(int thnum, NET net)
+{
+	BBOX pnt;
+	BBOX vpnt;
+	NET n;
+	if(!net) return TRUE;
+	pnt = net->bbox;
+	while(pnt) {
+		for(int i=0; i<thnum; i++) {
+			n = CurNet[i];
+			// TODO: add complicated stuff here in order to make the shapes not collide anymore
+			if(net!=n) {
+				if(checkContainsPoint(n,pnt)) {
+					vpnt = malloc(sizeof(struct bbox_pt_));
+					vpnt->x=pnt->x;
+					vpnt->y=pnt->y;
+				}
+				free(vpnt);
 			}
 		}
 		pnt = pnt->next;
@@ -2806,8 +2851,8 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
     while ((gpoint = iroute->glist) != NULL) {
       iroute->glist = gpoint->next;
 
-      curpt.x = gpoint->x1;
-      curpt.y = gpoint->y1;
+      curpt.x = gpoint->x;
+      curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
 
       if (graphdebug) highlight(curpt.x, curpt.y);

@@ -119,6 +119,12 @@ static int qrouter_vdd(
 static int qrouter_gnd(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_clk(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_borders(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_verbose(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -152,12 +158,14 @@ static cmdstruct qrouter_commands[] =
    {"passes", qrouter_passes},
    {"vdd", qrouter_vdd},
    {"gnd", qrouter_gnd},
+   {"clk", qrouter_clk},
    {"failing", qrouter_failing},
    {"remove", qrouter_remove},
    {"cost", qrouter_cost},
    {"map", qrouter_map},
    {"verbose", qrouter_verbose},
    {"redraw", redraw},
+   {"borders", qrouter_borders},
    {"print", qrouter_print},
    {"quit", qrouter_quit},
    {"", NULL}  /* sentinel */
@@ -2222,6 +2230,207 @@ qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
     else if (objc == 2) {
 	if (gndnet != NULL) free(gndnet);
 	gndnet = strdup(Tcl_GetString(objv[1]));
+    }
+    else {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "borders"					*/
+/* With no argument, just print borders of all nets */
+/*							*/
+/* Subcommand "fit" Refit borders of a given net to surrounding */
+/*							*/
+/* Options:						*/
+/*							*/
+/*	borders [<name>]					*/
+/*------------------------------------------------------*/
+BOOL qrouter_check_bbox_collisions(NET net);
+BOOL qrouter_resolve_bbox_collisions(NET net);
+static int
+qrouter_borders(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
+{
+	char *subcmd,*subcmdpar;
+	NET net;
+	if (objc == 2) {
+		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
+		if(!strcmp(subcmd,"fit")) {
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					net->bbox_color="red";
+					net->active=FALSE;
+				}
+			}
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					if(qrouter_check_bbox_collisions(net)) {
+						if(qrouter_resolve_bbox_collisions(net)) {
+							net->bbox_color="green";
+							net->active=TRUE;
+						}
+						draw_layout();
+					}
+				}
+			}
+		}
+		if(!strcmp(subcmd,"draw")) {
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) net->active=TRUE;
+			}
+			draw_layout();
+		}
+	}
+	if (objc == 3) {
+		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
+		if(!strcmp(subcmd,"draw")) {
+			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) net->active=FALSE;
+			}
+			net=getnetbyname(subcmdpar);
+			if(net) net->active=TRUE;
+			draw_layout();
+		}
+		if(!strcmp(subcmd,"fit")) {
+			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
+			net=getnetbyname(subcmdpar);
+			if(net) {
+				net->bbox_color="red";
+				net->active=FALSE;
+				if(qrouter_check_bbox_collisions(net)) {
+					if(qrouter_resolve_bbox_collisions(net)) {
+						net->bbox_color="green";
+						net->active=TRUE;
+					}
+				}
+				draw_layout();
+			}
+		}
+		if(!strcmp(subcmd,"collisions")||!strcmp(subcmd,"cols")) {
+			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
+			Tcl_SetObjResult(interp, Tcl_NewStringObj("checking for collisions with net", -1));
+			Tcl_AppendElement(interp, subcmdpar);
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					net->active=FALSE;
+				}
+			}
+			net=getnetbyname(subcmdpar);
+			if(net) {
+				net->bbox_color="red";
+				net->active=TRUE;
+				if(qrouter_check_bbox_collisions(net)) {
+					Tcl_AppendElement(interp, "there are collisions");
+				} else {
+					Tcl_AppendElement(interp, "no collisions found");
+				}
+				draw_layout();
+			}
+		}
+	}
+	return QrouterTagCallback(interp, objc, objv);
+}
+
+BOOL qrouter_check_bbox_collisions(NET net)
+{
+	BBOX pnt;
+	NET n;
+	if(!net) return TRUE;
+	pnt = net->bbox;
+	while(pnt) {
+		for(int i=0; i<Numnets; i++) {
+			n = getnettoroute(i);
+			if(n) {
+				if(net!=n) {
+					if(check_contains_point(n->bbox,pnt)) {
+						n->active=TRUE;
+						n->bbox_color="red";
+						return TRUE;
+					}
+				}
+			}
+		}
+		pnt = pnt->next;
+	}
+	return FALSE;
+}
+
+BOOL qrouter_resolve_bbox_collisions(NET net)
+{
+	BBOX pnt; // recent corner
+	BBOX vpnt; // virtual point
+	BBOX bbox_temp; // copy of bbox
+	int oldx, oldy;
+	NET n;
+	if(!net) return FALSE;
+	bbox_temp = clone_bbox(net->bbox);
+	for(int i=0; i<Numnets; i++) {
+		n = getnettoroute(i);
+		if((net!=n)&&n) {
+			pnt = n->bbox;
+			while(pnt) {
+				if(check_contains_point(net->bbox,pnt)) {
+					vpnt=net->bbox;
+					while(vpnt) {
+						if(check_contains_point(n->bbox,vpnt)) {
+							oldx = vpnt->x;
+							oldy = vpnt->y;
+							bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
+							bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
+							bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
+							bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
+						}
+						vpnt=vpnt->next;
+					}
+					if(!check_bbox_consistency(net, bbox_temp)) {
+						free_bbox(net->bbox);
+						return FALSE;
+					}
+				}
+				pnt = pnt->next;
+			}
+		}
+	}
+
+	free_bbox(net->bbox);
+	net->bbox=bbox_temp;
+	return TRUE;
+}
+
+/*------------------------------------------------------*/
+/* Command "clk"					*/
+/*							*/
+/* Set the name of the net used for the clock signal/timing	*/
+/* With no argument, return the name of the ground	*/
+/* net.							*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	clk [<name>]					*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_clk(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
+{
+    if (objc == 1) {
+	if (clknet == NULL)
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj("(none)", -1));
+	else
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj(clknet, -1));
+    }
+    else if (objc == 2) {
+	if (clknet != NULL) free(clknet);
+	clknet = strdup(Tcl_GetString(objv[1]));
     }
     else {
 	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");

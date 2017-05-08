@@ -18,8 +18,8 @@
 #include "qconfig.h"
 #include "lef.h"
 
-#define BOX_ROOM_X 0
-#define BOX_ROOM_Y 0
+#define BOX_ROOM_X 3
+#define BOX_ROOM_Y 3
 
 /*--------------------------------------------------------------*/
 /* Comparison routine used for qsort.  Sort nets by number of	*/
@@ -156,23 +156,53 @@ int net_absolute_distance(NET net)
 int get_num_points_of_bbox(BBOX box)
 {
 	int ret=0;
-	BBOX pt;
-	if(!box) return 0;
-	pt=box;
-	while(pt) {
-		pt=pt->next;
+	while(box) {
+		box=box->next;
 		ret++;
 	}
 	return ret;
 }
 
+BBOX start_of_bbox_list(BBOX pt)
+{
+	BBOX start;
+	if(!pt) return NULL;
+	while(pt) {
+		start=pt;
+		pt=pt->last;
+	}
+	return start;
+}
+
+BBOX delete_point_from_bbox(BBOX bbox, int x, int y)
+{
+	BBOX last = NULL, next = NULL, recent = NULL;
+	if(!bbox) return NULL;
+	recent = bbox;
+	while(recent) {
+		if((recent->x==x)&&(recent->y==y)) {
+			last = recent->last;
+			next = recent->next;
+			if(last!=NULL) {
+				last->next=next;
+			} else {
+				bbox = next;
+			}
+			if(next!=NULL) {
+				next->last=last;
+			}
+			free(recent);
+			return bbox;
+		}
+		recent=recent->next;
+	}
+	return bbox;
+}
+
 BBOX add_point_to_bbox(BBOX bbox, int x, int y)
 {
 	BBOX pt; // point to add
-	//BBOX cpt; // additional corner point
 	BBOX tmp;
-	//BOOL foundX = FALSE, foundY = FALSE;
-	//int num_pts;
 
 	// checking for collision
 	tmp = bbox;
@@ -180,8 +210,6 @@ BBOX add_point_to_bbox(BBOX bbox, int x, int y)
 		if((tmp->x==x)&&(tmp->y==y)) return bbox; // point already exists!
 		tmp=tmp->next;
 	}
-
-	//num_pts = get_num_points_of_bbox(net->bbox);
 
 	pt = malloc(sizeof(struct bbox_pt_)); // creating requested point
 	if(!pt) {
@@ -200,9 +228,7 @@ BBOX add_point_to_bbox(BBOX bbox, int x, int y)
 		bbox->last=pt;
 	}
 
-	bbox = pt;
-	
-	return bbox;
+	return pt;
 }
 
 /*--------------------------------------------------------------*/
@@ -336,7 +362,6 @@ void find_bounding_box(NET net)
 {
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
-   BBOX pt1, pt2;
    int mindist, dist, dx, dy;
 
    if (net->numnodes == 2) {
@@ -381,38 +406,46 @@ void find_bounding_box(NET net)
       }
       d1tap = mintap;
 
-      int x1=-BOX_ROOM_X,y1=-BOX_ROOM_Y,x2=BOX_ROOM_X,y2=BOX_ROOM_Y;
-      x1 += (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      y1 += (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      x2 += (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      y2 += (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
+      int x1,y1,x2,y2;
+      x1 = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
+      x1-=BOX_ROOM_X;
+      y1 = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
+      y1-=BOX_ROOM_Y;
+      x2 = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
+      x2+=BOX_ROOM_X;
+      y2 = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
+      y2+=BOX_ROOM_Y;
       
-      net->bbox = add_point_to_bbox(net->bbox, x1, y1);
-      net->bbox = add_point_to_bbox(net->bbox, x2, y2);
-      net->bbox = add_point_to_bbox(net->bbox, x1, y2);
-      net->bbox = add_point_to_bbox(net->bbox, x2, y1);
+      net->bbox = add_point_to_bbox(net->bbox, x1, y1); // left lower point
+      net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point
+      net->bbox = add_point_to_bbox(net->bbox, x1, y2); // left upper point
+      net->bbox = add_point_to_bbox(net->bbox, x2, y1); // right lower point
    } else { // Net with more than 2 nodes
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
-      net->bbox = add_point_to_bbox(net->bbox, MAXRT, MAXRT); // right upper point
-      net->bbox = add_point_to_bbox(net->bbox, -MAXRT, -MAXRT); // left lower point
 
-      pt1 = getLeftLowerPoint(net);
-      pt2 = getRightUpperPoint(net);
+      int x1=0, x2=0, y1=0, y2=0;
 
+      if (net->numnodes == 0) return;	 // e.g., vdd or gnd bus
       for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
-            if (dtap->gridx > pt2->x) pt2->x = dtap->gridx;
-            if (dtap->gridx < pt1->x) pt1->x = dtap->gridx;
-            if (dtap->gridy > pt2->y) pt2->y = dtap->gridy;
-            if (dtap->gridy < pt1->y) pt1->y = dtap->gridy;
+            if (dtap->gridx > x2) x2 = dtap->gridx;
+            if (dtap->gridx < x1) x1 = dtap->gridx;
+            if (dtap->gridy > y2) y2 = dtap->gridy;
+            if (dtap->gridy < y1) y1 = dtap->gridy;
 	 }
       }
+      x1-=BOX_ROOM_X;
+      y1-=BOX_ROOM_Y;
+      x2+=BOX_ROOM_X;
+      y2+=BOX_ROOM_Y;
 
-      net->bbox = add_point_to_bbox(net->bbox, pt2->x, pt1->y); // right lower point
-      net->bbox = add_point_to_bbox(net->bbox, pt1->x, pt2->y); // left upper point
+      net->bbox = add_point_to_bbox(net->bbox, x1, y1); // left lower point
+      net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point
+      net->bbox = add_point_to_bbox(net->bbox, x1, y2); // left upper point
+      net->bbox = add_point_to_bbox(net->bbox, x2, y1); // right lower point
    }
 }
 
@@ -434,7 +467,7 @@ void find_bounding_box(NET net)
 /* each net's trunk line.					*/
 /*--------------------------------------------------------------*/
 
-void defineRouteTree(NET net)
+void define_route_tree(NET net)
 {
     NODE n1;
     DPOINT dtap;
@@ -1046,7 +1079,7 @@ disable_gridpos(int x, int y, int lay)
 /*--------------------------------------------------------------*/
 
 void
-count_pinlayers(void)
+count_pinlayers()
 {
    int j, l;
 

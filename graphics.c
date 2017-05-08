@@ -457,15 +457,23 @@ draw_net_bbox(NET net) {
 	int num_total_pts;
 	int num_done_pts = 1;
 	int cycles = 0;
-	BOOL found_p1;
 
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	num_total_pts = get_num_points_of_bbox(net->bbox);
 	if (!num_total_pts) return;
-	print_all_points(net);
+	//print_all_points(net);
 
-	XSetForeground(dpy, gc, redpix); // set box colour to red
+	if(net->bbox_color) {
+		if(!strcmp(net->bbox_color,"green"))
+			XSetForeground(dpy, gc, greenpix); // set box colour to green
+		if(!strcmp(net->bbox_color,"red"))
+			XSetForeground(dpy, gc, redpix); // set box colour to green
+		else
+			XSetForeground(dpy, gc, blackpix); // set box colour to default
+	} else {
+		XSetForeground(dpy, gc, redpix); // set box colour to red
+	}
 	uncheck_all_points(net->bbox);
 
 	x0=x1=net->bbox->x; // save for the end
@@ -479,7 +487,7 @@ draw_net_bbox(NET net) {
 				if((tmp->x==x1)&&(tmp->y!=y1)) {
 					x2=tmp->x;
 					y2=tmp->y;
-					printf("%s: drawing vertical bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
+					//printf("%s: drawing vertical bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
 					XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
 					x1=tmp->x;
 					y1=tmp->y;
@@ -488,7 +496,7 @@ draw_net_bbox(NET net) {
 				} else if((tmp->x!=x1)&&(tmp->y==y1)) {
 					x2=tmp->x;
 					y2=tmp->y;
-					printf("%s: drawing horizontal bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
+					//printf("%s: drawing horizontal bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
 					XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
 					x1=tmp->x;
 					y1=tmp->y;
@@ -500,8 +508,51 @@ draw_net_bbox(NET net) {
 		}
 		cycles++;
 	}
-	printf("%s: drawing final bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x0,y0,x1,y1,net->netname);
-	XDrawLine(dpy, buffer, gc,spacing*x0,height - spacing*y0,spacing*x1,height - spacing*y1);
+	//printf("%s: drawing final bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x0,y0,x1,y1,net->netname);
+	XDrawLine(dpy, buffer, gc, spacing*x0,height - spacing*y0,spacing*x1,height - spacing*y1);
+	tmp=getRightUpperPoint(net);
+	XDrawString(dpy, buffer, gc, spacing*tmp->x,height-spacing*tmp->y, net->netname, strlen(net->netname));
+}
+
+/*--------------------------------------*/
+/* Draw the boundary box of the net on the display	*/
+/*--------------------------------------*/
+#define MAX_CYCLES 100
+static void
+draw_ratnet(NET net) {
+	NODE tn1,tn2;
+	DPOINT d1tap, d2tap;
+	int x1, x2, y1, y2;
+	if (dpy == NULL) return;
+	if (net == NULL) return;
+
+	XSetForeground(dpy, gc, yellowpix); // set ratnet colour to yellow
+
+	tn1=net->netnodes;
+	while(tn1) {
+		d1tap = (tn1->taps == NULL) ? tn1->extend : tn1->taps;
+		if (d1tap == NULL) {
+			tn1=tn1->next;
+			continue;
+		}
+
+		x1=d1tap->gridx;
+		y1=d1tap->gridy;
+		tn2=net->netnodes;
+		while(tn2) {
+			d2tap = (tn2->taps == NULL) ? tn2->extend : tn2->taps;
+			if (d2tap == NULL) {
+				tn2=tn2->next;
+				continue;
+			}
+			x2=d2tap->gridx;
+			y2=d2tap->gridy;
+			XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
+			tn2=tn2->next;
+		}
+		
+		tn1=tn1->next;
+	}
 }
 
 /*--------------------------------------*/
@@ -656,9 +707,14 @@ void draw_layout() {
 	if (mapType) {
 		for (i = 0; i < Numnets; i++) {
 			net = Nlnets[i];
-			//if (strcmp(net->netname, gndnet) || strcmp(net->netname, vddnet)) continue;
-			draw_net_bbox(net);
-			
+			//if(gndnet)
+			//	if (strcmp(net->netname, gndnet)) continue;
+			//if(vddnet)
+			//	if(strcmp(net->netname, vddnet)) continue;
+			if(net->active) {
+				draw_net_bbox(net);
+				draw_ratnet(net);
+			}
 		}
 	}
 

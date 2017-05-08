@@ -640,8 +640,9 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->netnodes = (NODE)NULL;
 		net->noripup = (NETLIST)NULL;
 		net->routes = (ROUTE)NULL;
-		net->bbox = NULL;
+		net->bbox = (BBOX)NULL;
 		net->locked = FALSE;
+		net->active = FALSE;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,
 		// use VDD_NET and GND_NET for power and ground, and 0
@@ -651,6 +652,8 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		   net->netnum = VDD_NET;
 		else if (gndnet && !strcmp(token, gndnet))
 		   net->netnum = GND_NET;
+		else if (clknet && !strcmp(token, clknet))
+		   net->netnum = CLK_NET;
 		else
 		   net->netnum = netidx++;
 

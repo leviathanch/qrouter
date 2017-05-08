@@ -8,17 +8,18 @@
 
 #define GND_NET		 1
 #define VDD_NET		 2
-#define MIN_NET_NUMBER   3
+#define CLK_NET		 3
+#define MIN_NET_NUMBER   4
 
 void create_netorder(u_char method);
 void find_bounding_box(NET net);
-void defineRouteTree(NET);
+void define_route_tree(NET);
 void print_nodes(char *filename);
 void print_nlnets(char *filename);
 void count_reachable_taps();
 void check_variable_pitch(int, int *, int *);
 void create_obstructions_from_variable_pitch(void);
-void count_pinlayers(void);
+void count_pinlayers();
 void create_obstructions_from_gates(void);
 void expand_tap_geometry(void);
 void create_obstructions_inside_nodes(void);

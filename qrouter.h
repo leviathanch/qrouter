@@ -5,7 +5,7 @@
 /* Modified by Tim Edwards 2011-2013				*/
 /*--------------------------------------------------------------*/
 
-#define THREADS 6
+#define THREADS 1
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 
@@ -293,6 +293,7 @@ int get_bbox_area(NET net);
 BOOL check_bbox_infinite(BBOX p);
 int net_absolute_distance(NET net);
 BBOX  add_point_to_bbox(BBOX bbox, int x, int y);
+BBOX delete_point_from_bbox(BBOX bbox, int x, int y);
 
 struct net_ {
    int  netnum;		// a unique number for this net
@@ -310,8 +311,10 @@ struct net_ {
    ROUTE   routes;	// routes for this net
    BBOX bbox;
    BOOL locked;
+   BOOL active;
    NET last;
    NET next;
+   char *bbox_color;
 };
 
 // Flags used by NET "flags" record
@@ -460,6 +463,7 @@ extern u_char ripLimit;
 
 extern char *vddnet;
 extern char *gndnet;
+extern char *clknet;
 
 /* Tcl output to console handling */
 
@@ -482,7 +486,7 @@ extern char *gndnet;
 /* Function prototypes */
 
 int    set_num_channels(void);
-int    allocate_obs_array(void);
+int    allocate_obs_array();
 int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 
@@ -504,8 +508,14 @@ int    dofirststage(u_char graphdebug, int debug_netnum);
 int    dosecondstage(u_char graphdebug, u_char singlestep);
 int    dothirdstage(u_char graphdebug, int debug_netnum);
 
+BOOL check_contains_point(BBOX bbox, BBOX pnt);
+BBOX clone_bbox(BBOX orig);
+BOOL check_bbox_consistency(NET net, BBOX vbox);
+void free_bbox(BBOX t);
+
 int    doroute(int thnum, NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
+NET getnetbyname(char *name);
 int    route_net_ripup(int thnum, NET net, u_char graphdebug);
 
 #ifdef TCL_QROUTER

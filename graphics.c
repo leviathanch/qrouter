@@ -523,7 +523,6 @@ static void
 draw_ratnet(NET net) {
 	NODE tn1,tn2;
 	DPOINT d1tap, d2tap;
-	int x1, x2, y1, y2;
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 
@@ -536,9 +535,6 @@ draw_ratnet(NET net) {
 			tn1=tn1->next;
 			continue;
 		}
-
-		x1=d1tap->gridx;
-		y1=d1tap->gridy;
 		tn2=net->netnodes;
 		while(tn2) {
 			d2tap = (tn2->taps == NULL) ? tn2->extend : tn2->taps;
@@ -546,12 +542,10 @@ draw_ratnet(NET net) {
 				tn2=tn2->next;
 				continue;
 			}
-			x2=d2tap->gridx;
-			y2=d2tap->gridy;
-			XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
+			printf("%s net %s d1tap->gridx %d d1tap->gridy %d d2tap->gridx %d d2tap->gridy %d \n",__FUNCTION__,tn2->netname,d1tap->gridx,d1tap->gridy,d2tap->gridx,d2tap->gridy);
+			XDrawLine(dpy, buffer, gc,d1tap->gridx*spacing,height-d1tap->gridy*spacing,d2tap->gridx*spacing,height-d2tap->gridy*spacing);
 			tn2=tn2->next;
 		}
-		
 		tn1=tn1->next;
 	}
 }

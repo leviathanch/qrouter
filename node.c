@@ -360,6 +360,8 @@ void find_bounding_box(NET net)
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
    int mindist, dist, dx, dy;
+   if(!net) return;
+   printf("%s finding box for %s\n",__FUNCTION__,net->netname);
 
    if (net->numnodes == 2) {
 
@@ -408,6 +410,7 @@ void find_bounding_box(NET net)
       y1 = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
       x2 = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
       y2 = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
+      printf("%s d1tap->gridx %d d1tap->gridy %d d2tap->gridx %d d2tap->gridy %d \n",__FUNCTION__,d1tap->gridx,d1tap->gridy,d2tap->gridx,d2tap->gridy);
 
       x1-=BOX_ROOM_X;
       y1-=BOX_ROOM_Y;

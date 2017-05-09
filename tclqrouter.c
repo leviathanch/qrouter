@@ -2370,48 +2370,48 @@ BOOL qrouter_resolve_bbox_collisions(NET net)
 	BBOX vpnt; // virtual point
 	BBOX bbox_temp; // copy of bbox
 	int oldx, oldy;
-	int num_pts, num_pts_tmp;
+	int num_bbox_pts;
 	NET n;
 	if(!net) return TRUE;
-	num_pts=net->num_bbox_pts;
+	if(net->num_bbox_pts<4)  return TRUE; // don't check something which isn't a rectangle at least
 	bbox_temp = clone_bbox(net->bbox);
 	for(int i=0; i<Numnets; i++) {
 		n = CurNet[i];
 		if((net!=n)&&n) {
+			num_bbox_pts=n->num_bbox_pts;
+			if(num_bbox_pts<4) continue; // don't check something which isn't a rectangle at least
 			pnt = n->bbox;
 			while(pnt) {
-				if(num_pts>3) {
-					if(check_contains_point(net->bbox,pnt)) {
-						vpnt=net->bbox;
-						while(vpnt) {
-							num_pts_tmp=get_num_points_of_bbox(bbox_temp);
-							if(num_pts_tmp>3) {
-								if(check_contains_point(n->bbox,vpnt)) {
-									oldx = vpnt->x;
-									oldy = vpnt->y;
-									bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
-									num_pts_tmp--;
-									bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
-									bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
-									bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
-									num_pts_tmp+=3;
-								}
-								vpnt=vpnt->next;
-							}
+				if(check_contains_point(net->bbox,pnt)) {
+					vpnt=net->bbox;
+					while(vpnt) {
+						if(check_contains_point(n->bbox,vpnt)) {
+							oldx = vpnt->x;
+							oldy = vpnt->y;
+							bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
+							num_bbox_pts--;
+							bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
+							bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
+							bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
+							num_bbox_pts+=3;
 						}
-						if(!check_bbox_consistency(net, bbox_temp)) {
-							free_bbox(net->bbox);
-							return FALSE;
-						}
+						vpnt=vpnt->next;
 					}
-					pnt = pnt->next;
+					if(check_bbox_consistency(net, bbox_temp)) {
+						free_bbox(net->bbox);
+						net->bbox=bbox_temp;
+						net->num_bbox_pts=num_bbox_pts;
+					} else {
+						free_bbox(bbox_temp);
+						bbox_temp = clone_bbox(net->bbox);
+						num_bbox_pts=net->num_bbox_pts;
+					}
 				}
+				pnt = pnt->next;
 			}
 		}
 	}
 
-	free_bbox(net->bbox);
-	net->bbox=bbox_temp;
 	return TRUE;
 }
 

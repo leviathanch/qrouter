@@ -405,12 +405,13 @@ void find_bounding_box(NET net)
 
       int x1,y1,x2,y2;
       x1 = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      x1-=BOX_ROOM_X;
       y1 = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      y1-=BOX_ROOM_Y;
       x2 = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      x2+=BOX_ROOM_X;
       y2 = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
+
+      x1-=BOX_ROOM_X;
+      y1-=BOX_ROOM_Y;
+      x2+=BOX_ROOM_X;
       y2+=BOX_ROOM_Y;
       
       net->bbox = add_point_to_bbox(net->bbox, x1, y1); // left lower point

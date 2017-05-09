@@ -315,6 +315,7 @@ struct net_ {
    NET last;
    NET next;
    char *bbox_color;
+   int num_bbox_pts;
 };
 
 // Flags used by NET "flags" record

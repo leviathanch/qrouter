@@ -2466,7 +2466,7 @@ BOOL resolve_bbox_collisions(int thnum)
 	NET n;
 	NET net = CurNet[thnum];
 	if(!net) return TRUE;
-	num_pts=get_num_points_of_bbox(net->bbox);
+	num_pts=net->num_bbox_pts;
 	bbox_temp = clone_bbox(net->bbox);
 	for(int i=0; i<thnum; i++) {
 		n = CurNet[i];
@@ -2483,9 +2483,11 @@ BOOL resolve_bbox_collisions(int thnum)
 									oldx = vpnt->x;
 									oldy = vpnt->y;
 									bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
+									num_pts_tmp--;
 									bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
 									bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
 									bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
+									num_pts_tmp+=3;
 								}
 								vpnt=vpnt->next;
 							}

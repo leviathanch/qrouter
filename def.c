@@ -643,6 +643,7 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->bbox = (BBOX)NULL;
 		net->locked = FALSE;
 		net->active = FALSE;
+		net->num_bbox_pts = 0;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,
 		// use VDD_NET and GND_NET for power and ground, and 0

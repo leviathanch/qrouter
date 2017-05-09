@@ -156,10 +156,7 @@ int net_absolute_distance(NET net)
 int get_num_points_of_bbox(BBOX box)
 {
 	int ret=0;
-	while(box) {
-		box=box->next;
-		ret++;
-	}
+	for(;box;box=box->next) ret++;
 	return ret;
 }
 
@@ -420,6 +417,7 @@ void find_bounding_box(NET net)
       net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point
       net->bbox = add_point_to_bbox(net->bbox, x1, y2); // left upper point
       net->bbox = add_point_to_bbox(net->bbox, x2, y1); // right lower point
+      net->num_bbox_pts+=4;
    } else { // Net with more than 2 nodes
 
       // Use the first tap point for each node to get a rough bounding box and
@@ -446,6 +444,7 @@ void find_bounding_box(NET net)
       net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point
       net->bbox = add_point_to_bbox(net->bbox, x1, y2); // left upper point
       net->bbox = add_point_to_bbox(net->bbox, x2, y1); // right lower point
+      net->num_bbox_pts+=4;
    }
 }
 

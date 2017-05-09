@@ -2282,7 +2282,13 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 		if(!strcmp(subcmd,"draw")) {
 			for (int i = 0; i < Numnets; i++) {
 				net=getnettoroute(i);
-				if(net) net->active=TRUE;
+				if(net) {
+					if(is_vddnet(net)||is_gndnet(net)||is_clknet(net)) {
+						net->active=FALSE;
+					} else {
+						net->active=TRUE;
+					}
+				}
 			}
 			draw_layout();
 		}

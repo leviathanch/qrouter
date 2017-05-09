@@ -6,6 +6,7 @@
 
 #ifndef NODE_H
 
+#define UNDEF_NET	 0
 #define GND_NET		 1
 #define VDD_NET		 2
 #define CLK_NET		 3

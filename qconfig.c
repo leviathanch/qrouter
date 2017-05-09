@@ -504,6 +504,21 @@ int read_config(FILE *fconfig, int is_info)
 		printf("gndnet %s\n",gndnet);
 	}
 
+	if (strstr(lineptr, "clk")) {
+		OK = 1;
+		int lenstrT = 0;
+		char *clkname = lineptr+strlen("clk")+1;
+		for(int c=0;c<strlen(clkname);c++) {
+			if(isspace(clkname[c]))
+				break;
+			lenstrT++;
+		}
+		clknet=malloc(lenstrT);
+		strncpy(gndnet,clkname,lenstrT);
+		clknet[lenstrT]=0;
+		printf("clknet %s\n",clknet);
+	}
+
 	if (OK == 0) {
 	    if (!(lineptr[0] == '\n' || lineptr[0] == '#' || lineptr[0] == 0)) {
 		if (!is_info)	// Don't report errors on info file generation

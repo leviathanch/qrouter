@@ -84,6 +84,109 @@ static void helpmessage(void);
 BOOL check_bbox_collisions(int thnum);
 BOOL resolve_bbox_collisions(int thnum);
 
+NET gndnets = NULL;
+NET vddnets = NULL;
+NET clknets = NULL;
+
+BOOL is_vddnet(NET net)
+{
+	if(!net) return FALSE;
+	if(vddnet)
+		if(!strcmp(vddnet,net->netname)) return TRUE;
+	for(NET p=vddnets;p;p=p->next) {
+		if(p==net) return TRUE;
+	}
+	return FALSE;
+}
+
+void add_vddnet(NET net)
+{
+	if(!net) return;
+	if(vddnets) {
+		vddnets->next = net;
+		net->last = vddnets;
+	} else {
+		vddnets = net;
+	}
+}
+
+void delete_vddnet(NET net)
+{
+	if(!net) return;
+	for(NET p=vddnets;p;p=p->next) {
+		if(p==net) {
+			if(p->last) p->last->next = p->next;
+			if(p->next) p->next->last = p->last;
+		}
+	}
+}
+
+BOOL is_gndnet(NET net)
+{
+	if(!net) return FALSE;
+	if(vddnet)
+		if(!strcmp(gndnet,net->netname)) return TRUE;
+	for(NET p=gndnets;p;p=p->next) {
+		if(p==net) return TRUE;
+	}
+	return FALSE;
+}
+
+void add_gndnet(NET net)
+{
+	if(!net) return;
+	if(gndnets) {
+		gndnets->next = net;
+		net->last = gndnets;
+	} else {
+		gndnets = net;
+	}
+}
+
+void delete_gndnet(NET net)
+{
+	if(!net) return;
+	for(NET p=gndnets;p;p=p->next) {
+		if(p==net) {
+			if(p->last) p->last->next = p->next;
+			if(p->next) p->next->last = p->last;
+		}
+	}
+}
+
+BOOL is_clknet(NET net)
+{
+	if(!net) return FALSE;
+	if(clknet)
+		if(!strcmp(clknet,net->netname)) return TRUE;
+	for(NET p=clknets;p;p=p->next) {
+		if(p==net) return TRUE;
+	}
+	return FALSE;
+}
+
+void add_clknet(NET net)
+{
+	if(!net) return;
+	if(clknets) {
+		clknets->next = net;
+		net->last = clknets;
+	} else {
+		clknets = net;
+	}
+}
+
+void delete_clknet(NET net)
+{
+	if(!net) return;
+	for(NET p=clknets;p;p=p->next) {
+		if(p==net) {
+			if(p->last) p->last->next = p->next;
+			if(p->next) p->next->last = p->last;
+		}
+	}
+}
+
 /*--------------------------------------------------------------*/
 /* Check track pitch and set the number of channels (may be	*/
 /* called from DefRead)						*/

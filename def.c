@@ -644,19 +644,34 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->locked = FALSE;
 		net->active = FALSE;
 		net->num_bbox_pts = 0;
+		net->bbox_color = 0;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,
 		// use VDD_NET and GND_NET for power and ground, and 0
 		// is not a valid net number.
 
-		if (vddnet && !strcmp(token, vddnet))
-		   net->netnum = VDD_NET;
-		else if (gndnet && !strcmp(token, gndnet))
-		   net->netnum = GND_NET;
-		else if (clknet && !strcmp(token, clknet))
-		   net->netnum = CLK_NET;
-		else
+		net->netnum = UNDEF_NET;
+		if(vddnet) {
+			if(!strcmp(token, vddnet)) {
+				net->netnum = VDD_NET;
+				add_vddnet(net);
+			}
+		}
+		if(gndnet) {
+			if(!strcmp(token, gndnet)) {
+				net->netnum = GND_NET;
+				add_gndnet(net);
+			}
+		}
+		if(clknet) {
+			if(!strcmp(token, clknet)) {
+				net->netnum = CLK_NET;
+				add_clknet(net);
+			}
+		}
+		if(net->netnum==UNDEF_NET) {
 		   net->netnum = netidx++;
+		}
 
 		nodeidx = 0;
 

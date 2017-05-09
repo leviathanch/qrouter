@@ -512,6 +512,13 @@ int    dothirdstage(u_char graphdebug, int debug_netnum);
 BOOL check_contains_point(BBOX bbox, BBOX pnt);
 BBOX clone_bbox(BBOX orig);
 BOOL check_bbox_consistency(NET net, BBOX vbox);
+BOOL is_vddnet(NET net);
+BOOL is_gndnet(NET net);
+BOOL is_clknet(NET net);
+void add_clknet(NET net);
+void add_gndnet(NET net);
+void add_vddnet(NET net);
+
 void free_bbox(BBOX t);
 
 int    doroute(int thnum, NET net, u_char stage, u_char graphdebug);

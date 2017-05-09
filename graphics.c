@@ -103,8 +103,7 @@ void highlight_source() {
 		Pr = &OBS2VAL(x, y, i);
 		if (Pr->flags & PR_SOURCE) {
 		    yspc = height - (y + 1) * spacing - hspc;
-		    XFillRectangle(dpy, win, gc, xspc, yspc,
-				spacing, spacing);
+		    XFillRectangle(dpy, win, gc, xspc, yspc,spacing, spacing);
 		}
 	    }
 	}
@@ -139,8 +138,7 @@ void highlight_dest() {
 		Pr = &OBS2VAL(x, y, i);
 		if (Pr->flags & PR_TARGET) {
 		    yspc = height - (y + 1) * spacing - hspc;
-		    XFillRectangle(dpy, win, gc, xspc, yspc,
-				dspc, dspc);
+		    XFillRectangle(dpy, win, gc, xspc, yspc,dspc, dspc);
 		}
 	    }
 	}
@@ -219,8 +217,7 @@ map_obstruction()
 	    for (y = 0; y < NumChannelsY[i]; y++) {
 		if (OBSVAL(x, y, i) & NO_NET) {
 		    yspc = height - (y + 1) * spacing - hspc;
-		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
-				spacing, spacing);
+		    XFillRectangle(dpy, buffer, gc, xspc, yspc, spacing, spacing);
 		}
 	    }
 	}
@@ -234,8 +231,7 @@ map_obstruction()
 	    for (y = 0; y < NumChannelsY[i]; y++) {
 		if (NODEIPTR(x, y, i) != NULL) {
 		    yspc = height - (y + 1) * spacing - hspc;
-		    XFillRectangle(dpy, buffer, gc, xspc, yspc,
-				spacing, spacing);
+		    XFillRectangle(dpy, buffer, gc, xspc, yspc, spacing, spacing);
 		}
 	    }
 	}
@@ -256,8 +252,7 @@ map_congestion()
 
     hspc = spacing >> 1;
 
-    Congestion = (u_char *)calloc(NumChannelsX[0] * NumChannelsY[0],
-			sizeof(u_char));
+    Congestion = (u_char *)calloc(NumChannelsX[0] * NumChannelsY[0], sizeof(u_char));
 
     // Analyze Obs[] array for congestion
     for (i = 0; i < Num_layers; i++) {
@@ -312,8 +307,7 @@ map_estimate()
 
     hspc = spacing >> 1;
 
-    Congestion = (float *)calloc(NumChannelsX[0] * NumChannelsY[0],
-			sizeof(float));
+    Congestion = (float *)calloc(NumChannelsX[0] * NumChannelsY[0], sizeof(float));
 
     // Use net bounding boxes to estimate congestion
 
@@ -437,7 +431,7 @@ void uncheck_all_points(BBOX p)
 
 void print_all_points(NET net)
 {
-	printf("%s: printing bounding box for net %s with %d corners\n",__FUNCTION__,net->netname,get_num_points_of_bbox(net->bbox));
+	printf("%s: bounding box of net %s with %d corners\n",__FUNCTION__,net->netname,get_num_points_of_bbox(net->bbox));
 	BBOX t = net->bbox;
 	while(t) {
 		printf("(%d,%d) ",t->x,t->y);
@@ -485,20 +479,10 @@ draw_net_bbox(NET net) {
 		tmp=net->bbox;
 		while(tmp) {
 			if(!(tmp->checked)) {
-				if((tmp->x==x1)&&(tmp->y!=y1)) {
+				if(((tmp->x==x1)&&(tmp->y!=y1))||((tmp->x!=x1)&&(tmp->y==y1))) {
 					x2=tmp->x;
 					y2=tmp->y;
-					//printf("%s: drawing vertical bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
-					XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
-					x1=tmp->x;
-					y1=tmp->y;
-					tmp->checked=TRUE;
-					num_done_pts++;
-				} else if((tmp->x!=x1)&&(tmp->y==y1)) {
-					x2=tmp->x;
-					y2=tmp->y;
-					//printf("%s: drawing horizontal bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x1,y1,x2,y2,net->netname);
-					XDrawLine(dpy, buffer, gc,spacing*x1,height - spacing*y1,spacing*x2,height - spacing*y2);
+					XDrawLine(dpy,buffer,gc,spacing*x1,height-spacing*y1,spacing*x2,height-spacing*y2);
 					x1=tmp->x;
 					y1=tmp->y;
 					tmp->checked=TRUE;
@@ -509,10 +493,9 @@ draw_net_bbox(NET net) {
 		}
 		cycles++;
 	}
-	//printf("%s: drawing final bbox line from (%d,%d) to (%d,%d) for net %s\n",__FUNCTION__,x0,y0,x1,y1,net->netname);
 	XDrawLine(dpy, buffer, gc, spacing*x0,height - spacing*y0,spacing*x1,height - spacing*y1);
 	tmp=getRightUpperPoint(net);
-	XDrawString(dpy, buffer, gc, spacing*tmp->x,height-spacing*tmp->y, net->netname, strlen(net->netname));
+	XDrawString(dpy, buffer, gc, spacing*tmp->x,height-spacing*tmp->y,net->netname,strlen(net->netname));
 }
 
 /*--------------------------------------*/
@@ -542,7 +525,6 @@ draw_ratnet(NET net) {
 				tn2=tn2->next;
 				continue;
 			}
-			printf("%s net %s d1tap->gridx %d d1tap->gridy %d d2tap->gridx %d d2tap->gridy %d \n",__FUNCTION__,tn2->netname,d1tap->gridx,d1tap->gridy,d2tap->gridx,d2tap->gridy);
 			XDrawLine(dpy, buffer, gc,d1tap->gridx*spacing,height-d1tap->gridy*spacing,d2tap->gridx*spacing,height-d2tap->gridy*spacing);
 			tn2=tn2->next;
 		}
@@ -661,6 +643,7 @@ void draw_layout() {
 	XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);
 	return;
     }
+    XDrawRectangle(dpy, buffer, gc, 0, 0, width, height);
 
     switch (mapType & MAP_MASK) {
 	case MAP_OBSTRUCT:
@@ -707,8 +690,10 @@ void draw_layout() {
 			//if(vddnet)
 			//	if(strcmp(net->netname, vddnet)) continue;
 			if(net->active) {
-				draw_net_bbox(net);
-				draw_ratnet(net);
+				if(!is_gndnet(net)||!is_vddnet(net)||!is_clknet(net)) {
+					draw_net_bbox(net);
+					draw_ratnet(net);
+				}
 			}
 		}
 	}

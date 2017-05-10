@@ -349,6 +349,8 @@ struct routeinfo_ {
 };
 
 #define MAXRT		10000		// "Infinite" route cost
+#define BOX_ROOM_X 3
+#define BOX_ROOM_Y 3
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect

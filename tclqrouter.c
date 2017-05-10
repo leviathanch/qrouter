@@ -2274,6 +2274,9 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 							net->bbox_color="green";
 							net->active=TRUE;
 						}
+						if(is_gndnet(net)||is_vddnet(net)||is_clknet(net)) {
+							net->active=FALSE;
+						}
 						draw_layout();
 					}
 				}
@@ -2301,8 +2304,31 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 				net=getnettoroute(i);
 				if(net) net->active=FALSE;
 			}
-			net=getnetbyname(subcmdpar);
-			if(net) net->active=TRUE;
+			if(!strcmp(subcmdpar,"power_nets")) {
+				for (int i = 0; i < Numnets; i++) {
+					net=getnettoroute(i);
+					if(net) {
+						if(is_gndnet(net)||is_vddnet(net)) net->active=TRUE;
+					}
+				}
+			} else if(!strcmp(subcmdpar,"clock_nets")) {
+				for (int i = 0; i < Numnets; i++) {
+					net=getnettoroute(i);
+					if(net) {
+						if(is_clknet(net)) net->active=TRUE;
+					}
+				}
+			} else if(!strcmp(subcmdpar,"all_nets")) {
+				for (int i = 0; i < Numnets; i++) {
+					net=getnettoroute(i);
+					if(net) {
+						net->active=TRUE;
+					}
+				}
+			} else {
+				net=getnetbyname(subcmdpar);
+				if(net) net->active=TRUE;
+			}
 			draw_layout();
 		}
 		if(!strcmp(subcmd,"fit")) {
@@ -2356,7 +2382,7 @@ BOOL qrouter_check_bbox_collisions(NET net)
 		for(int i=0; i<Numnets; i++) {
 			n = getnettoroute(i);
 			if(n) {
-				if(net!=n) {
+				if(net!=n&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
 					if(check_contains_point(n->bbox,pnt)) {
 						n->active=TRUE;
 						n->bbox_color="red";
@@ -2384,36 +2410,38 @@ BOOL qrouter_resolve_bbox_collisions(NET net)
 	for(int i=0; i<Numnets; i++) {
 		n = CurNet[i];
 		if((net!=n)&&n) {
-			num_bbox_pts=n->num_bbox_pts;
-			if(num_bbox_pts<4) continue; // don't check something which isn't a rectangle at least
-			pnt = n->bbox;
-			while(pnt) {
-				if(check_contains_point(net->bbox,pnt)) {
-					vpnt=net->bbox;
-					while(vpnt) {
-						if(check_contains_point(n->bbox,vpnt)) {
-							oldx = vpnt->x;
-							oldy = vpnt->y;
-							bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
-							num_bbox_pts--;
-							bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
-							bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
-							bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
-							num_bbox_pts+=3;
+			if(!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+				num_bbox_pts=n->num_bbox_pts;
+				if(num_bbox_pts<4) continue; // don't check something which isn't a rectangle at least
+				pnt = n->bbox;
+				while(pnt) {
+					if(check_contains_point(net->bbox,pnt)) {
+						vpnt=net->bbox;
+						while(vpnt) {
+							if(check_contains_point(n->bbox,vpnt)) {
+								oldx = vpnt->x;
+								oldy = vpnt->y;
+								bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
+								num_bbox_pts--;
+								bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
+								bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
+								bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
+								num_bbox_pts+=3;
+							}
+							vpnt=vpnt->next;
 						}
-						vpnt=vpnt->next;
+						if(check_bbox_consistency(net, bbox_temp)) {
+							free_bbox(net->bbox);
+							net->bbox=bbox_temp;
+							net->num_bbox_pts=num_bbox_pts;
+						} else {
+							free_bbox(bbox_temp);
+							bbox_temp = clone_bbox(net->bbox);
+							num_bbox_pts=net->num_bbox_pts;
+						}
 					}
-					if(check_bbox_consistency(net, bbox_temp)) {
-						free_bbox(net->bbox);
-						net->bbox=bbox_temp;
-						net->num_bbox_pts=num_bbox_pts;
-					} else {
-						free_bbox(bbox_temp);
-						bbox_temp = clone_bbox(net->bbox);
-						num_bbox_pts=net->num_bbox_pts;
-					}
+					pnt = pnt->next;
 				}
-				pnt = pnt->next;
 			}
 		}
 	}

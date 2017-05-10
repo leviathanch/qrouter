@@ -18,9 +18,6 @@
 #include "qconfig.h"
 #include "lef.h"
 
-#define BOX_ROOM_X 3
-#define BOX_ROOM_Y 3
-
 /*--------------------------------------------------------------*/
 /* Comparison routine used for qsort.  Sort nets by number of	*/
 /* nodes.							*/
@@ -359,78 +356,39 @@ void find_bounding_box(NET net)
 {
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
-   int mindist, dist, dx, dy;
    if(!net) return;
    printf("%s finding box for %s\n",__FUNCTION__,net->netname);
-
-   if (net->numnodes == 2) {
-
-      n1 = (NODE)net->netnodes;
-      n2 = (NODE)net->netnodes->next;
-
-      // Simple 2-pass---pick up first tap on n1, find closest tap on n2,
-      // then find closest tap on n1.
-
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      if (d1tap == NULL) return;
-      d2tap = (n2->taps == NULL) ? n2->extend : n2->taps;
-      if (d2tap == NULL) return;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d2tap;
-      for (d2tap = d2tap->next; d2tap != NULL; d2tap = d2tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d2tap;
-         }
-      }
-      d2tap = mintap;
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d1tap;
-      for (d1tap = d1tap->next; d1tap != NULL; d1tap = d1tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d1tap;
-         }
-      }
-      d1tap = mintap;
-
-      int x1,y1,x2,y2;
-      x1 = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      y1 = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      x2 = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      y2 = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
-      printf("%s d1tap->gridx %d d1tap->gridy %d d2tap->gridx %d d2tap->gridy %d \n",__FUNCTION__,d1tap->gridx,d1tap->gridy,d2tap->gridx,d2tap->gridy);
-
-      x1-=BOX_ROOM_X;
-      y1-=BOX_ROOM_Y;
-      x2+=BOX_ROOM_X;
-      y2+=BOX_ROOM_Y;
-      
-      net->bbox = add_point_to_bbox(net->bbox, x1, y1); // left lower point
-      net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point
-      net->bbox = add_point_to_bbox(net->bbox, x1, y2); // left upper point
-      net->bbox = add_point_to_bbox(net->bbox, x2, y1); // right lower point
-      net->num_bbox_pts+=4;
-   } else { // Net with more than 2 nodes
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
 
       int x1=0, x2=0, y1=0, y2=0;
-
       if (net->numnodes == 0) return;	 // e.g., vdd or gnd bus
+
+      n1 = net->netnodes;
+      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      x1=dtap->gridx;
+      y1=dtap->gridy;
       for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+	 if (dtap) {
+            if (dtap->gridx < x1) x1 = dtap->gridx;
+            if (dtap->gridy < y1) y1 = dtap->gridy;
+	 }
+      }
+      n1 = net->netnodes;
+      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      x2=dtap->gridx;
+      y2=dtap->gridy;
+      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+	 if (dtap) {
+            if (dtap->gridx > x2) x2 = dtap->gridx;
+            if (dtap->gridy > y2) y2 = dtap->gridy;
+	 }
+      }
+      
+      /*for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
             if (dtap->gridx > x2) x2 = dtap->gridx;
@@ -438,18 +396,19 @@ void find_bounding_box(NET net)
             if (dtap->gridy > y2) y2 = dtap->gridy;
             if (dtap->gridy < y1) y1 = dtap->gridy;
 	 }
-      }
+      }*/
+      
       x1-=BOX_ROOM_X;
       y1-=BOX_ROOM_Y;
       x2+=BOX_ROOM_X;
       y2+=BOX_ROOM_Y;
+      printf("%s x1 %d 1y %d x2 %d y2 %d \n",__FUNCTION__,x1,y1,x2,y2);
 
       net->bbox = add_point_to_bbox(net->bbox, x1, y1); // left lower point
       net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point
       net->bbox = add_point_to_bbox(net->bbox, x1, y2); // left upper point
       net->bbox = add_point_to_bbox(net->bbox, x2, y1); // right lower point
       net->num_bbox_pts+=4;
-   }
 }
 
 /*--------------------------------------------------------------*/

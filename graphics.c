@@ -19,6 +19,8 @@
 #include "maze.h"
 #include "lef.h"
 
+#define SPACE 20
+
 /*------------------------------*/
 /* Type declarations		*/
 /*------------------------------*/
@@ -690,10 +692,8 @@ void draw_layout() {
 			//if(vddnet)
 			//	if(strcmp(net->netname, vddnet)) continue;
 			if(net->active) {
-				if(!is_gndnet(net)||!is_vddnet(net)||!is_clknet(net)) {
-					draw_net_bbox(net);
-					draw_ratnet(net);
-				}
+				draw_net_bbox(net);
+				draw_ratnet(net);
 			}
 		}
 	}

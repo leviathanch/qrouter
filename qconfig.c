@@ -514,7 +514,7 @@ int read_config(FILE *fconfig, int is_info)
 			lenstrT++;
 		}
 		clknet=malloc(lenstrT);
-		strncpy(gndnet,clkname,lenstrT);
+		strncpy(clknet,clkname,lenstrT);
 		clknet[lenstrT]=0;
 		printf("clknet %s\n",clknet);
 	}

@@ -2405,31 +2405,45 @@ BOOL qrouter_resolve_bbox_collisions(NET net)
 	int num_bbox_pts;
 	NET n;
 	if(!net) return TRUE;
-	if(net->num_bbox_pts<4)  return TRUE; // don't check something which isn't a rectangle at least
+	if(net->num_bbox_pts<4) return TRUE; // don't check something which isn't a rectangle at least
 	bbox_temp = clone_bbox(net->bbox);
 	for(int i=0; i<Numnets; i++) {
 		n = CurNet[i];
 		if((net!=n)&&n) {
-			if(!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+			if(is_gndnet(n)||is_vddnet(n)||is_clknet(n)) {
+				if(is_gndnet(n))
+					printf("%s: skipping GND net\n",__FUNCTION__);
+				if(is_vddnet(n))
+					printf("%s: skipping VDD net\n",__FUNCTION__);
+				if(is_clknet(n))
+					printf("%s: skipping CLK net\n",__FUNCTION__);
+				continue;
+			} else {
 				num_bbox_pts=n->num_bbox_pts;
 				if(num_bbox_pts<4) continue; // don't check something which isn't a rectangle at least
 				pnt = n->bbox;
 				while(pnt) {
 					if(check_contains_point(net->bbox,pnt)) {
-						vpnt=net->bbox;
-						while(vpnt) {
-							if(check_contains_point(n->bbox,vpnt)) {
-								oldx = vpnt->x;
-								oldy = vpnt->y;
-								bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
-								num_bbox_pts--;
-								bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
-								bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
-								bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
-								num_bbox_pts+=3;
-							}
-							vpnt=vpnt->next;
-						}
+						printf("%s point (%d,%d) inside of (my) net %s!\n",__FUNCTION__,pnt->x,pnt->y,net->netname);
+					}
+					pnt = pnt->next;
+				}
+				vpnt = net->bbox;
+				while(vpnt) {
+					if(check_contains_point(n->bbox,vpnt)) {
+						printf("%s point (%d,%d) inside of net %s!\n",__FUNCTION__,vpnt->x,vpnt->y,n->netname);
+						/*oldx = vpnt->x;
+						oldy = vpnt->y;
+						bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
+						printf("%s deleting point (%d,%d)\n",__FUNCTION__,vpnt->x,vpnt->y);
+						num_bbox_pts--;
+						bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
+						printf("%s adding point (%d,%d)\n",__FUNCTION__,pnt->x,pnt->y);
+						bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
+						printf("%s adding point (%d,%d)\n",__FUNCTION__,oldx,pnt->y);
+						bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
+						printf("%s adding point (%d,%d)\n",__FUNCTION__,pnt->x,oldy);
+						num_bbox_pts+=3;
 						if(check_bbox_consistency(net, bbox_temp)) {
 							free_bbox(net->bbox);
 							net->bbox=bbox_temp;
@@ -2438,9 +2452,9 @@ BOOL qrouter_resolve_bbox_collisions(NET net)
 							free_bbox(bbox_temp);
 							bbox_temp = clone_bbox(net->bbox);
 							num_bbox_pts=net->num_bbox_pts;
-						}
+						}*/
 					}
-					pnt = pnt->next;
+					vpnt=vpnt->next;
 				}
 			}
 		}

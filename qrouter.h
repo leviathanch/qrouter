@@ -9,6 +9,9 @@
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 
+#define BOX_SPACING_X 1
+#define BOX_SPACING_Y 1
+
 #ifndef QROUTER_H
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
@@ -316,6 +319,13 @@ struct net_ {
    NET next;
    char *bbox_color;
    int num_bbox_pts;
+};
+
+typedef struct postponed_net_ *POSTPONED_NET;
+struct postponed_net_ {
+	NET net;
+	POSTPONED_NET last;
+	POSTPONED_NET next;
 };
 
 // Flags used by NET "flags" record

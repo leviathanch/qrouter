@@ -459,7 +459,7 @@ draw_net_bbox(NET net) {
 	if (net->bbox == NULL) return;
 	num_total_pts = get_num_points_of_bbox(net->bbox);
 	if (num_total_pts<3) return;
-	print_all_points(net);
+	//print_all_points(net);
 
 	if(net->bbox_color) {
 		if(!strcmp(net->bbox_color,"green"))

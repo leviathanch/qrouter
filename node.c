@@ -357,7 +357,6 @@ void find_bounding_box(NET net)
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
    if(!net) return;
-   printf("%s finding box for %s\n",__FUNCTION__,net->netname);
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
@@ -402,7 +401,6 @@ void find_bounding_box(NET net)
       y1-=BOX_ROOM_Y;
       x2+=BOX_ROOM_X;
       y2+=BOX_ROOM_Y;
-      printf("%s x1 %d 1y %d x2 %d y2 %d \n",__FUNCTION__,x1,y1,x2,y2);
 
       net->bbox = add_point_to_bbox(net->bbox, x1, y1); // left lower point
       net->bbox = add_point_to_bbox(net->bbox, x2, y2); // right upper point

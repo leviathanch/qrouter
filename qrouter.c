@@ -28,9 +28,6 @@
 #include "def.h"
 #include "graphics.h"
 
-#define BOX_SPACING_X 1
-#define BOX_SPACING_Y 1
-
 int  Pathon = -1;
 int  TotalRoutes = 0;
 TCL_DECLARE_MUTEX(TotalRoutesMutex)
@@ -84,18 +81,15 @@ static void helpmessage(void);
 BOOL check_bbox_collisions(int thnum);
 BOOL resolve_bbox_collisions(int thnum);
 
-NET gndnets = NULL;
-NET vddnets = NULL;
-NET clknets = NULL;
+POSTPONED_NET gndnets = NULL;
+POSTPONED_NET vddnets = NULL;
+POSTPONED_NET clknets = NULL;
 
 BOOL is_vddnet(NET net)
 {
 	if(!net) return FALSE;
-	if(vddnet)
-		if(!strcmp(vddnet,net->netname)) return TRUE;
-	for(NET p=vddnets;p;p=p->next) {
-		if(p==net) return TRUE;
-	}
+	if(vddnet) if(!strcmp(vddnet,net->netname)) return TRUE;
+	for(POSTPONED_NET p=vddnets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
 }
 
@@ -103,20 +97,26 @@ void add_vddnet(NET net)
 {
 	if(!net) return;
 	if(vddnets) {
-		vddnets->next = net;
-		net->last = vddnets;
+		vddnets->last = malloc(sizeof(struct postponed_net_));
+		vddnets->last->next = vddnets->last;
+		vddnets = vddnets->last;
 	} else {
-		vddnets = net;
+		vddnets = malloc(sizeof(struct postponed_net_));
+		vddnets->net = net;
+		vddnets->next = NULL;
+		vddnets->last = NULL;
 	}
 }
 
 void delete_vddnet(NET net)
 {
 	if(!net) return;
-	for(NET p=vddnets;p;p=p->next) {
-		if(p==net) {
+	for(POSTPONED_NET p=vddnets;p;p=p->next) {
+		if(p->net==net) {
 			if(p->last) p->last->next = p->next;
 			if(p->next) p->next->last = p->last;
+			free(p);
+			return;
 		}
 	}
 }
@@ -124,11 +124,8 @@ void delete_vddnet(NET net)
 BOOL is_gndnet(NET net)
 {
 	if(!net) return FALSE;
-	if(vddnet)
-		if(!strcmp(gndnet,net->netname)) return TRUE;
-	for(NET p=gndnets;p;p=p->next) {
-		if(p==net) return TRUE;
-	}
+	if(gndnet) if(!strcmp(gndnet,net->netname)) return TRUE;
+	for(POSTPONED_NET p=gndnets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
 }
 
@@ -136,20 +133,26 @@ void add_gndnet(NET net)
 {
 	if(!net) return;
 	if(gndnets) {
-		gndnets->next = net;
-		net->last = gndnets;
+		gndnets->last = malloc(sizeof(struct postponed_net_));
+		gndnets->last->next = gndnets->last;
+		gndnets = gndnets->last;
 	} else {
-		gndnets = net;
+		gndnets = malloc(sizeof(struct postponed_net_));
+		gndnets->net = net;
+		gndnets->next = NULL;
+		gndnets->last = NULL;
 	}
 }
 
 void delete_gndnet(NET net)
 {
 	if(!net) return;
-	for(NET p=gndnets;p;p=p->next) {
-		if(p==net) {
+	for(POSTPONED_NET p=gndnets;p;p=p->next) {
+		if(p->net==net) {
 			if(p->last) p->last->next = p->next;
 			if(p->next) p->next->last = p->last;
+			free(p);
+			return;
 		}
 	}
 }
@@ -157,11 +160,8 @@ void delete_gndnet(NET net)
 BOOL is_clknet(NET net)
 {
 	if(!net) return FALSE;
-	if(clknet)
-		if(!strcmp(clknet,net->netname)) return TRUE;
-	for(NET p=clknets;p;p=p->next) {
-		if(p==net) return TRUE;
-	}
+	if(clknet) if(!strcmp(clknet,net->netname)) return TRUE;
+	for(POSTPONED_NET p=clknets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
 }
 
@@ -169,20 +169,26 @@ void add_clknet(NET net)
 {
 	if(!net) return;
 	if(clknets) {
-		clknets->next = net;
-		net->last = clknets;
+		clknets->last = malloc(sizeof(struct postponed_net_));
+		clknets->last->next = clknets->last;
+		clknets = clknets->last;
 	} else {
-		clknets = net;
+		clknets = malloc(sizeof(struct postponed_net_));
+		clknets->net = net;
+		clknets->next = NULL;
+		clknets->last = NULL;
 	}
 }
 
 void delete_clknet(NET net)
 {
 	if(!net) return;
-	for(NET p=clknets;p;p=p->next) {
-		if(p==net) {
+	for(POSTPONED_NET p=clknets;p;p=p->next) {
+		if(p->net==net) {
 			if(p->last) p->last->next = p->next;
 			if(p->next) p->next->last = p->last;
+			free(p);
+			return;
 		}
 	}
 }

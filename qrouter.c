@@ -78,8 +78,6 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
 static void helpmessage(void);
-BOOL check_bbox_collisions(int thnum);
-BOOL resolve_bbox_collisions(int thnum);
 
 POSTPONED_NET gndnets = NULL;
 POSTPONED_NET vddnets = NULL;
@@ -707,7 +705,7 @@ static int post_def_setup()
    for (i = 0; i < Numnets; i++) {
       net = Nlnets[i];
       find_bounding_box(net);
-      define_route_tree(net);
+      //define_route_tree(net);
    }
 
    create_netorder(0);		// Choose ordering method (0 or 1)
@@ -926,27 +924,33 @@ void dofirststage_thread(ClientData parm)
 	return TCL_THREAD_CREATE_RETURN;
 }
 
-BOOL is_clocknet(NET net)
-{
-	if(clknet) {
-		printf("%s: net name: %s\n",__FUNCTION__,net->netname);
-		if (clknet && !strcmp(net->netname, clknet))
-			return TRUE;
+void free_postponed(POSTPONED_NET postponed) {
+	if(!postponed) return;
+	POSTPONED_NET victim = NULL;
+	for(POSTPONED_NET t=postponed;t;t=t->next) {
+		if(victim) free(victim);
+		victim=t;
 	}
-	return FALSE;
+	free(victim);
 }
 
-NET postpone_net(NET postponed, NET net)
+POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net)
 {
-	if(postponed) {
-		postponed->next = net;
-		postponed->next->last=postponed;
-	} else {
-		postponed = net;
-		postponed->next = FALSE;
-		postponed->last = FALSE;
+	if(!net) return postponed;
+	POSTPONED_NET p = NULL;
+	for(POSTPONED_NET pp=postponed;pp;pp=pp->next) {
+		if(pp->net==net) return postponed; // already in list
 	}
-	return postponed;
+	p = malloc(sizeof(struct postponed_net_));
+	p->net = net;
+	p->last = NULL;
+	p->next = NULL;
+
+	if(postponed) {
+		p->next = postponed;
+	}
+
+	return p;
 }
 
 int dofirststage(u_char graphdebug, int debug_netnum)
@@ -955,7 +959,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    NETLIST nl;
    Tcl_ThreadId idPtr;
    int thret;
-   NET postponed = NULL, pstptmp = NULL;
+   POSTPONED_NET postponed = NULL;
    int threadnum;
 
    // Clear the lists of failed routes, in case first
@@ -982,9 +986,30 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 				free(thread_params);
 				goto skip;
 			}
-			if(check_bbox_collisions(threadnum)) {
+			/*if(check_bbox_infinite(CurNet[threadnum]->bbox)) {
+				Fprintf(stdout,"%s: Box of %s is infinit. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
+				postponed=postpone_net(postponed,CurNet[threadnum]);
+				free(thread_params);
+				goto skip;
+			}*/
+			if(is_clknet(CurNet[threadnum])) {
+				Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
+				free(thread_params);
+				goto skip;
+			}
+			if(is_vddnet(CurNet[threadnum])) {
+				Fprintf(stdout,"%s: Post-Pony-ing VDD net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
+				free(thread_params);
+				goto skip;
+			}
+			if(is_gndnet(CurNet[threadnum])) {
+				Fprintf(stdout,"%s: Post-Pony-ing GND net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
+				free(thread_params);
+				goto skip;
+			}
+			if(check_bbox_collisions(CurNet[threadnum])) {
 				Fprintf(stdout,"%s: Boxes of %s overlap.Trying to find alternative shapes\n", __FUNCTION__, CurNet[threadnum]->netname);
-				if(resolve_bbox_collisions(threadnum)) {
+				if(resolve_bbox_collisions(CurNet[threadnum])) {
 					Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__, CurNet[threadnum]->netname);
 					draw_layout();
 				} else {
@@ -994,18 +1019,6 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 					free(thread_params);
 					goto skip;
 				}
-			}
-			if(check_bbox_infinite(CurNet[threadnum]->bbox)) {
-				Fprintf(stdout,"%s: Box of %s is infinit. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
-				postponed=postpone_net(postponed,CurNet[threadnum]);
-				free(thread_params);
-				goto skip;
-			}
-			if(is_clocknet(CurNet[threadnum])) {
-				Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
-				postponed=postpone_net(postponed,CurNet[threadnum]);
-				free(thread_params);
-				goto skip;
 			}
 			CurNet[threadnum]->active=TRUE;
 			thread_params->i=i;
@@ -2090,9 +2103,9 @@ static void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
-    BBOX pt1, pt2;
-    pt1 = getLeftLowerPoint(net);
-    pt2 = getRightUpperPoint(net);
+    BBOX_POINT pt1, pt2;
+    pt1 = get_left_lower_trunk_point(net->bbox);
+    pt2 = get_right_upper_trunk_point(net->bbox);
 
     fillMask((u_char)halo);
     
@@ -2100,6 +2113,9 @@ static void createBboxMask(NET net, u_char halo)
     xmax = pt2->x;
     ymin = pt1->y;
     ymax = pt2->y;
+    
+    free(pt1);
+    free(pt2);
   
     for (gx1 = xmin; gx1 <= xmax; gx1++)
 	for (gy1 = ymin; gy1 <= ymax; gy1++)
@@ -2206,9 +2222,9 @@ static void createMask(NET net, u_char slack, u_char halo)
   int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
-  BBOX pt1, pt2;
-  pt1 = getLeftLowerPoint(net);
-  pt2 = getRightUpperPoint(net);
+  BBOX_POINT pt1, pt2;
+  pt1 = get_left_lower_trunk_point(net->bbox);
+  pt2 = get_right_upper_trunk_point(net->bbox);
 
   fillMask((u_char)halo);
 
@@ -2216,6 +2232,9 @@ static void createMask(NET net, u_char slack, u_char halo)
   xmax = pt2->x;
   ymin = pt1->y;
   ymax = pt2->y;
+  
+  free(pt1);
+  free(pt2);
 
   xcent = net->trunkx;
   ycent = net->trunky;
@@ -2411,210 +2430,6 @@ free_glist(struct routeinfo_ *iroute)
       Pr->flags &= ~PR_ON_STACK;
       freePOINT(gpoint);
   }
-}
-
-BOOL check_sub_contains_point(BBOX bbox, BBOX subpnt, BBOX pnt)
-{
-	BBOX box;
-	int x = subpnt->x, y = subpnt->y;
-	BOOL foundX=FALSE,foundY=FALSE;
-	int x1, x2, y1, y2;
-	subpnt->checked = TRUE;
-
-	box = bbox;
-	while(box) {
-		if(box->x==x) {
-			y1 = (box->y<y) ? box->y : y;
-			y2 = (box->y>y) ? box->y : y;
-			box->checked = TRUE;
-			foundY=TRUE;
-		}
-		if(box->y==y) {
-			x1 = (box->x<x) ? box->x : x;
-			x2 = (box->x>x) ? box->x : x;
-			box->checked = TRUE;
-			foundX=TRUE;
-		}
-		box = box->next;
-	}
-	if(foundX&&foundY) {
-		//FprintfT(stdout,"%s: Checking whether (%d,%d) between (%d,%d)<->(%d,%d) (net: %s)\n", __FUNCTION__, pnt->x, pnt->y, x1, y1, x2, y2, net->netname);
-		if((pnt->x>=x1)&&(pnt->x<=x2)&&(pnt->y>=y1)&&(pnt->y<=y2)) {
-			//FprintfT(stdout,"%s: yes. boxes overlap\n", __FUNCTION__);
-			return TRUE;
-		}
-	}
-	return FALSE;
-}
-
-// check whether pnt is within bbox
-BOOL check_contains_point(BBOX bbox, BBOX pnt)
-{
-	BBOX box;
-	if(!bbox) return FALSE;
-	if(!pnt) return FALSE;
-
-	box = bbox;
-	//printf("%s: box %p\n",__FUNCTION__,box);
-	while(box) {
-		//printf("%s: point (%d,%d)\n",__FUNCTION__,box->x,box->y);
-		box->checked = FALSE;
-		box = box->next;
-	}
-	box = bbox;
-	while(box) {
-		if(!(box->checked)) {
-			if(check_sub_contains_point(bbox, box, pnt)) {
-				return TRUE;
-			}
-		}
-		box = box->next;
-	}
-	return FALSE;
-}
-
-BOOL check_bbox_collisions(int thnum)
-{
-	BBOX pnt;
-	NET n;
-	NET net = CurNet[thnum];
-	if(!net) return TRUE;
-	pnt = net->bbox;
-	while(pnt) {
-		for(int i=0; i<thnum; i++) {
-			n = CurNet[i];
-			if(net!=n) {
-				if(check_contains_point(n->bbox,pnt)) {
-					return TRUE;
-				}
-			}
-		}
-		pnt = pnt->next;
-	}
-	return FALSE;
-}
-
-BBOX clone_bbox(BBOX orig)
-{
-	BBOX r = NULL;
-	BBOX rt = NULL;
-	BBOX t = NULL;
-	if(!orig) return NULL;
-	t = orig;
-	while(t) {
-		r = malloc(sizeof(struct bbox_pt_));
-		if(!r) {
-			printf("%s: memory leak. dying!\n",__FUNCTION__);
-			exit(0);
-		}
-
-		r->x=t->x;
-		r->y=t->y;
-		r->checked=t->checked;
-		r->next = rt;
-		r->last = NULL;
-
-		rt = r;
-		t=t->next;
-	}
-
-	return r;
-}
-
-void free_bbox(BBOX t)
-{
-	BBOX victim;
-	BBOX temp=t;
-	while(temp) {
-		victim=temp;
-		temp=temp->next;
-		if(victim) free(victim);
-	}
-}
-
-// checks whether all taps are inside vbox
-// return FALSE if not and otherwise TRUE
-BOOL check_bbox_consistency(NET net, BBOX vbox)
-{
-	NODE tn;
-	DPOINT dtap;
-	BBOX vpnt;
-	vpnt = malloc(sizeof(struct bbox_pt_));
-	tn=net->netnodes;
-	while(tn) {
-		dtap=tn->taps;
-		while(dtap) {
-			vpnt->x=dtap->gridx;
-			vpnt->y=dtap->gridy;
-			if(!check_contains_point(vbox, vpnt)) {
-				free(vpnt);
-				return FALSE;
-			}
-			dtap=dtap->next;
-		}
-		tn=tn->next;
-	}
-	free(vpnt);
-	return TRUE;
-}
-
-BBOX move_point_of_bbox(BBOX bbox, int oldx,int oldy, int newx, int newy)
-{
-	bbox=delete_point_from_bbox(bbox,oldx,oldy);
-	bbox=add_point_to_bbox(bbox,newx,newy);
-	return bbox;
-}
-
-BOOL resolve_bbox_collisions(int thnum)
-{
-	BBOX pnt; // recent corner
-	BBOX vpnt; // virtual point
-	BBOX bbox_temp; // copy of bbox
-	int oldx, oldy;
-	int num_pts, num_pts_tmp;
-	NET n;
-	NET net = CurNet[thnum];
-	if(!net) return TRUE;
-	num_pts=net->num_bbox_pts;
-	bbox_temp = clone_bbox(net->bbox);
-	for(int i=0; i<thnum; i++) {
-		n = CurNet[i];
-		if((net!=n)&&n) {
-			pnt = n->bbox;
-			while(pnt) {
-				if(num_pts>3) {
-					if(check_contains_point(net->bbox,pnt)) {
-						vpnt=net->bbox;
-						while(vpnt) {
-							num_pts_tmp=get_num_points_of_bbox(bbox_temp);
-							if(num_pts_tmp>3) {
-								if(check_contains_point(n->bbox,vpnt)) {
-									oldx = vpnt->x;
-									oldy = vpnt->y;
-									bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
-									num_pts_tmp--;
-									bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
-									bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
-									bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
-									num_pts_tmp+=3;
-								}
-								vpnt=vpnt->next;
-							}
-						}
-						if(!check_bbox_consistency(net, bbox_temp)) {
-							free_bbox(net->bbox);
-							return FALSE;
-						}
-					}
-					pnt = pnt->next;
-				}
-			}
-		}
-	}
-
-	free_bbox(net->bbox);
-	net->bbox=bbox_temp;
-	return TRUE;
 }
 
 /*--------------------------------------------------------------*/

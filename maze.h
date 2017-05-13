@@ -21,7 +21,6 @@ int     writeback_all_routes(NET net);
 NETLIST find_colliding(NET net, int *ripnum);
 void    clear_non_source_targets(NET net, POINT *pushlist);
 void    clear_target_node(NODE node);
-int get_num_points_of_bbox(BBOX box);
 int     count_targets(NET net);
 int	set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
                 SEG bbox, u_char stage);

@@ -305,7 +305,7 @@ map_estimate()
     int xspc, yspc, hspc;
     int i, x, y, nwidth, nheight, area, length, value;
     float density, *Congestion, norm, maxval;
-    BBOX pt1, pt2;
+    BBOX_POINT pt1, pt2;
 
     hspc = spacing >> 1;
 
@@ -319,8 +319,8 @@ map_estimate()
 	length = net_absolute_distance(net);
 	density = (float)length / (float)area;
 
-	pt1 = getLeftLowerPoint(net);
-	pt2 = getRightUpperPoint(net);
+	pt1 = get_left_lower_trunk_point(net->bbox);
+	pt2 = get_right_upper_trunk_point(net->bbox);
 	for (x = pt1->x; x < pt2->x; x++)
 	    for (y = pt1->y; y < pt2->y; y++)
 		CONGEST(x, y) += density;
@@ -347,6 +347,8 @@ map_estimate()
     }
 
     // Cleanup
+    free(pt1);
+    free(pt2);
     free(Congestion);
 }
 
@@ -411,7 +413,7 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 }
 
 // check whether still unchecked points exist
-int num_points_checked(BBOX p)
+/*int num_points_checked(BBOX p)
 {
 	BBOX pts = p;
 	int ret = 0;
@@ -420,27 +422,7 @@ int num_points_checked(BBOX p)
 		pts=pts->next;
 	}
 	return ret;
-}
-
-void uncheck_all_points(BBOX p)
-{
-	BBOX pts = p;
-	while(pts) {
-		pts->checked=FALSE;
-		pts=pts->next;
-	}
-}
-
-void print_all_points(NET net)
-{
-	printf("%s: bounding box of net %s with %d corners\n",__FUNCTION__,net->netname,get_num_points_of_bbox(net->bbox));
-	BBOX t = net->bbox;
-	while(t) {
-		printf("(%d,%d) ",t->x,t->y);
-		t = t->next;
-	}
-	printf("\n");
-}
+}*/
 
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
@@ -448,56 +430,35 @@ void print_all_points(NET net)
 #define MAX_CYCLES 100
 static void
 draw_net_bbox(NET net) {
-	BBOX tmp;
-	int x0, x1, x2, y0, y1, y2;
-	int num_total_pts;
-	int num_done_pts = 1;
-	int cycles = 0;
+	int x1, x2, y1, y2;
 
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	if (net->bbox == NULL) return;
-	num_total_pts = get_num_points_of_bbox(net->bbox);
-	if (num_total_pts<3) return;
-	//print_all_points(net);
+	if(net->bbox->num_edges<4) return;
 
 	if(net->bbox_color) {
 		if(!strcmp(net->bbox_color,"green"))
 			XSetForeground(dpy, gc, greenpix); // set box colour to green
-		if(!strcmp(net->bbox_color,"red"))
+		else if(!strcmp(net->bbox_color,"red"))
 			XSetForeground(dpy, gc, redpix); // set box colour to green
+		else if(!strcmp(net->bbox_color,"black"))
+			XSetForeground(dpy, gc, blackpix); // set box colour to black
 		else
 			XSetForeground(dpy, gc, blackpix); // set box colour to default
 	} else {
-		XSetForeground(dpy, gc, redpix); // set box colour to red
+		XSetForeground(dpy, gc, blackpix); // set box colour to black
 	}
-	uncheck_all_points(net->bbox);
-
-	x0=x1=net->bbox->x; // save for the end
-	y0=y1=net->bbox->y; // save for the end
-	net->bbox->checked=TRUE;
-
-	while((num_done_pts<num_total_pts)&&(cycles<MAX_CYCLES)) {
-		tmp=net->bbox;
-		while(tmp) {
-			if(!(tmp->checked)) {
-				if(((tmp->x==x1)&&(tmp->y!=y1))||((tmp->x!=x1)&&(tmp->y==y1))) {
-					x2=tmp->x;
-					y2=tmp->y;
-					XDrawLine(dpy,buffer,gc,spacing*x1,height-spacing*y1,spacing*x2,height-spacing*y2);
-					x1=tmp->x;
-					y1=tmp->y;
-					tmp->checked=TRUE;
-					num_done_pts++;
-				}
-			}
-			tmp=tmp->next;
-		}
-		cycles++;
+	for(BBOX_LINE line=net->bbox->edges;line;line=line->next) {
+		if(!line) continue;
+		x1=line->pt1->x;
+		y1=line->pt1->y;
+		x2=line->pt2->x;
+		y2=line->pt2->y;
+		XDrawLine(dpy,buffer,gc,spacing*x1,height-spacing*y1,spacing*x2,height-spacing*y2);
 	}
-	XDrawLine(dpy, buffer, gc, spacing*x0,height - spacing*y0,spacing*x1,height - spacing*y1);
-	tmp=getRightUpperPoint(net);
-	XDrawString(dpy, buffer, gc, spacing*tmp->x,height-spacing*tmp->y,net->netname,strlen(net->netname));
+	if(net) if(net->netname)
+		XDrawString(dpy, buffer, gc, spacing*x1,height-spacing*y1,net->netname,strlen(net->netname));
 }
 
 /*--------------------------------------*/
@@ -687,10 +648,6 @@ void draw_layout() {
 	if (mapType) {
 		for (i = 0; i < Numnets; i++) {
 			net = Nlnets[i];
-			//if(gndnet)
-			//	if (strcmp(net->netname, gndnet)) continue;
-			//if(vddnet)
-			//	if(strcmp(net->netname, vddnet)) continue;
 			if(net->active) {
 				draw_net_bbox(net);
 				draw_ratnet(net);

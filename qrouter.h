@@ -280,23 +280,36 @@ struct gate_ {
 
 typedef struct net_ *NET;
 typedef struct netlist_ *NETLIST;
-typedef struct bbox_pt_ *BBOX;
-
+typedef struct bbox_pt_ *BBOX_POINT;
 struct bbox_pt_ {
 	int x;
 	int y;
-	BBOX last;
-	BBOX next;
+	BBOX_POINT last;
+	BBOX_POINT next;
 	BOOL checked;
 };
 
-BBOX getLeftLowerPoint(NET net);
-BBOX getRightUpperPoint(NET net);
+typedef struct bbox_line_ *BBOX_LINE;
+struct bbox_line_ {
+	BBOX_POINT pt1;
+	BBOX_POINT pt2;
+	BBOX_LINE last;
+	BBOX_LINE next;
+};
+
+typedef struct bbox_ *BBOX;
+struct bbox_ {
+	BBOX_LINE edges;
+	int num_edges;
+};
+
+BBOX_POINT get_left_lower_trunk_point(BBOX bbox);
+BBOX_POINT get_right_upper_trunk_point(BBOX bbox);
 int get_bbox_area(NET net);
-BOOL check_bbox_infinite(BBOX p);
 int net_absolute_distance(NET net);
-BBOX  add_point_to_bbox(BBOX bbox, int x, int y);
-BBOX delete_point_from_bbox(BBOX bbox, int x, int y);
+BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l);
+void free_line_list(BBOX_LINE t);
+BBOX_LINE get_fresh_line();
 
 struct net_ {
    int  netnum;		// a unique number for this net
@@ -318,7 +331,6 @@ struct net_ {
    NET last;
    NET next;
    char *bbox_color;
-   int num_bbox_pts;
 };
 
 typedef struct postponed_net_ *POSTPONED_NET;
@@ -359,8 +371,8 @@ struct routeinfo_ {
 };
 
 #define MAXRT		10000		// "Infinite" route cost
-#define BOX_ROOM_X 3
-#define BOX_ROOM_Y 3
+#define BOX_ROOM_X 1
+#define BOX_ROOM_Y 1
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect
@@ -521,22 +533,12 @@ int    dofirststage(u_char graphdebug, int debug_netnum);
 int    dosecondstage(u_char graphdebug, u_char singlestep);
 int    dothirdstage(u_char graphdebug, int debug_netnum);
 
-BOOL check_contains_point(BBOX bbox, BBOX pnt);
-BBOX clone_bbox(BBOX orig);
-BOOL check_bbox_consistency(NET net, BBOX vbox);
-BOOL is_vddnet(NET net);
-BOOL is_gndnet(NET net);
-BOOL is_clknet(NET net);
-void add_clknet(NET net);
-void add_gndnet(NET net);
-void add_vddnet(NET net);
-
-void free_bbox(BBOX t);
-
 int    doroute(int thnum, NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
 NET getnetbyname(char *name);
 int    route_net_ripup(int thnum, NET net, u_char graphdebug);
+
+POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net);
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

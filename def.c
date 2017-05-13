@@ -643,7 +643,6 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->bbox = (BBOX)NULL;
 		net->locked = FALSE;
 		net->active = FALSE;
-		net->num_bbox_pts = 0;
 		net->bbox_color = 0;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,

@@ -2248,13 +2248,12 @@ qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
 /*							*/
 /*	borders [<name>]					*/
 /*------------------------------------------------------*/
-BOOL qrouter_check_bbox_collisions(NET net);
-BOOL qrouter_resolve_bbox_collisions(NET net);
 static int
 qrouter_borders(ClientData clientData, Tcl_Interp *interp,
             int objc, Tcl_Obj *CONST objv[])
 {
 	char *subcmd,*subcmdpar;
+	POSTPONED_NET pp = NULL;
 	NET net;
 	if (objc == 2) {
 		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
@@ -2269,8 +2268,8 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			for (int i = 0; i < Numnets; i++) {
 				net=getnettoroute(i);
 				if(net) {
-					if(qrouter_check_bbox_collisions(net)) {
-						if(qrouter_resolve_bbox_collisions(net)) {
+					if(check_bbox_collisions(net)) {
+						if(resolve_bbox_collisions(net)) {
 							net->bbox_color="green";
 							net->active=TRUE;
 						}
@@ -2337,8 +2336,8 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			if(net) {
 				net->bbox_color="red";
 				net->active=FALSE;
-				if(qrouter_check_bbox_collisions(net)) {
-					if(qrouter_resolve_bbox_collisions(net)) {
+				if(check_bbox_collisions(net)) {
+					if(resolve_bbox_collisions(net)) {
 						net->bbox_color="green";
 						net->active=TRUE;
 					}
@@ -2358,11 +2357,17 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			}
 			net=getnetbyname(subcmdpar);
 			if(net) {
-				net->bbox_color="red";
 				net->active=TRUE;
-				if(qrouter_check_bbox_collisions(net)) {
-					Tcl_AppendElement(interp, "there are collisions");
+				if(check_bbox_collisions(net)) {
+					net->bbox_color="red";
+					Tcl_AppendElement(interp, "there are collisions with: ");
+					pp=get_bbox_collisions(net);
+					for(POSTPONED_NET tmpp=pp;tmpp;tmpp=tmpp->next) {
+						Tcl_AppendElement(interp, tmpp->net->netname);
+					}
+					free_postponed(pp);
 				} else {
+					net->bbox_color="black";
 					Tcl_AppendElement(interp, "no collisions found");
 				}
 				draw_layout();
@@ -2370,97 +2375,6 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 		}
 	}
 	return QrouterTagCallback(interp, objc, objv);
-}
-
-BOOL qrouter_check_bbox_collisions(NET net)
-{
-	BBOX pnt;
-	NET n;
-	if(!net) return TRUE;
-	pnt = net->bbox;
-	while(pnt) {
-		for(int i=0; i<Numnets; i++) {
-			n = getnettoroute(i);
-			if(n) {
-				if(net!=n&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
-					if(check_contains_point(n->bbox,pnt)) {
-						n->active=TRUE;
-						n->bbox_color="red";
-						return TRUE;
-					}
-				}
-			}
-		}
-		pnt = pnt->next;
-	}
-	return FALSE;
-}
-
-BOOL qrouter_resolve_bbox_collisions(NET net)
-{
-	BBOX pnt; // recent corner
-	BBOX vpnt; // virtual point
-	BBOX bbox_temp; // copy of bbox
-	int oldx, oldy;
-	int num_bbox_pts;
-	NET n;
-	if(!net) return TRUE;
-	if(net->num_bbox_pts<4) return TRUE; // don't check something which isn't a rectangle at least
-	bbox_temp = clone_bbox(net->bbox);
-	for(int i=0; i<Numnets; i++) {
-		n = CurNet[i];
-		if((net!=n)&&n) {
-			if(is_gndnet(n)||is_vddnet(n)||is_clknet(n)) {
-				if(is_gndnet(n))
-					printf("%s: skipping GND net\n",__FUNCTION__);
-				if(is_vddnet(n))
-					printf("%s: skipping VDD net\n",__FUNCTION__);
-				if(is_clknet(n))
-					printf("%s: skipping CLK net\n",__FUNCTION__);
-				continue;
-			} else {
-				num_bbox_pts=n->num_bbox_pts;
-				if(num_bbox_pts<4) continue; // don't check something which isn't a rectangle at least
-				pnt = n->bbox;
-				while(pnt) {
-					if(check_contains_point(net->bbox,pnt)) {
-						printf("%s point (%d,%d) inside of (my) net %s!\n",__FUNCTION__,pnt->x,pnt->y,net->netname);
-					}
-					pnt = pnt->next;
-				}
-				vpnt = net->bbox;
-				while(vpnt) {
-					if(check_contains_point(n->bbox,vpnt)) {
-						printf("%s point (%d,%d) inside of net %s!\n",__FUNCTION__,vpnt->x,vpnt->y,n->netname);
-						/*oldx = vpnt->x;
-						oldy = vpnt->y;
-						bbox_temp=delete_point_from_bbox(bbox_temp,vpnt->x,vpnt->y);
-						printf("%s deleting point (%d,%d)\n",__FUNCTION__,vpnt->x,vpnt->y);
-						num_bbox_pts--;
-						bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,pnt->y);
-						printf("%s adding point (%d,%d)\n",__FUNCTION__,pnt->x,pnt->y);
-						bbox_temp=add_point_to_bbox(bbox_temp,oldx,pnt->y);
-						printf("%s adding point (%d,%d)\n",__FUNCTION__,oldx,pnt->y);
-						bbox_temp=add_point_to_bbox(bbox_temp,pnt->x,oldy);
-						printf("%s adding point (%d,%d)\n",__FUNCTION__,pnt->x,oldy);
-						num_bbox_pts+=3;
-						if(check_bbox_consistency(net, bbox_temp)) {
-							free_bbox(net->bbox);
-							net->bbox=bbox_temp;
-							net->num_bbox_pts=num_bbox_pts;
-						} else {
-							free_bbox(bbox_temp);
-							bbox_temp = clone_bbox(net->bbox);
-							num_bbox_pts=net->num_bbox_pts;
-						}*/
-					}
-					vpnt=vpnt->next;
-				}
-			}
-		}
-	}
-
-	return TRUE;
 }
 
 /*------------------------------------------------------*/

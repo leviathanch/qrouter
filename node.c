@@ -519,7 +519,7 @@ BOOL check_bbox_collisions(NET net)
 	for(int i=0; i<Numnets; i++) {
 		n = getnettoroute(i);
 		if(n) {
-			if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+			if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)&&!n->routed) {
 				if(check_single_bbox_collision(net->bbox,n->bbox)) {
 					n->active=TRUE;
 					n->bbox_color="red";
@@ -564,6 +564,7 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 		for(DPOINT dtap=tn->taps;dtap;dtap=dtap->next) {
 			vpnt->x=dtap->gridx;
 			vpnt->y=dtap->gridy;
+			printf("%s checking tap (%d,%d) of net %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
 			ok=check_contains_tap(vbox, vpnt);
 			if(!ok) {
 				printf("%s net %s is outside of box with point (%d,%d)\n",__FUNCTION__,net->netname,vpnt->x,vpnt->y);
@@ -894,9 +895,11 @@ BOOL resolve_bbox_collisions(NET net)
 				continue;
 			} else {
 				if(check_single_bbox_collision(net->bbox,n->bbox)) {
+					Fprintf(stdout,"fiting net %s with net %s: ",net->netname,n->netname);
 					if(fit_competing_net_bboxes(net, n)) {
-						Fprintf(stdout,"%s fit successful\n",__FUNCTION__);
-						continue;
+						Fprintf(stdout,"fit successful\n");
+					} else {
+						Fprintf(stdout,"fitting failed\n");
 					}
 				}
 			}

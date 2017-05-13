@@ -328,6 +328,7 @@ struct net_ {
    BBOX bbox;
    BOOL locked;
    BOOL active;
+   BOOL routed;
    NET last;
    NET next;
    char *bbox_color;

@@ -431,6 +431,8 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 static void
 draw_net_bbox(NET net) {
 	int x1, x2, y1, y2;
+	int x0, y0, dx, dy;
+	BBOX_POINT p1, p2;
 
 	if (dpy == NULL) return;
 	if (net == NULL) return;
@@ -459,12 +461,22 @@ draw_net_bbox(NET net) {
 	}
 	if(net) if(net->netname)
 		XDrawString(dpy, buffer, gc, spacing*x1,height-spacing*y1,net->netname,strlen(net->netname));
+
+	/* // trunk box
+	p1 = get_left_lower_trunk_point(net->bbox);
+	p2 = get_right_upper_trunk_point(net->bbox);
+	x0 = (p1->x)*spacing;
+	y0 = height-(p2->y)*spacing;
+	dx = (p2->x-p1->x)*spacing;
+	dy = (p2->y-p1->y)*spacing;
+	XDrawRectangle(dpy, buffer, gc, x0, y0, dx, dy);
+	free(p1);
+	free(p2);*/
 }
 
 /*--------------------------------------*/
-/* Draw the boundary box of the net on the display	*/
+/* Draw the ratnet of the net on the display	*/
 /*--------------------------------------*/
-#define MAX_CYCLES 100
 static void
 draw_ratnet(NET net) {
 	NODE tn1,tn2;

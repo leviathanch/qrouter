@@ -427,11 +427,10 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
 /*--------------------------------------*/
-#define MAX_CYCLES 100
 static void
 draw_net_bbox(NET net) {
 	int x1, x2, y1, y2;
-	int x0, y0, dx, dy;
+	//int x0, y0, dx, dy;
 	BBOX_POINT p1, p2;
 
 	if (dpy == NULL) return;

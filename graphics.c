@@ -479,31 +479,18 @@ draw_net_bbox(NET net) {
 /*--------------------------------------*/
 static void
 draw_ratnet(NET net) {
-	NODE tn1,tn2;
-	DPOINT d1tap, d2tap;
 	if (dpy == NULL) return;
 	if (net == NULL) return;
-
 	XSetForeground(dpy, gc, yellowpix); // set ratnet colour to yellow
-
-	tn1=net->netnodes;
-	while(tn1) {
+	DPOINT d1tap, d2tap;
+	for(NODE tn1=net->netnodes;tn1;tn1=tn1->next) {
 		d1tap = (tn1->taps == NULL) ? tn1->extend : tn1->taps;
-		if (d1tap == NULL) {
-			tn1=tn1->next;
-			continue;
-		}
-		tn2=net->netnodes;
-		while(tn2) {
+		if (d1tap == NULL) continue;
+		for(NODE tn2=net->netnodes;tn2;tn2=tn2->next) {
 			d2tap = (tn2->taps == NULL) ? tn2->extend : tn2->taps;
-			if (d2tap == NULL) {
-				tn2=tn2->next;
-				continue;
-			}
+			if (d2tap == NULL) continue;
 			XDrawLine(dpy, buffer, gc,d1tap->gridx*spacing,height-d1tap->gridy*spacing,d2tap->gridx*spacing,height-d2tap->gridy*spacing);
-			tn2=tn2->next;
 		}
-		tn1=tn1->next;
 	}
 }
 

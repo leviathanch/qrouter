@@ -475,11 +475,53 @@ BOOL check_contains_tap(BBOX bbox, BBOX_POINT pnt)
 	return FALSE;
 }
 
+BOOL points_equal(BBOX_POINT p1, BBOX_POINT p2)
+{
+	if((p1->x==p2->x)&&(p1->y==p2->y)) return TRUE;
+	return FALSE;
+}
+
+// check whether b2 is totally within b1
+BOOL partial_bbox_overlap(BBOX b1, BBOX b2)
+{
+	if(!b1) return FALSE;
+	if(!b2) return FALSE;
+	BBOX_POINT tu1 = get_right_upper_trunk_point(b1);
+	BBOX_POINT tl1 = get_left_lower_trunk_point(b1);
+	BBOX_POINT tu2 = get_right_upper_trunk_point(b2);
+	BBOX_POINT tl2 = get_left_lower_trunk_point(b2);
+	if(points_equal(tu1,tu2)) {
+		if((tl1->x<tl2->x)&&(tl1->y<tl2->y)) return TRUE;
+	}
+	if(points_equal(tl1,tl2)) {
+		if((tu1->x>tu2->x)&&(tu1->y>tu2->y)) return TRUE;
+	}
+	return FALSE;
+}
+
+// check whether b2 is totally within b1
+BOOL total_bbox_overlap(BBOX b1, BBOX b2)
+{
+	if(!b1) return FALSE;
+	if(!b2) return FALSE;
+	BBOX_POINT p1, p2;
+	for(BBOX_LINE l=b2->edges;l;l=l->next) {
+		p1=l->pt1;
+		p2=l->pt2;
+		if(!check_contains_point(b1,p1)) return FALSE;
+		if(!check_contains_point(b1,p2)) return FALSE;
+	}
+	return TRUE;
+}
+
 BOOL check_single_bbox_collision(BBOX box1, BBOX box2)
 {
 	if(!box1) return TRUE;
 	if(!box2) return TRUE;
 	if(box1==box2) return TRUE;
+	if(partial_bbox_overlap(box1,box2)) return TRUE;
+	if(partial_bbox_overlap(box2,box1)) return TRUE;
+	if(total_bbox_overlap(box1,box2)) return TRUE;
 
 	for(BBOX_LINE line = box2->edges; line; line = line->next) {
 		if(check_contains_point(box1,line->pt1)) return TRUE;
@@ -553,24 +595,22 @@ void free_bbox(BBOX t)
 BOOL check_bbox_consistency(NET net, BBOX vbox)
 {
 	BBOX_POINT vpnt;
+	DPOINT dtap;
 	BOOL ok;
 	vpnt = create_bbox_point(0,0);
 	BBOX_POINT t1 = get_left_lower_trunk_point(vbox);
 	BBOX_POINT t2 = get_right_upper_trunk_point(vbox);
 	if(!t1) return FALSE;
 	if(!t2) return FALSE;
-	printf("%s net %s with trunk points (%d,%d) to (%d,%d)\n",__FUNCTION__,net->netname,t1->x,t1->y,t2->x,t2->y);
 	for(NODE tn = net->netnodes; tn; tn=tn->next) {
-		for(DPOINT dtap=tn->taps;dtap;dtap=dtap->next) {
-			vpnt->x=dtap->gridx;
-			vpnt->y=dtap->gridy;
-			printf("%s checking tap (%d,%d) of net %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
-			ok=check_contains_tap(vbox, vpnt);
-			if(!ok) {
-				printf("%s net %s is outside of box with point (%d,%d)\n",__FUNCTION__,net->netname,vpnt->x,vpnt->y);
-				free(vpnt);
-				return FALSE;
-			}
+		dtap = (tn->taps == NULL) ? tn->extend : tn->taps;
+		if (dtap == NULL) continue;
+		vpnt->x=dtap->gridx;
+		vpnt->y=dtap->gridy;
+		ok=check_contains_tap(vbox, vpnt);
+		if(!ok) {
+			free(vpnt);
+			return FALSE;
 		}
 	}
 	free(vpnt);
@@ -795,12 +835,6 @@ BBOX_LINE get_edge(BBOX box1, BBOX box2)
 	return ret;
 }
 
-BOOL points_equal(BBOX_POINT p1, BBOX_POINT p2)
-{
-	if((p1->x==p2->x)&&(p1->y==p2->y)) return TRUE;
-	return FALSE;
-}
-
 BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l)
 {
 	if(!l) return bbox;
@@ -828,21 +862,6 @@ BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l)
 		}
 	}
 	return bbox;
-}
-
-// check whether b2 is totally within b1
-BOOL total_bbox_overlap(BBOX b1, BBOX b2)
-{
-	if(!b1) return FALSE;
-	if(!b2) return FALSE;
-	BBOX_POINT p1, p2;
-	for(BBOX_LINE l=b2->edges;l;l=l->next) {
-		p1=l->pt1;
-		p2=l->pt2;
-		if(!check_contains_point(b1,p1)) return FALSE;
-		if(!check_contains_point(b1,p2)) return FALSE;
-	}
-	return TRUE;
 }
 
 BOOL fit_competing_net_bboxes(NET n1, NET n2)

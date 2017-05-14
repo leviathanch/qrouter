@@ -303,14 +303,6 @@ struct bbox_ {
 	int num_edges;
 };
 
-BBOX_POINT get_left_lower_trunk_point(BBOX bbox);
-BBOX_POINT get_right_upper_trunk_point(BBOX bbox);
-int get_bbox_area(NET net);
-int net_absolute_distance(NET net);
-BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l);
-void free_line_list(BBOX_LINE t);
-BBOX_LINE get_fresh_line();
-
 struct net_ {
    int  netnum;		// a unique number for this net
    char *netname;

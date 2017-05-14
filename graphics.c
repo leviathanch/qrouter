@@ -436,7 +436,7 @@ draw_net_bbox(NET net) {
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	if (net->bbox == NULL) return;
-	if(net->bbox->num_edges<4) return;
+	//if(net->bbox->num_edges<4) return;
 
 	if(net->bbox_color) {
 		if(!strcmp(net->bbox_color,"green"))

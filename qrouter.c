@@ -953,11 +953,23 @@ POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net)
 	return p;
 }
 
+qThreadData *get_thread_data()
+{
+	qThreadData *ret = malloc(sizeof(qThreadData));
+	if(!ret) {
+		printf("%s: memory leak. dying!\n",__FUNCTION__);
+		exit(0);
+	}
+	return ret;
+}
+
 int dofirststage(u_char graphdebug, int debug_netnum)
 {
    int i, failcount, remaining;
+   NET net;
    NETLIST nl;
    Tcl_ThreadId idPtr;
+   qThreadData *thread_params;
    int thret;
    POSTPONED_NET postponed = NULL;
    int threadnum;
@@ -979,59 +991,42 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    threadnum=0;
  
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
-		qThreadData *thread_params = malloc(sizeof(qThreadData));
-		if(thread_params) {
-			CurNet[threadnum]=getnettoroute(i);
-			if(!CurNet[threadnum]) {
-				free(thread_params);
-				goto skip;
-			}
-			/*if(check_bbox_infinite(CurNet[threadnum]->bbox)) {
-				Fprintf(stdout,"%s: Box of %s is infinit. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
-				postponed=postpone_net(postponed,CurNet[threadnum]);
-				free(thread_params);
-				goto skip;
-			}*/
-			if(is_clknet(CurNet[threadnum])) {
-				Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
-				free(thread_params);
-				goto skip;
-			}
-			if(is_vddnet(CurNet[threadnum])) {
-				Fprintf(stdout,"%s: Post-Pony-ing VDD net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
-				free(thread_params);
-				goto skip;
-			}
-			if(is_gndnet(CurNet[threadnum])) {
-				Fprintf(stdout,"%s: Post-Pony-ing GND net %s\n", __FUNCTION__, CurNet[threadnum]->netname);
-				free(thread_params);
-				goto skip;
-			}
-			if(check_bbox_collisions(CurNet[threadnum])) {
-				Fprintf(stdout,"%s: Boxes of %s overlap.Trying to find alternative shapes\n", __FUNCTION__, CurNet[threadnum]->netname);
-				if(resolve_bbox_collisions(CurNet[threadnum])) {
-					Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__, CurNet[threadnum]->netname);
-					draw_layout();
-				} else {
-					Fprintf(stdout,"%s: Boxes of %s still overlap. Post-Pony-ing\n", __FUNCTION__, CurNet[threadnum]->netname);
-					CurNet[threadnum]->locked=TRUE;
-					postponed=postpone_net(postponed,CurNet[threadnum]);
-					free(thread_params);
-					goto skip;
-				}
-			}
-			CurNet[threadnum]->active=TRUE;
-			thread_params->i=i;
-			thread_params->remaining=&remaining;
-			thread_params->graphdebug=graphdebug;
-			thread_params->thnum=threadnum;
-			thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
-			thread_params_list[threadnum]=thread_params;
-			threadnum++;
-		} else {
-			Fprintf(stdout,"%s: Out of memory. Dying\n",__FUNCTION__);
-			exit(0);
+		net=getnettoroute(i);
+		if(!net) goto skip;
+		if(is_clknet(net)) {
+			Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__,  net->netname);
+			goto skip;
 		}
+		if(is_vddnet(net)) {
+			Fprintf(stdout,"%s: Post-Pony-ing VDD net %s\n", __FUNCTION__,  net->netname);
+			goto skip;
+		}
+		if(is_gndnet(net)) {
+			Fprintf(stdout,"%s: Post-Pony-ing GND net %s\n", __FUNCTION__,  net->netname);
+			goto skip;
+		}
+		if(check_bbox_collisions(net)) {
+			Fprintf(stdout,"%s: Boxes of %s overlap.Trying to find alternative shapes\n", __FUNCTION__,  net->netname);
+			if(resolve_bbox_collisions(net)) {
+				Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
+				draw_layout();
+			} else {
+				Fprintf(stdout,"%s: Boxes of %s still overlap. Post-Pony-ing\n", __FUNCTION__, net->netname);
+				net->locked=TRUE;
+				postponed=postpone_net(postponed,net);
+				goto skip;
+			}
+		}
+		net->active=TRUE;
+		CurNet[threadnum]=net;
+		thread_params=get_thread_data();
+		thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
+		thread_params->i=i;
+		thread_params->remaining=&remaining;
+		thread_params->graphdebug=graphdebug;
+		thread_params->thnum=threadnum;
+		thread_params_list[threadnum]=thread_params;
+		threadnum++;
 
 skip:
 		if((threadnum==MAX_NUM_THREADS)||i+1==Numnets) {

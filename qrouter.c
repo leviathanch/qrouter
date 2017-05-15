@@ -705,7 +705,7 @@ static int post_def_setup()
    for (i = 0; i < Numnets; i++) {
       net = Nlnets[i];
       find_bounding_box(net);
-      //define_route_tree(net);
+      define_route_tree(net);
    }
 
    create_netorder(0);		// Choose ordering method (0 or 1)
@@ -963,6 +963,10 @@ qThreadData *get_thread_data()
 	return ret;
 }
 
+void route_postponed_nets(POSTPONED_NET n)
+{
+}
+
 int dofirststage(u_char graphdebug, int debug_netnum)
 {
    int i, failcount, remaining;
@@ -1051,6 +1055,8 @@ skip:
 		}
       if (debug_netnum >= 0) break;
    }
+   route_postponed_nets(postponed);
+
    failcount = countlist(FailedNets);
    if (debug_netnum >= 0) return failcount;
 
@@ -2217,9 +2223,10 @@ static void createMask(NET net, u_char slack, u_char halo)
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
   BBOX_POINT pt1, pt2;
+  BBOX_POINT vpnt;
   pt1 = get_left_lower_trunk_point(net->bbox);
   pt2 = get_right_upper_trunk_point(net->bbox);
-  BBOX_POINT vpnt = create_bbox_point(0,0);
+  vpnt = create_bbox_point(0,0);
 
   fillMask((u_char)halo);
 

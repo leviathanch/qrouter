@@ -1243,19 +1243,14 @@ void define_route_tree(NET net)
     int xcent, ycent, xmin, ymin, xmax, ymax;
     if(!net) return;
     if(!net->bbox) return;
-    if(net->bbox->num_edges<4) return;
 
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
     BBOX_POINT p1, p2;
+    if(net->bbox->num_edges>3) {
     p1 = get_left_lower_trunk_point(net->bbox);
-    if(!p1) return;
     p2 = get_right_upper_trunk_point(net->bbox);
-    if(!p2) {
-	    free(p1);
-	    return;
-    }
-    
+
     xmin = p1->x;
     xmax = p2->x;
     ymin = p1->y;
@@ -1263,6 +1258,12 @@ void define_route_tree(NET net)
 
     free(p1);
     free(p2);
+    } else {
+    xmin = -MAXRT;
+    xmax = MAXRT;
+    ymin = -MAXRT;
+    ymax = MAXRT;
+    }
 
     if (net->numnodes == 2) {
 

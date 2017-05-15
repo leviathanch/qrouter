@@ -294,7 +294,6 @@ BBOX_LINE add_line_to_edge(BBOX_LINE list, BBOX_LINE l)
 	if(!line) return list;
 	line->next = NULL;
 	line->last = NULL;
-	printf("%s add line (%d,%d) to (%d,%d)\n",__FUNCTION__,COORDS(line));
 
 	if(list) {
 		line->last = NULL;
@@ -620,7 +619,6 @@ BBOX_LINE delete_line_from_edge(BBOX_LINE vbox, BBOX_LINE l)
 	BBOX_LINE last, next;
 	for(BBOX_LINE line=vbox; line; line=line->next) {
 		if(lines_equal(line,l)) {
-			printf("%s deleting line (%d,%d) to (%d,%d)\n",__FUNCTION__,COORDS(line));
 			last=line->last;
 			next=line->next;
 			free_line(line);

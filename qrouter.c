@@ -1045,7 +1045,6 @@ skip:
 				Tcl_JoinThread( threadIDs[c], NULL );
 			}
 			for(int c=0;c<threadnum;c++) {
-				CurNet[threadnum]->active=FALSE;
 				free(thread_params_list[c]);
 			}
 			threadnum=0;

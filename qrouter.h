@@ -5,7 +5,7 @@
 /* Modified by Tim Edwards 2011-2013				*/
 /*--------------------------------------------------------------*/
 
-#define THREADS 1
+#define THREADS 5
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 

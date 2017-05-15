@@ -44,6 +44,7 @@ BBOX_LINE get_fresh_line();
 BBOX_LINE clone_line(BBOX_LINE orig);
 BBOX_POINT clone_bbox_point(BBOX_POINT p);
 BOOL check_point_inside_wo_edges(BBOX bbox, BBOX_POINT pnt);
+BOOL check_point_area(BBOX bbox, BBOX_POINT pnt);
 BBOX clone_bbox(BBOX orig);
 BOOL check_bbox_consistency(NET net, BBOX vbox);
 BOOL is_vddnet(NET net);

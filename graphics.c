@@ -412,18 +412,6 @@ void draw_net(NET net, u_char single, int *lastlayer) {
     }
 }
 
-// check whether still unchecked points exist
-/*int num_points_checked(BBOX p)
-{
-	BBOX pts = p;
-	int ret = 0;
-	while(pts) {
-		if(pts->checked) ret++;
-		pts=pts->next;
-	}
-	return ret;
-}*/
-
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
 /*--------------------------------------*/

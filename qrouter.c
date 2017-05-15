@@ -2219,6 +2219,7 @@ static void createMask(NET net, u_char slack, u_char halo)
   BBOX_POINT pt1, pt2;
   pt1 = get_left_lower_trunk_point(net->bbox);
   pt2 = get_right_upper_trunk_point(net->bbox);
+  BBOX_POINT vpnt = create_bbox_point(0,0);
 
   fillMask((u_char)halo);
 
@@ -2248,7 +2249,9 @@ static void createMask(NET net, u_char slack, u_char halo)
 	if (i < 0 || i >= NumChannelsX[0]) continue;
 	for (j = ycent - slack; j <= ycent + slack; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
-	   RMASK(i, j) = (u_char)0;
+	   vpnt->x=i;
+	   vpnt->y=j;
+	   if(check_point_area(net->bbox,vpnt)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2257,19 +2260,31 @@ static void createMask(NET net, u_char slack, u_char halo)
 	gy2 = ycent + slack + i;
         for (j = xmin - slack - i; j <= xmax + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsX[0]) continue;
-	   if (gy1 >= 0)
-	      RMASK(j, gy1) = (u_char)i;
-	   if (gy2 < NumChannelsY[0])
-	      RMASK(j, gy2) = (u_char)i;
+	   if (gy1 >= 0) {
+	      vpnt->x=j;
+	      vpnt->y=gy1;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy1) = (u_char)i;
+	   }
+	   if (gy2 < NumChannelsY[0]) {
+	      vpnt->x=j;
+	      vpnt->y=gy2;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy2) = (u_char)i;
+	   }
 	}
 	gx1 = xmin - slack - i;
 	gx2 = xmax + slack + i;
         for (j = ycent - slack - i; j <= ycent + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
-	   if (gx1 >= 0)
-	      RMASK(gx1, j) = (u_char)i;
-	   if (gx2 < NumChannelsX[0])
-	      RMASK(gx2, j) = (u_char)i;
+	   if (gx1 >= 0) {
+	      vpnt->x=gx1;
+	      vpnt->y=j;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(gx1, j) = (u_char)i;
+	   }
+	   if (gx2 < NumChannelsX[0]) {
+	      vpnt->x=gx2;
+	      vpnt->y=j;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(gx2, j) = (u_char)i;
+	   }
 	}
      }
   }
@@ -2282,7 +2297,9 @@ static void createMask(NET net, u_char slack, u_char halo)
 	if (i < 0 || i >= NumChannelsX[0]) continue;
 	for (j = ymin - slack; j <= ymax + slack; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
-	   RMASK(i, j) = (u_char)0;
+	   vpnt->x=i;
+	   vpnt->y=j;
+	   if(check_point_area(net->bbox,vpnt)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2291,19 +2308,31 @@ static void createMask(NET net, u_char slack, u_char halo)
 	gx2 = xcent + slack + i;
         for (j = ymin - slack - i; j <= ymax + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
-	   if (gx1 >= 0)
-	      RMASK(gx1, j) = (u_char)i;
-	   if (gx2 < NumChannelsX[0])
-	      RMASK(gx2, j) = (u_char)i;
+	   if (gx1 >= 0) {
+	      vpnt->x=gx1;
+	      vpnt->y=j;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(gx1, j) = (u_char)i;
+	   }
+	   if (gx2 < NumChannelsX[0]) {
+	      vpnt->x=gx2;
+	      vpnt->y=j;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(gx2, j) = (u_char)i;
+	   }
 	}
 	gy1 = ymin - slack - i;
 	gy2 = ymax + slack + i;
         for (j = xcent - slack - i; j <= xcent + slack + i; j++) {
 	   if (j < 0 || j >= NumChannelsX[0]) continue;
-	   if (gy1 >= 0)
-	      RMASK(j, gy1) = (u_char)i;
-	   if (gy2 < NumChannelsY[0])
-	      RMASK(j, gy2) = (u_char)i;
+	   if (gy1 >= 0) {
+	      vpnt->x=j;
+	      vpnt->y=gy1;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy1) = (u_char)i;
+	   }
+	   if (gy2 < NumChannelsY[0]) {
+	      vpnt->x=j;
+	      vpnt->y=gy2;
+	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy2) = (u_char)i;
+	   }
 	}
      }
   }
@@ -2392,6 +2421,7 @@ static void createMask(NET net, u_char slack, u_char halo)
         FprintfT(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
   }
+  free(vpnt);
 }
 
 /*--------------------------------------------------------------*/
@@ -2884,6 +2914,7 @@ static int route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
 static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
+  BBOX_POINT vpnt = create_bbox_point(0,0);
   int  i, o;
   int  pass, maskpass;
   u_int forbid;
@@ -2918,6 +2949,9 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
     while ((gpoint = iroute->glist) != NULL) {
       iroute->glist = gpoint->next;
 
+      vpnt->x = gpoint->x;
+      vpnt->y = gpoint->y;
+      if(check_point_area(iroute->net->bbox,vpnt)) {
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
@@ -3150,8 +3184,9 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
     // Regenerate the stack of unprocessed nodes
     iroute->glist = gunproc;
     gunproc = NULL;
-    
+    }  
   } // pass
+  free(vpnt);
   
   if (!first && (Verbose > 2)) {
      FprintfT(stdout, "\n");

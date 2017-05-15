@@ -559,7 +559,6 @@ int disable_node_nets(NODE node)
 /* source nodes) is routable by definition. . .			*/
 /*--------------------------------------------------------------*/
 
-TCL_DECLARE_MUTEX(lnode_mutex)
 int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		SEG bbox, u_char stage)
 {
@@ -605,11 +604,9 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// If we found another node connected to the route,
 		// then process it, too.
 
-		Tcl_MutexLock(&lnode_mutex);
 		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
 		printf("%s: netname %s lnode %p\n",__FUNCTION__,net->netname,lnode);
 		n2 = (lnode) ? lnode->nodeloc : NULL;
-		Tcl_MutexUnlock(&lnode_mutex);
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);

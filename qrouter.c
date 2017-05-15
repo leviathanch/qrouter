@@ -91,68 +91,12 @@ BOOL is_vddnet(NET net)
 	return FALSE;
 }
 
-void add_vddnet(NET net)
-{
-	if(!net) return;
-	if(vddnets) {
-		vddnets->last = malloc(sizeof(struct postponed_net_));
-		vddnets->last->next = vddnets->last;
-		vddnets = vddnets->last;
-	} else {
-		vddnets = malloc(sizeof(struct postponed_net_));
-		vddnets->net = net;
-		vddnets->next = NULL;
-		vddnets->last = NULL;
-	}
-}
-
-void delete_vddnet(NET net)
-{
-	if(!net) return;
-	for(POSTPONED_NET p=vddnets;p;p=p->next) {
-		if(p->net==net) {
-			if(p->last) p->last->next = p->next;
-			if(p->next) p->next->last = p->last;
-			free(p);
-			return;
-		}
-	}
-}
-
 BOOL is_gndnet(NET net)
 {
 	if(!net) return FALSE;
 	if(gndnet) if(!strcmp(gndnet,net->netname)) return TRUE;
 	for(POSTPONED_NET p=gndnets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
-}
-
-void add_gndnet(NET net)
-{
-	if(!net) return;
-	if(gndnets) {
-		gndnets->last = malloc(sizeof(struct postponed_net_));
-		gndnets->last->next = gndnets->last;
-		gndnets = gndnets->last;
-	} else {
-		gndnets = malloc(sizeof(struct postponed_net_));
-		gndnets->net = net;
-		gndnets->next = NULL;
-		gndnets->last = NULL;
-	}
-}
-
-void delete_gndnet(NET net)
-{
-	if(!net) return;
-	for(POSTPONED_NET p=gndnets;p;p=p->next) {
-		if(p->net==net) {
-			if(p->last) p->last->next = p->next;
-			if(p->next) p->next->last = p->last;
-			free(p);
-			return;
-		}
-	}
 }
 
 BOOL is_clknet(NET net)
@@ -163,31 +107,48 @@ BOOL is_clknet(NET net)
 	return FALSE;
 }
 
-void add_clknet(NET net)
-{
-	if(!net) return;
-	if(clknets) {
-		clknets->last = malloc(sizeof(struct postponed_net_));
-		clknets->last->next = clknets->last;
-		clknets = clknets->last;
-	} else {
-		clknets = malloc(sizeof(struct postponed_net_));
-		clknets->net = net;
-		clknets->next = NULL;
-		clknets->last = NULL;
+void free_postponed(POSTPONED_NET postponed) {
+	if(!postponed) return;
+	POSTPONED_NET lp = NULL;
+	for(POSTPONED_NET t=postponed;t;t=t->next) {
+		if(lp) free(lp);
+		lp=t;
 	}
 }
 
-void delete_clknet(NET net)
+POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net)
 {
-	if(!net) return;
-	for(POSTPONED_NET p=clknets;p;p=p->next) {
+	if(!net) return postponed;
+	for(POSTPONED_NET pp=postponed;pp;pp=pp->next) {
+		if(pp->net==net) return postponed; // already in list
+	}
+	POSTPONED_NET p = malloc(sizeof(struct postponed_net_));
+	if(!p) {
+		printf("%s: memory leak. dying!\n",__FUNCTION__);
+		exit(0);
+	}
+	p->net = net;
+	p->next = postponed ? postponed : NULL;
+
+	return p;
+}
+
+POSTPONED_NET delete_postponed(POSTPONED_NET postponed, NET net)
+{
+	if(!postponed) return NULL;
+	if(!net) return postponed;
+	POSTPONED_NET np = NULL;
+	POSTPONED_NET lp = NULL;
+	for(POSTPONED_NET p=postponed;p;p=p->next) {
+		np=p->next;
 		if(p->net==net) {
-			if(p->last) p->last->next = p->next;
-			if(p->next) p->next->last = p->last;
-			free(p);
-			return;
+			if(lp) lp->next = np;
+			else {
+				free(p);
+				return np;
+			}
 		}
+		lp=p;
 	}
 }
 
@@ -873,7 +834,6 @@ void read_def(char *filename)
 /*--------------------------------------------------------------*/
 
 typedef struct {
-	int i;
 	int thnum;
 	int *remaining;
 	u_char graphdebug;
@@ -888,15 +848,12 @@ void dofirststage_thread(ClientData parm)
 {
 	NET net;
 	qThreadData *thread_params = (qThreadData*)parm;
-	int i = thread_params->i;
 	int thnum = thread_params->thnum;
 	int result=0;
 	int *remaining = thread_params->remaining;
 	u_char graphdebug = thread_params->graphdebug;
 	net = thread_params->net;
 	net->locked = TRUE;
-	//if(Verbose > 1)
-	//	FprintfT(stdout, "%s: got parameters: i=%d remaining=%d thnum=%d netname %s \n",__FUNCTION__,i,*remaining,thnum,net->netname);
 	if ((net != NULL) && (net->netnodes != NULL)) {
 		result = doroute(thnum, net, (u_char)0, graphdebug);
 		if (result == 0) {
@@ -924,35 +881,6 @@ void dofirststage_thread(ClientData parm)
 	return TCL_THREAD_CREATE_RETURN;
 }
 
-void free_postponed(POSTPONED_NET postponed) {
-	if(!postponed) return;
-	POSTPONED_NET victim = NULL;
-	for(POSTPONED_NET t=postponed;t;t=t->next) {
-		if(victim) free(victim);
-		victim=t;
-	}
-	free(victim);
-}
-
-POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net)
-{
-	if(!net) return postponed;
-	POSTPONED_NET p = NULL;
-	for(POSTPONED_NET pp=postponed;pp;pp=pp->next) {
-		if(pp->net==net) return postponed; // already in list
-	}
-	p = malloc(sizeof(struct postponed_net_));
-	p->net = net;
-	p->last = NULL;
-	p->next = NULL;
-
-	if(postponed) {
-		p->next = postponed;
-	}
-
-	return p;
-}
-
 qThreadData *get_thread_data()
 {
 	qThreadData *ret = malloc(sizeof(qThreadData));
@@ -963,8 +891,94 @@ qThreadData *get_thread_data()
 	return ret;
 }
 
-void route_postponed_nets(POSTPONED_NET n)
+int count_postponed_nets(POSTPONED_NET l)
 {
+	int ret=0;
+	for(POSTPONED_NET n=l;n;n=n->next) ret++;
+	return ret;
+}
+
+void hide_all_nets()
+{
+	NET net;
+	for (int i = 0; i < Numnets; i++) {
+		net=getnettoroute(i);
+		if(!net) continue;
+		net->active=FALSE;
+	}
+}
+
+void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
+{
+	qThreadData *thread_params;
+	Tcl_ThreadId idPtr;
+	int threadnum;
+	int thret;
+	NET net;
+	while(count_postponed_nets(l)) {
+		threadnum=0;
+		for(POSTPONED_NET pn=l;pn;pn=pn->next) {
+			net=pn->net;
+			if(check_bbox_collisions(net,FOR_THREAD)) continue;
+			CurNet[threadnum]=net;
+			thread_params=get_thread_data();
+			thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
+			thread_params->remaining=remaining;
+			thread_params->graphdebug=graphdebug;
+			thread_params->thnum=threadnum;
+			thread_params_list[threadnum]=thread_params;
+			threadnum++;
+
+			if(threadnum==MAX_NUM_THREADS) {
+				for(int c=0;c<MAX_NUM_THREADS;c++) {
+					thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
+					if( thret == TCL_OK) {
+						threadIDs[c]=idPtr;
+						Fprintf(stdout,"routing net %s\n",thread_params_list[c]->net->netname);
+						thread_params_list[c]->net->active=TRUE;
+					} else {
+						exit(0);
+					}
+				}
+				draw_layout();
+				for(int c=0;c<MAX_NUM_THREADS;c++) {
+					Tcl_JoinThread( threadIDs[c], NULL );
+					l=delete_postponed(l,CurNet[c]);
+					free(thread_params_list[c]);
+					thread_params_list[c]=NULL;
+					CurNet[c]->active=FALSE;
+					CurNet[c]=NULL;
+					draw_layout();
+				}
+				threadnum=0;
+			}
+			
+		}
+		for(int c=0;c<MAX_NUM_THREADS;c++) {
+			if(thread_params_list[c]) {
+				thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
+				if( thret == TCL_OK) {
+					threadIDs[c]=idPtr;
+					Fprintf(stdout,"routing net %s\n",thread_params_list[c]->net->netname);
+					thread_params_list[c]->net->active=TRUE;
+				} else {
+					exit(0);
+				}
+			}
+		}
+		draw_layout();
+		for(int c=0;c<MAX_NUM_THREADS;c++) {
+			if(thread_params_list[c]) {
+				Tcl_JoinThread( threadIDs[c], NULL );
+				l=delete_postponed(l,CurNet[c]);
+				free(thread_params_list[c]);
+				thread_params_list[c]=NULL;
+				CurNet[c]->active=FALSE;
+				CurNet[c]=NULL;
+				draw_layout();
+			}
+		}
+	}
 }
 
 int dofirststage(u_char graphdebug, int debug_netnum)
@@ -974,9 +988,9 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    NETLIST nl;
    Tcl_ThreadId idPtr;
    qThreadData *thread_params;
-   int thret;
    POSTPONED_NET postponed = NULL;
-   int threadnum;
+   int threadnum = 0;
+   int thret;
 
    // Clear the lists of failed routes, in case first
    // stage is being called more than once.
@@ -994,68 +1008,78 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    remaining = Numnets;
    threadnum=0;
  
+   hide_all_nets();
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 		net=getnettoroute(i);
-		if(!net) goto skip;
+		if(!net) continue;
 		if(is_clknet(net)) {
 			Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__,  net->netname);
-			goto skip;
+			continue;
 		}
 		if(is_vddnet(net)) {
 			Fprintf(stdout,"%s: Post-Pony-ing VDD net %s\n", __FUNCTION__,  net->netname);
-			goto skip;
+			continue;
 		}
 		if(is_gndnet(net)) {
 			Fprintf(stdout,"%s: Post-Pony-ing GND net %s\n", __FUNCTION__,  net->netname);
-			goto skip;
+			continue;
 		}
-		if(check_bbox_collisions(net)) {
+		if(check_bbox_collisions(net,FOR_THREAD)) {
 			Fprintf(stdout,"%s: Boxes of %s overlap.Trying to find alternative shapes\n", __FUNCTION__,  net->netname);
-			if(resolve_bbox_collisions(net)) {
+			if(resolve_bbox_collisions(net,FOR_THREAD)) {
 				Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
+				net->active=TRUE;
 				draw_layout();
 			} else {
 				Fprintf(stdout,"%s: Boxes of %s still overlap. Post-Pony-ing\n", __FUNCTION__, net->netname);
-				net->locked=TRUE;
 				postponed=postpone_net(postponed,net);
-				goto skip;
+				net->active=FALSE;
+				draw_layout();
+				continue;
 			}
 		}
-		net->active=TRUE;
 		CurNet[threadnum]=net;
 		thread_params=get_thread_data();
 		thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
-		thread_params->i=i;
 		thread_params->remaining=&remaining;
 		thread_params->graphdebug=graphdebug;
 		thread_params->thnum=threadnum;
 		thread_params_list[threadnum]=thread_params;
 		threadnum++;
 
-skip:
 		if((threadnum==MAX_NUM_THREADS)||i+1==Numnets) {
-			for(int c=0;c<threadnum;c++) {
-				thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
-				if( thret != TCL_OK) {
-					Fprintf(stdout,"Couldn't start thread!\n");
-					exit(0);
-				} else {
-					threadIDs[c]=idPtr;
-					Fprintf(stdout,"Started thread %d\n",c);
+			Fprintf(stdout,"starting threads\n");
+			for(int c=0;c<MAX_NUM_THREADS;c++) {
+				if(thread_params_list[c]) {
+					thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
+					if( thret == TCL_OK) {
+						threadIDs[c]=idPtr;
+						Fprintf(stdout,"routing net %s\n",thread_params_list[c]->net->netname);
+						thread_params_list[c]->net->active=TRUE;
+					} else {
+						exit(0);
+					}
 				}
 			}
-			for(int c=0;c<threadnum;c++) {
-				Fprintf(stdout,"%s: waiting for thread %d to finish\n",__FUNCTION__,threadnum);
-				Tcl_JoinThread( threadIDs[c], NULL );
-			}
-			for(int c=0;c<threadnum;c++) {
-				free(thread_params_list[c]);
+			draw_layout();
+			for(int c=0;c<MAX_NUM_THREADS;c++) {
+				if(thread_params_list[c]) {
+					Tcl_JoinThread( threadIDs[c], NULL );
+					free(thread_params_list[c]);
+					thread_params_list[c]=NULL;
+					CurNet[c]->active=FALSE;
+					CurNet[c]=NULL;
+					draw_layout();
+				}
 			}
 			threadnum=0;
 		}
       if (debug_netnum >= 0) break;
    }
-   route_postponed_nets(postponed);
+   route_postponed_nets(postponed,&remaining,graphdebug);
+   route_postponed_nets(clknets,&remaining,graphdebug);
+   route_postponed_nets(vddnets,&remaining,graphdebug);
+   route_postponed_nets(gndnets,&remaining,graphdebug);
 
    failcount = countlist(FailedNets);
    if (debug_netnum >= 0) return failcount;
@@ -2157,35 +2181,48 @@ static void createBboxMask(NET net, u_char halo)
 /* best location for the trunk route.				*/
 /*--------------------------------------------------------------*/
 
-static int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
+static int analyzeCongestion(BBOX box)
 {
-    int x, y, i, minidx = -1, sidx, n;
-    int *score, minscore;
+	int x, y, i, minidx = -1, sidx, n;
+	int xmin, xmax;
+	int ymin, ymax;
+	int *score, minscore;
+	BBOX_POINT vpnt = create_bbox_point(0,0);
+	BBOX_POINT pt1, pt2;
+	pt1 = get_left_lower_trunk_point(box);
+	pt2 = get_right_upper_trunk_point(box);
+	xmin = pt1->x;
+	ymin = pt1->y;
+	xmax = pt2->x;
+	ymax = pt2->y;
 
-    score = (int *)malloc((ymax - ymin + 1) * sizeof(int));
+	score = (int *)malloc((ymax - ymin + 1) * sizeof(int));
 
-    for (y = ymin; y <= ymax; y++) {
-	sidx = y - ymin;
-	score[sidx] = ABSDIFF(ycent, y) * Num_layers;
-	for (x = xmin; x <= xmax; x++) {
-	    for (i = 0; i < Num_layers; i++) {
-		n = OBSVAL(x, y, i);
-		if (n & ROUTED_NET) score[sidx]++;
-		if (n & NO_NET) score[sidx]++;
-		if (n & PINOBSTRUCTMASK) score[sidx]++;
-	    }
+	for (y = ymin; y <= ymax; y++) {
+		sidx = y - ymin;
+		score[sidx] = Num_layers;
+		for (x = xmin; x <= xmax; x++) {
+			if(check_point_area(box,vpnt)) {
+				for (i = 0; i < Num_layers; i++) {
+					n = OBSVAL(x, y, i);
+					if (n & ROUTED_NET) score[sidx]++;
+					if (n & NO_NET) score[sidx]++;
+					if (n & PINOBSTRUCTMASK) score[sidx]++;
+				}
+			}
+		}
 	}
-    }
-    minscore = MAXRT;
-    for (i = 0; i < (ymax - ymin + 1); i++) {
-	if (score[i] < minscore) {
-	    minscore = score[i];
-	    minidx = i + ymin;
+	minscore = MAXRT;
+	for (i = 0; i < (ymax - ymin + 1); i++) {
+			if (score[i] < minscore) {
+			minscore = score[i];
+			minidx = i + ymin;
+		}
 	}
-    }
 
-    free(score);
-    return minidx;
+	free(vpnt);
+	free(score);
+	return minidx;
 }
 
 /*--------------------------------------------------------------*/
@@ -2238,18 +2275,18 @@ static void createMask(NET net, u_char slack, u_char halo)
   free(pt1);
   free(pt2);
 
-  xcent = net->trunkx;
-  ycent = net->trunky;
+  xcent = xmin;
+  ycent = ymax;
 
   orient = 0;
 
   // Construct the trunk line mask
 
-  if (!(net->flags & NET_VERTICAL_TRUNK) || (net->numnodes == 2)) {
+  if (!(net->flags & NET_VERTICAL_TRUNK)) {
      // Horizontal trunk
      orient |= 1;
 
-     ycent = analyzeCongestion(net->trunky, ymin, ymax, xmin, xmax);
+     ycent = analyzeCongestion(net->bbox);
      ymin = ymax = ycent;
 
      for (i = xmin - slack; i <= xmax + slack; i++) {
@@ -2295,7 +2332,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	}
      }
   }
-  if ((net->flags & NET_VERTICAL_TRUNK) || (net->numnodes == 2)) {
+  if ((net->flags & NET_VERTICAL_TRUNK)) {
      // Vertical trunk
      orient |= 2;
      xmin = xmax = xcent;
@@ -2421,12 +2458,7 @@ static void createMask(NET net, u_char slack, u_char halo)
   }
 
   if (Verbose > 2) {
-     if (net->numnodes == 2)
-        FprintfT(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
-			xmin, ymin, xmax, ymax);
-     else
-        FprintfT(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
-			xmin, ymin, xmax, ymax);
+	  FprintfT(stdout, "port mask has trunk line (%d %d) to (%d %d)\n", xmin, ymin, xmax, ymax);
   }
   free(vpnt);
 }

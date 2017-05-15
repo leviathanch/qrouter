@@ -52,14 +52,11 @@ BOOL is_gndnet(NET net);
 BOOL is_clknet(NET net);
 BBOX_LINE get_horizontal_lines(BBOX_LINE box);
 BBOX_LINE get_vertical_lines(BBOX_LINE box);
-BOOL check_bbox_collisions(NET net);
-POSTPONED_NET get_bbox_collisions(NET net);
-BOOL resolve_bbox_collisions(NET net);
-void add_clknet(NET net);
-void add_gndnet(NET net);
-void add_vddnet(NET net);
-void free_postponed(POSTPONED_NET postponed);
-void free_bbox(BBOX t);
+BOOL check_bbox_collisions(NET net, BOOL thread);
+POSTPONED_NET get_bbox_collisions(NET net, BOOL thread);
+BOOL resolve_bbox_collisions(NET net, BOOL thread);
+BOOL check_single_bbox_collision(BBOX box1, BBOX box2);
+
 #define NODE_H
 #endif 
 

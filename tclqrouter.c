@@ -2252,9 +2252,10 @@ static int
 qrouter_borders(ClientData clientData, Tcl_Interp *interp,
             int objc, Tcl_Obj *CONST objv[])
 {
-	char *subcmd,*subcmdpar;
+	char *subcmd,*subcmdpar, *par1, *par2;
 	POSTPONED_NET pp = NULL;
 	NET net;
+	NET n1, n2;
 	if (objc == 2) {
 		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
 		if(!strcmp(subcmd,"fit")) {
@@ -2268,8 +2269,8 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			for (int i = 0; i < Numnets; i++) {
 				net=getnettoroute(i);
 				if(net) {
-					if(check_bbox_collisions(net)) {
-						if(resolve_bbox_collisions(net)) {
+					if(check_bbox_collisions(net,NOT_FOR_THREAD)) {
+						if(resolve_bbox_collisions(net,NOT_FOR_THREAD)) {
 							net->bbox_color="green";
 							net->active=TRUE;
 						}
@@ -2336,8 +2337,8 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			if(net) {
 				net->bbox_color="red";
 				net->active=FALSE;
-				if(check_bbox_collisions(net)) {
-					if(resolve_bbox_collisions(net)) {
+				if(check_bbox_collisions(net,NOT_FOR_THREAD)) {
+					if(resolve_bbox_collisions(net,NOT_FOR_THREAD)) {
 						net->bbox_color="green";
 						net->active=TRUE;
 					}
@@ -2346,6 +2347,7 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			}
 		}
 		if(!strcmp(subcmd,"collisions")||!strcmp(subcmd,"cols")) {
+			hide_all_nets();
 			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
 			Tcl_SetObjResult(interp, Tcl_NewStringObj("checking for collisions with net", -1));
 			Tcl_AppendElement(interp, subcmdpar);
@@ -2358,10 +2360,10 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			net=getnetbyname(subcmdpar);
 			if(net) {
 				net->active=TRUE;
-				if(check_bbox_collisions(net)) {
+				if(check_bbox_collisions(net,NOT_FOR_THREAD)) {
 					net->bbox_color="red";
 					Tcl_AppendElement(interp, "there are collisions with: ");
-					pp=get_bbox_collisions(net);
+					pp=get_bbox_collisions(net,NOT_FOR_THREAD);
 					for(POSTPONED_NET tmpp=pp;tmpp;tmpp=tmpp->next) {
 						Tcl_AppendElement(interp, tmpp->net->netname);
 					}
@@ -2372,6 +2374,23 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 				}
 				draw_layout();
 			}
+		}
+	}
+	if (objc == 4) {
+		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
+		if(!strcmp(subcmd,"collisions")||!strcmp(subcmd,"cols")) {
+			hide_all_nets();
+			par1 = Tcl_Strdup(Tcl_GetString(objv[2]));
+			par2 = Tcl_Strdup(Tcl_GetString(objv[3]));
+			n1=getnetbyname(par1);
+			n2=getnetbyname(par2);
+			if(n1) n1->active=TRUE;
+			if(n2) n2->active=TRUE;
+			if(check_single_bbox_collision(n1->bbox,n2->bbox))
+				Tcl_AppendElement(interp, "collisions found");
+			else
+				Tcl_AppendElement(interp, "no collisions found");
+			draw_layout();
 		}
 	}
 	return QrouterTagCallback(interp, objc, objv);

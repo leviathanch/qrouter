@@ -497,24 +497,12 @@ BOOL partial_bbox_overlap(BBOX b1, BBOX b2)
 	if(!b1) return FALSE;
 	if(!b2) return FALSE;
 	BBOX_POINT p1, p2;
-	BBOX_POINT tu1 = get_right_upper_trunk_point(b1);
-	BBOX_POINT tl1 = get_left_lower_trunk_point(b1);
-	BBOX_POINT tu2 = get_right_upper_trunk_point(b2);
-	BBOX_POINT tl2 = get_left_lower_trunk_point(b2);
-	if(points_equal(tu1,tu2)) {
-		if((tl1->x>tl2->x)&&(tl1->y>tl2->y)) return FALSE;
-	}
-	if(points_equal(tl1,tl2)) {
-		if((tu1->x<tu2->x)&&(tu1->y<tu2->y)) return FALSE;
-	}
-
 	for(BBOX_LINE l=b2->edges;l;l=l->next) {
 		p1=l->pt1;
 		p2=l->pt2;
-		if(check_point_inside_wo_edges(b1,p1)) return TRUE;
-		if(check_point_inside_wo_edges(b1,p2)) return TRUE;
+		if(check_point_area(b1,p1)) return TRUE;
+		if(check_point_area(b1,p2)) return TRUE;
 	}
-
 	return FALSE;
 }
 
@@ -527,8 +515,8 @@ BOOL total_bbox_overlap(BBOX b1, BBOX b2)
 	for(BBOX_LINE l=b2->edges;l;l=l->next) {
 		p1=l->pt1;
 		p2=l->pt2;
-		if(!check_point_inside_wo_edges(b1,p1)) return FALSE;
-		if(!check_point_inside_wo_edges(b1,p2)) return FALSE;
+		if(!check_point_area(b1,p1)) return FALSE;
+		if(!check_point_area(b1,p2)) return FALSE;
 	}
 	return TRUE;
 }
@@ -539,33 +527,41 @@ BOOL check_single_bbox_collision(BBOX box1, BBOX box2)
 	if(!box2) return TRUE;
 	if(box1==box2) return TRUE;
 	if(partial_bbox_overlap(box1,box2)) return TRUE;
-	if(partial_bbox_overlap(box2,box1)) return TRUE;
 	if(total_bbox_overlap(box1,box2)) return TRUE;
-
-	for(BBOX_LINE line = box2->edges; line; line = line->next) {
-		if(check_point_inside_wo_edges(box1,line->pt1)) return TRUE;
-		if(check_point_inside_wo_edges(box1,line->pt2)) return TRUE;
-	}
-
 	return FALSE;
 }
 
-POSTPONED_NET get_bbox_collisions(NET net)
+POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
 {
 	POSTPONED_NET ret = NULL;
 	NET n;
 	if(!net) return NULL;
 	if(!net->bbox) return NULL;
 	if(net->bbox->num_edges<4) return NULL;
-
-	for(int i=0; i<Numnets; i++) {
-		n = getnettoroute(i);
-		if(n) {
-			if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
-				if(check_single_bbox_collision(net->bbox,n->bbox)) {
-					n->active=TRUE;
-					n->bbox_color="red";
-					ret=postpone_net(ret,n);
+	if(thread==FOR_THREAD) {
+		for(int i=0; i<MAX_NUM_THREADS; i++) {
+			n = CurNet[i];
+			if(n) {
+				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+					if(check_single_bbox_collision(net->bbox,n->bbox)) {
+						n->active=TRUE;
+						n->bbox_color="red";
+						ret=postpone_net(ret,n);
+					}
+				}
+			}
+		}
+	}
+	if(thread==NOT_FOR_THREAD) {
+		for(int i=0; i<Numnets; i++) {
+			n = getnettoroute(i);
+			if(n) {
+				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+					if(check_single_bbox_collision(net->bbox,n->bbox)) {
+						n->active=TRUE;
+						n->bbox_color="red";
+						ret=postpone_net(ret,n);
+					}
 				}
 			}
 		}
@@ -573,18 +569,34 @@ POSTPONED_NET get_bbox_collisions(NET net)
 	return ret;
 }
 
-BOOL check_bbox_collisions(NET net)
+BOOL check_bbox_collisions(NET net, BOOL thread)
 {
 	NET n;
 	if(!net) return TRUE;
-	for(int i=0; i<Numnets; i++) {
-		n = getnettoroute(i);
-		if(n) {
-			if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)&&!n->routed) {
-				if(check_single_bbox_collision(net->bbox,n->bbox)) {
-					n->active=TRUE;
-					n->bbox_color="red";
-					return TRUE;
+	if(thread==FOR_THREAD) {
+		for(int i=0; i<MAX_NUM_THREADS; i++) {
+			n = CurNet[i];
+			if(n) {
+				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+					if(check_single_bbox_collision(net->bbox,n->bbox)) {
+						n->active=TRUE;
+						n->bbox_color="red";
+						return TRUE;
+					}
+				}
+			}
+		}
+	}
+	if(thread==NOT_FOR_THREAD) {
+		for(int i=0; i<Numnets; i++) {
+			n = getnettoroute(i);
+			if(n) {
+				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)&&!n->routed) {
+					if(check_single_bbox_collision(net->bbox,n->bbox)) {
+						n->active=TRUE;
+						n->bbox_color="red";
+						return TRUE;
+					}
 				}
 			}
 		}
@@ -1004,11 +1016,12 @@ BOOL fit_competing_net_bboxes(NET n1, NET n2)
 	}
 }
 
-BOOL resolve_bbox_collisions(NET net)
+BOOL resolve_bbox_collisions(NET net, BOOL thread)
 {
 	NET n;
-	if(!net) return TRUE;
-	POSTPONED_NET pp=get_bbox_collisions(net);
+	BOOL ret = TRUE;
+	if(!net) return FALSE;
+	POSTPONED_NET pp=get_bbox_collisions(net,thread);
 	for(POSTPONED_NET p=pp;p;p=p->next) {
 		n = p->net;
 		if((net!=n)&&n) {
@@ -1021,13 +1034,14 @@ BOOL resolve_bbox_collisions(NET net)
 						Fprintf(stdout,"fit successful\n");
 					} else {
 						Fprintf(stdout,"fitting failed\n");
+						ret=FALSE;
 					}
 				}
 			}
 		}
 	}
 	free_postponed(pp);
-	return TRUE;
+	return ret;
 }
 
 /*--------------------------------------------------------------*/
@@ -1265,17 +1279,7 @@ void define_route_tree(NET net)
     ymax = MAXRT;
     }
 
-    if (net->numnodes == 2) {
-
-	// For 2-node nets, record the initial position as
-	// one horizontal trunk + one branch for one "L" of
-	// the bounding box, and one vertical trunk + one
-	// branch for the other "L" of the bounding box.
-
-	net->trunkx = xmin;
-	net->trunky = ymin;
-    }
-    else if (net->numnodes > 0) {
+    if (net->numnodes > 0) {
 
 	// Use the first tap point for each node to get a rough
 	// centroid of all taps
@@ -1290,11 +1294,7 @@ void define_route_tree(NET net)
 	xcent /= net->numnodes;
 	ycent /= net->numnodes;
 
-	// Record the trunk line in the net record
-
-	net->trunkx = xcent;
-	net->trunky = ycent;
-    }
+   }
 
     if (xmax - xmin > ymax - ymin) {
 	// Horizontal trunk preferred

@@ -311,8 +311,8 @@ struct net_ {
    u_char flags;	// flags for this net (see below)
    int  netorder;	// to be assigned by route strategy (critical
 			// nets first, then order by number of nodes).
-   int  trunkx;		// X position of the net's trunk line (see flags)
-   int  trunky;		// Y position of the net's trunk line (see flags)
+   //int  trunkx;		// X position of the net's trunk line (see flags)
+   //int  trunky;		// Y position of the net's trunk line (see flags)
    NETLIST noripup;	// list of nets that have been ripped up to
 			// route this net.  This will not be allowed
 			// a second time, to avoid looping.
@@ -321,7 +321,6 @@ struct net_ {
    BOOL locked;
    BOOL active;
    BOOL routed;
-   NET last;
    NET next;
    char *bbox_color;
 };
@@ -329,7 +328,6 @@ struct net_ {
 typedef struct postponed_net_ *POSTPONED_NET;
 struct postponed_net_ {
 	NET net;
-	POSTPONED_NET last;
 	POSTPONED_NET next;
 };
 
@@ -340,6 +338,9 @@ struct postponed_net_ {
 #define NET_IGNORED  		4	// net is ignored by router
 #define NET_STUB     		8	// Net has at least one stub
 #define NET_VERTICAL_TRUNK	16	// Trunk line is (preferred) vertical
+
+#define FOR_THREAD 1
+#define NOT_FOR_THREAD 2
 
 // List of nets, used to maintain a list of failed routes
 
@@ -482,6 +483,9 @@ extern u_char ripLimit;
 extern char *vddnet;
 extern char *gndnet;
 extern char *clknet;
+extern POSTPONED_NET gndnets;
+extern POSTPONED_NET vddnets;
+extern POSTPONED_NET clknets;
 
 /* Tcl output to console handling */
 
@@ -532,6 +536,9 @@ NET getnetbyname(char *name);
 int    route_net_ripup(int thnum, NET net, u_char graphdebug);
 
 POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net);
+void free_postponed(POSTPONED_NET postponed);
+void free_bbox(BBOX t);
+void hide_all_nets();
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

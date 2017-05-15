@@ -654,19 +654,19 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		if(vddnet) {
 			if(!strcmp(token, vddnet)) {
 				net->netnum = VDD_NET;
-				add_vddnet(net);
+				vddnets=postpone_net(vddnets,net);
 			}
 		}
 		if(gndnet) {
 			if(!strcmp(token, gndnet)) {
 				net->netnum = GND_NET;
-				add_gndnet(net);
+				gndnets=postpone_net(gndnets,net);
 			}
 		}
 		if(clknet) {
 			if(!strcmp(token, clknet)) {
 				net->netnum = CLK_NET;
-				add_clknet(net);
+				clknets=postpone_net(clknets,net);
 			}
 		}
 		if(net->netnum==UNDEF_NET) {

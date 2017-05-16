@@ -916,7 +916,7 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
 	    for(int thnum=0;thnum<MAX_NUM_THREADS;thnum++) {
-			result = doroute(thnum, net, (u_char)0, dodebug);
+			result = doroute(net, (u_char)0, dodebug);
 			failcount += (result == 0) ? 0 : 1;
 	    }
 
@@ -1248,7 +1248,7 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
 	    for(int thnum=0;thnum<MAX_NUM_THREADS;thnum++) {
-			result = doroute(thnum, net, (u_char)0, dodebug);
+			result = doroute(net, (u_char)0, dodebug);
 			failcount += (result == 0) ? 0 : 1;
 	    }
 

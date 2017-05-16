@@ -497,28 +497,36 @@ BOOL partial_bbox_overlap(BBOX b1, BBOX b2)
 	if(!b1) return FALSE;
 	if(!b2) return FALSE;
 	BBOX_POINT p1, p2;
+	BOOL ret=FALSE;
 	for(BBOX_LINE l=b2->edges;l;l=l->next) {
 		p1=l->pt1;
 		p2=l->pt2;
-		if(check_point_area(b1,p1)) return TRUE;
-		if(check_point_area(b1,p2)) return TRUE;
+		if(check_point_area(b1,p1)) ret=TRUE;
+		if(check_point_area(b1,p2)) ret=TRUE;
 	}
-	return FALSE;
+	for(BBOX_LINE l=b1->edges;l;l=l->next) {
+		p1=l->pt1;
+		p2=l->pt2;
+		if(check_point_area(b2,p1)) ret=TRUE;
+		if(check_point_area(b2,p2)) ret=TRUE;
+	}
+	return ret;
 }
 
 // check whether b2 is totally within b1
-BOOL total_bbox_overlap(BBOX b1, BBOX b2)
+BOOL box2_inside_box1(BBOX b1, BBOX b2)
 {
 	if(!b1) return FALSE;
 	if(!b2) return FALSE;
 	BBOX_POINT p1, p2;
+	BOOL ret=TRUE;
 	for(BBOX_LINE l=b2->edges;l;l=l->next) {
 		p1=l->pt1;
 		p2=l->pt2;
-		if(!check_point_area(b1,p1)) return FALSE;
-		if(!check_point_area(b1,p2)) return FALSE;
+		if(!check_point_area(b1,p1)) ret=FALSE;
+		if(!check_point_area(b1,p2)) ret=FALSE;
 	}
-	return TRUE;
+	return ret;
 }
 
 BOOL check_single_bbox_collision(BBOX box1, BBOX box2)
@@ -526,9 +534,11 @@ BOOL check_single_bbox_collision(BBOX box1, BBOX box2)
 	if(!box1) return TRUE;
 	if(!box2) return TRUE;
 	if(box1==box2) return TRUE;
-	if(partial_bbox_overlap(box1,box2)) return TRUE;
-	if(total_bbox_overlap(box1,box2)) return TRUE;
-	return FALSE;
+	BOOL ret=FALSE;
+	if(box2_inside_box1(box1,box2)) ret=TRUE;
+	if(box2_inside_box1(box2,box1)) ret=TRUE;
+	if(partial_bbox_overlap(box1,box2)) ret=TRUE;
+	return ret;
 }
 
 POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
@@ -544,8 +554,6 @@ POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
 			if(n) {
 				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
 					if(check_single_bbox_collision(net->bbox,n->bbox)) {
-						n->active=TRUE;
-						n->bbox_color="red";
 						ret=postpone_net(ret,n);
 					}
 				}
@@ -558,8 +566,6 @@ POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
 			if(n) {
 				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
 					if(check_single_bbox_collision(net->bbox,n->bbox)) {
-						n->active=TRUE;
-						n->bbox_color="red";
 						ret=postpone_net(ret,n);
 					}
 				}
@@ -572,6 +578,7 @@ POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
 BOOL check_bbox_collisions(NET net, BOOL thread)
 {
 	NET n;
+	BOOL ret = FALSE;
 	if(!net) return TRUE;
 	if(thread==FOR_THREAD) {
 		for(int i=0; i<MAX_NUM_THREADS; i++) {
@@ -579,9 +586,7 @@ BOOL check_bbox_collisions(NET net, BOOL thread)
 			if(n) {
 				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
 					if(check_single_bbox_collision(net->bbox,n->bbox)) {
-						n->active=TRUE;
-						n->bbox_color="red";
-						return TRUE;
+						ret=TRUE;
 					}
 				}
 			}
@@ -593,15 +598,13 @@ BOOL check_bbox_collisions(NET net, BOOL thread)
 			if(n) {
 				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)&&!n->routed) {
 					if(check_single_bbox_collision(net->bbox,n->bbox)) {
-						n->active=TRUE;
-						n->bbox_color="red";
-						return TRUE;
+						ret=TRUE;
 					}
 				}
 			}
 		}
 	}
-	return FALSE;
+	return ret;
 }
 
 void free_bbox(BBOX t)
@@ -990,7 +993,7 @@ BOOL fit_competing_net_bboxes(NET n1, NET n2)
 	if(!n2->bbox) return FALSE;
 	if(n1->bbox->num_edges<4) return FALSE;
 	if(n2->bbox->num_edges<4) return FALSE;
-	if(total_bbox_overlap(n1->bbox,n2->bbox)) return FALSE; // don't cut out inside
+	if(box2_inside_box1(n1->bbox,n2->bbox)) return FALSE; // don't cut out inside
 
 	BBOX bbox_temp = NULL; // copy of bbox1
 	BBOX_LINE edge1 = NULL;

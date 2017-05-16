@@ -932,7 +932,7 @@ u_char ripup_net(NET net, u_char restore)
 /*  SIDE EFFECTS: none (get this right or else)			*/
 /*--------------------------------------------------------------*/
 
-POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
+POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 {
     int thiscost = 0;
     int netnum;
@@ -988,7 +988,7 @@ POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
 
-	  for (nl = CurNet[thnum]->noripup; nl; nl = nl->next) {
+	  for (nl = net->noripup; nl; nl = nl->next) {
 	     if (nl->net->netnum == netnum)
 		return NULL;
 	  }
@@ -1017,9 +1017,9 @@ POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x + 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1029,9 +1029,9 @@ POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x - 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1042,9 +1042,9 @@ POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x, newpt.y + 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1054,9 +1054,9 @@ POINT eval_pt(int thnum, GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x, newpt.y - 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet[thnum]->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet[thnum]->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1356,7 +1356,7 @@ void writeback_segment(SEG seg, int netnum)
 /*--------------------------------------------------------------*/
 
 //TCL_DECLARE_MUTEX(commit_proute_threadMutex)
-int commit_proute(int thnum, ROUTE rt, GRIDP *ept, u_char stage)
+int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
    NODEINFO lnode1, lnode2;

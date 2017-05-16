@@ -72,9 +72,9 @@ ScaleRec Scales;	// record of input and output scales
 /* Prototypes for some local functions */
 static void initMask(void);
 static void fillMask(u_char value);
-static int next_route_setup(int thnum, struct routeinfo_ *iroute, u_char stage);
-static int route_setup(int thnum, struct routeinfo_ *iroute, u_char stage);
-static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
 static void helpmessage(void);
@@ -855,7 +855,7 @@ void dofirststage_thread(ClientData parm)
 	net = thread_params->net;
 	net->locked = TRUE;
 	if ((net != NULL) && (net->netnodes != NULL)) {
-		result = doroute(thnum, net, (u_char)0, graphdebug);
+		result = doroute(net, (u_char)0, graphdebug);
 		if (result == 0) {
 			Tcl_MutexLock(&dofirststage_threadMutex);
 			(*remaining)--;
@@ -947,8 +947,8 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 					free(thread_params_list[c]);
 					thread_params_list[c]=NULL;
 					CurNet[c]->active=FALSE;
-					CurNet[c]=NULL;
 					draw_layout();
+					CurNet[c]=NULL;
 				}
 				threadnum=0;
 			}
@@ -974,8 +974,8 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 				free(thread_params_list[c]);
 				thread_params_list[c]=NULL;
 				CurNet[c]->active=FALSE;
-				CurNet[c]=NULL;
 				draw_layout();
+				CurNet[c]=NULL;
 			}
 		}
 	}
@@ -1009,6 +1009,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    threadnum=0;
  
    hide_all_nets();
+   for(int c=0;c<MAX_NUM_THREADS;c++) thread_params_list[c]=NULL;
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 		net=getnettoroute(i);
 		if(!net) continue;
@@ -1025,19 +1026,19 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 			continue;
 		}
 		if(check_bbox_collisions(net,FOR_THREAD)) {
-			Fprintf(stdout,"%s: Boxes of %s overlap.Trying to find alternative shapes\n", __FUNCTION__,  net->netname);
-			if(resolve_bbox_collisions(net,FOR_THREAD)) {
+			Fprintf(stdout,"%s: Box of %s overlaps. Trying to find alternative shape\n", __FUNCTION__,  net->netname);
+			if(check_bbox_collisions(net,FOR_THREAD)) {
+				Fprintf(stdout,"%s: Box of %s still overlaps. Post-Pony-ing\n", __FUNCTION__, net->netname);
+				net->active=FALSE;
+				postponed=postpone_net(postponed,net);
+				continue;
+			} else {
 				Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
 				net->active=TRUE;
 				draw_layout();
-			} else {
-				Fprintf(stdout,"%s: Boxes of %s still overlap. Post-Pony-ing\n", __FUNCTION__, net->netname);
-				postponed=postpone_net(postponed,net);
-				net->active=FALSE;
-				draw_layout();
-				continue;
 			}
 		}
+
 		CurNet[threadnum]=net;
 		thread_params=get_thread_data();
 		thread_params->net = CurNet[threadnum]; // Global, used by 2nd stage
@@ -1048,28 +1049,26 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 		threadnum++;
 
 		if((threadnum==MAX_NUM_THREADS)||i+1==Numnets) {
-			Fprintf(stdout,"starting threads\n");
 			for(int c=0;c<MAX_NUM_THREADS;c++) {
 				if(thread_params_list[c]) {
+					thread_params_list[c]->net->active=TRUE;
 					thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 					if( thret == TCL_OK) {
 						threadIDs[c]=idPtr;
 						Fprintf(stdout,"routing net %s\n",thread_params_list[c]->net->netname);
-						thread_params_list[c]->net->active=TRUE;
 					} else {
 						exit(0);
 					}
 				}
 			}
-			draw_layout();
 			for(int c=0;c<MAX_NUM_THREADS;c++) {
 				if(thread_params_list[c]) {
 					Tcl_JoinThread( threadIDs[c], NULL );
 					free(thread_params_list[c]);
 					thread_params_list[c]=NULL;
 					CurNet[c]->active=FALSE;
-					CurNet[c]=NULL;
 					draw_layout();
+					CurNet[c]=NULL;
 				}
 			}
 			threadnum=0;
@@ -1672,7 +1671,7 @@ int route_net_ripup(int thnum, NET net, u_char graphdebug)
 	}
     }
 
-    result = doroute(thnum, net, (u_char)1, graphdebug);
+    result = doroute(net, (u_char)1, graphdebug);
     if (result != 0) {
 	if (net->noripup != NULL) {
 	    if ((net->flags & NET_PENDING) == 0) {
@@ -1683,7 +1682,7 @@ int route_net_ripup(int thnum, NET net, u_char graphdebug)
 		    free(net->noripup);
 		    net->noripup = nl;
 		}
-		result = doroute(thnum, net, (u_char)1, graphdebug);
+		result = doroute(net, (u_char)1, graphdebug);
 		net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	}
@@ -1769,7 +1768,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 Fprintf(stdout, "Routing net %s with collisions\n", net->netname);
       Flush(stdout);
 
-      result = doroute(thnum, net, (u_char)1, graphdebug);
+      result = doroute(net, (u_char)1, graphdebug);
 
       if (result != 0) {
 	 if (net->noripup != NULL) {
@@ -1781,7 +1780,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	          free(net->noripup);
 	          net->noripup = nl;
 	       }
-	       result = doroute(thnum, net, (u_char)1, graphdebug);
+	       result = doroute(net, (u_char)1, graphdebug);
 	       net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	 }
@@ -1959,7 +1958,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
 	 ripup_net(net, (u_char)0);
-	 result = doroute(thnum, net, (u_char)0, graphdebug);
+	 result = doroute(net, (u_char)0, graphdebug);
 	 if (result == 0) {
 	    remaining--;
 	    if (Verbose > 0)
@@ -2507,7 +2506,7 @@ free_glist(struct routeinfo_ *iroute)
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 TCL_DECLARE_MUTEX(dorouteMutex)
-int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
+int doroute(NET net, u_char stage, u_char graphdebug)
 {
   ROUTE rt1, lrt;
   NETLIST nlist;
@@ -2533,7 +2532,7 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 
   /* Set up Obs2[] matrix for first route */
 
-  result = route_setup(thnum, &iroute, stage);
+  result = route_setup(&iroute, stage);
   unroutable = result - 1;
   if (graphdebug) highlight_mask();
 
@@ -2553,7 +2552,7 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
 	       net->netnum, net->netnodes->nodenum);
      }
 
-     result = route_segs(thnum, &iroute, stage, graphdebug);
+     result = route_segs(&iroute, stage, graphdebug);
 
      if (result < 0) {		// Route failure.
 
@@ -2589,7 +2588,7 @@ int doroute(int thnum, NET net, u_char stage, u_char graphdebug)
      if (iroute.do_pwrbus) free_glist(&iroute);
 
      /* Set up for next route and check if routing is done */
-     result = next_route_setup(thnum, &iroute, stage);
+     result = next_route_setup(&iroute, stage);
   }
 
   /* Finished routing (or error occurred) */
@@ -2635,7 +2634,7 @@ static void unable_to_route(char *netname, NODE node, unsigned char forced)
 /*								*/
 /*--------------------------------------------------------------*/
 TCL_DECLARE_MUTEX(next_route_setupMutex)
-static int next_route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
   NODE node;
@@ -2740,7 +2739,7 @@ static int next_route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
 /*								*/
 /*--------------------------------------------------------------*/
 
-static int route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
+static int route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   int  i, j;
   u_int netnum, dir;
@@ -2950,9 +2949,10 @@ static int route_setup(int thnum, struct routeinfo_ *iroute, u_char stage)
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
+static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
+  NET net = iroute->net;
   BBOX_POINT vpnt = create_bbox_point(0,0);
   int  i, o;
   int  pass, maskpass;
@@ -3112,7 +3112,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	    case EAST:
 	       predecessor |= PR_PRED_W;
                if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
-         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -3124,7 +3124,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	    case WEST:
 	       predecessor |= PR_PRED_E;
                if ((curpt.x - 1) >= 0) {
-         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -3136,7 +3136,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
                if ((curpt.y - 1) >= 0) {
-         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                    }
@@ -3148,7 +3148,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
                if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
-         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
                   }
@@ -3160,7 +3160,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	    case DOWN:
 	       predecessor |= PR_PRED_U;
                if (curpt.lay > 0) {
-         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
          	  }
@@ -3172,7 +3172,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	    case UP:
 	       predecessor |= PR_PRED_D;
                if (curpt.lay < (Num_layers - 1)) {
-         	  if ((gpoint = eval_pt(thnum, &curpt, predecessor, stage)) != NULL) {
+         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
          	  }
@@ -3194,7 +3194,7 @@ static int route_segs(int thnum, struct routeinfo_ *iroute, u_char stage, u_char
 	curpt.x = best.x;
 	curpt.y = best.y;
 	curpt.lay = best.lay;
-	if ((rval = commit_proute(thnum, iroute->rt, &curpt, stage)) != 1) break;
+	if ((rval = commit_proute(iroute->rt, &curpt, stage)) != 1) break;
 	if (Verbose > 2) {
 	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
 	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n",

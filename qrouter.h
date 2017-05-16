@@ -530,7 +530,7 @@ int    dofirststage(u_char graphdebug, int debug_netnum);
 int    dosecondstage(u_char graphdebug, u_char singlestep);
 int    dothirdstage(u_char graphdebug, int debug_netnum);
 
-int    doroute(int thnum, NET net, u_char stage, u_char graphdebug);
+int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
 NET getnetbyname(char *name);
 int    route_net_ripup(int thnum, NET net, u_char graphdebug);

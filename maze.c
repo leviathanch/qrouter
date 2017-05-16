@@ -354,7 +354,7 @@ count_targets(NET net)
 /* will be no way to route the net.				*/
 /*--------------------------------------------------------------*/
 
-int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char stage)
+int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char stage)
 {
     int x, y, lay, obsnet = 0;
     int result = 0;
@@ -422,12 +422,12 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  found_one = (u_char)1;
 
 	  // record extents
-	  if (bbox) {
+	  /*if (bbox) {
 	     if (x < bbox->x1) bbox->x1 = x;
 	     if (x > bbox->x2) bbox->x2 = x;
 	     if (y < bbox->y1) bbox->y1 = y;
 	     if (y > bbox->y2) bbox->y2 = y;
-	  }
+	  }*/
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -475,12 +475,12 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  found_one = (u_char)1;
 
 	  // record extents
-	  if (bbox) {
+	  /*if (bbox) {
 	     if (x < bbox->x1) bbox->x1 = x;
 	     if (x > bbox->x2) bbox->x2 = x;
 	     if (y < bbox->y1) bbox->y1 = y;
 	     if (y > bbox->y2) bbox->y2 = y;
-	  }
+	  }*/
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -559,8 +559,7 @@ int disable_node_nets(NODE node)
 /* source nodes) is routable by definition. . .			*/
 /*--------------------------------------------------------------*/
 
-int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
-		SEG bbox, u_char stage)
+int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox, u_char stage)
 {
     int x, y, lay;
     int result = 0;
@@ -569,6 +568,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
     SEG seg;
     NODE n2;
     PROUTE *Pr;
+    BBOX_POINT vpnt = create_bbox_point(0,0);
 
     if (rt) if(rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
@@ -576,6 +576,9 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 	    x = seg->x1;
 	    y = seg->y1;
 	    while (1) {
+		vpnt->x=x;
+		vpnt->y=y;
+		if(check_point_area(net->bbox,vpnt)) {
 		Pr = &OBS2VAL(x, y, lay);
 		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
 		// Conflicts should not happen (check for this?)
@@ -594,12 +597,12 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		}
 
 		// record extents
-		if (bbox) {
+		/*if (bbox) {
 		   if (x < bbox->x1) bbox->x1 = x;
 		   if (x > bbox->x2) bbox->x2 = x;
 		   if (y < bbox->y1) bbox->y1 = y;
 		   if (y > bbox->y2) bbox->y2 = y;
-		}
+		}*/
 
 		// If we found another node connected to the route,
 		// then process it, too.
@@ -619,7 +622,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		   lay++;
 		   continue;
 		}
-
+		}
 		// Move to next grid position in segment
 		if (x == seg->x2 && y == seg->y2) break;
 		if (seg->x2 > seg->x1) x++;
@@ -637,14 +640,13 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 /* to SOURCE in Obs2[]						*/
 /*--------------------------------------------------------------*/
 
-int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
-		u_char stage)
+int set_routes_to_net(NET net, int newflags, POINT *pushlist, BBOX bbox, u_char stage)
 {
     ROUTE rt;
     int result = 0;
 
     for (rt = net->routes; rt; rt = rt->next)
-	result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
+	result = set_route_to_net(net, rt, newflags, pushlist, net->bbox, stage);
 
     return result;
 }

@@ -200,9 +200,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    if (special == (char)0) {
 	       routednet = (ROUTE)malloc(sizeof(struct route_));
 	       routednet->next = net->routes;
-	       routednet->last = net->routes;
 	       net->routes = routednet;
-
 	       routednet->netnum = net->netnum;
 	       routednet->segments = NULL;
 	       routednet->flags = (u_char)0;

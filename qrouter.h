@@ -168,7 +168,6 @@ struct seg_ {
 typedef struct dseg_ *DSEG;
 
 struct dseg_ {
-   DSEG   last;
    DSEG   next;
    int    layer;
    double x1, y1, x2, y2;
@@ -181,7 +180,6 @@ struct dseg_ {
 typedef struct point_ *POINT;
 
 struct point_ {
-  POINT last;
   POINT next;
   int layer;
   int x, y;
@@ -194,7 +192,6 @@ struct point_ {
 typedef struct dpoint_ *DPOINT;
 
 struct dpoint_ {
-   DPOINT last;
    DPOINT next;
    int layer;
    double x, y;
@@ -205,7 +202,6 @@ typedef struct route_ *ROUTE;
 typedef struct node_ *NODE;
 
 struct route_ {
-  ROUTE  last;
   ROUTE  next;
   int    netnum;
   SEG    segments;
@@ -361,7 +357,7 @@ struct routeinfo_ {
    int maxcost;
    u_char do_pwrbus;
    int pwrbus_src;
-   struct seg_ bbox;
+   BBOX bbox;
 };
 
 #define MAXRT		10000		// "Infinite" route cost

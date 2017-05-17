@@ -2685,7 +2685,6 @@ static void unable_to_route(char *netname, NODE node, unsigned char forced)
 /* next_route_setup --						*/
 /*								*/
 /*--------------------------------------------------------------*/
-TCL_DECLARE_MUTEX(next_route_setupMutex)
 static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
@@ -2741,14 +2740,14 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
   // Check for the possibility that there is already a route to the target
 
-  if (!result) {
+  /*if (!result) {
 
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
 
      for (i = 0; i < Pinlayers; i++) {
 	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   if (Nodeinfo[i][j]) {
+	   if(Nodeinfo[i][j]) {
 	      node = Nodeinfo[i][j]->nodeloc;
 	      if (node != (NODE)NULL)
 	         if (node->netnum == iroute->net->netnum)
@@ -2759,7 +2758,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
      free_glist(iroute);
      return 0;
-  }
+  }*/
 
   if (!iroute->do_pwrbus) {
 
@@ -2774,9 +2773,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
   }
 
   if (Verbose > 1) {
-     Tcl_MutexLock(&next_route_setupMutex);
      FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes);
-     Tcl_MutexUnlock(&next_route_setupMutex);
   }
 
   if (iroute->maxcost > 2)
@@ -3040,8 +3037,9 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       curpt.lay = gpoint->layer;
       vpnt->x = gpoint->x;
       vpnt->y = gpoint->y;
+      //if(check_point_area(net->bbox,vpnt)) FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, vpnt->x, gpoint->y);
+      //else continue;
       if(!check_point_area(net->bbox,vpnt)) continue;
-      //FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, gpoint->x, gpoint->y);
 
       if (graphdebug) highlight(curpt.x, curpt.y);
 	

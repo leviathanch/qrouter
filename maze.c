@@ -570,7 +570,8 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 	    while (1) {
 		vpnt->x=x;
 		vpnt->y=y;
-		if(check_point_area(net->bbox,vpnt)) {
+		if(check_point_area(net->bbox,vpnt)) printf("%s: point (%d,%d) inside bbox of %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
+		else break;
 		Pr = &OBS2VAL(x, y, lay);
 		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
 		// Conflicts should not happen (check for this?)
@@ -605,7 +606,6 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 		   if (lay != seg->layer) break;
 		   lay++;
 		   continue;
-		}
 		}
 		// Move to next grid position in segment
 		if (x == seg->x2 && y == seg->y2) break;
@@ -646,7 +646,7 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, BBOX bbox, u_char 
     int result = 0;
 
     for (rt = net->routes; rt; rt = rt->next)
-	result = set_route_to_net(net, rt, newflags, pushlist, net->bbox, stage);
+	result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
 
     return result;
 }

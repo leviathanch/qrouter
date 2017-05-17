@@ -420,14 +420,6 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
 	     *pushlist = gpoint;
 	  }
 	  found_one = (u_char)1;
-
-	  // record extents
-	  /*if (bbox) {
-	     if (x < bbox->x1) bbox->x1 = x;
-	     if (x > bbox->x2) bbox->x2 = x;
-	     if (y < bbox->y1) bbox->y1 = y;
-	     if (y > bbox->y2) bbox->y2 = y;
-	  }*/
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -596,14 +588,6 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 	 	   *pushlist = gpoint;
 		}
 
-		// record extents
-		/*if (bbox) {
-		   if (x < bbox->x1) bbox->x1 = x;
-		   if (x > bbox->x2) bbox->x2 = x;
-		   if (y < bbox->y1) bbox->y1 = y;
-		   if (y > bbox->y2) bbox->y2 = y;
-		}*/
-
 		// If we found another node connected to the route,
 		// then process it, too.
 
@@ -625,10 +609,26 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 		}
 		// Move to next grid position in segment
 		if (x == seg->x2 && y == seg->y2) break;
-		if (seg->x2 > seg->x1) x++;
-		else if (seg->x2 < seg->x1) x--;
-		if (seg->y2 > seg->y1) y++;
-		else if (seg->y2 < seg->y1) y--;
+		vpnt->x=x;
+		if (seg->x2 > seg->x1) {
+			vpnt->x++;
+			if(check_point_area(net->bbox,vpnt)) x++;
+		}
+		else if (seg->x2 < seg->x1) {
+			vpnt->x--;
+			if(check_point_area(net->bbox,vpnt)) x--;
+		}
+		vpnt->y=y;
+		if (seg->y2 > seg->y1) {
+			vpnt->y++;
+			if(check_point_area(net->bbox,vpnt)) y++;
+		}
+		else if (seg->y2 < seg->y1) {
+			vpnt->y--;
+			if(check_point_area(net->bbox,vpnt)) y--;
+		}
+		vpnt->x=x;
+		vpnt->y=y;
 	    }
 	}
     }
@@ -944,6 +944,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     PROUTE *Pr, *Pt;
     GRIDP newpt;
     POINT ptret = NULL;
+    BBOX_POINT vpnt;
 
     newpt = *ept;
 
@@ -976,6 +977,13 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  newpt.lay++;
 	  break;
     }
+
+    vpnt = create_bbox_point(newpt.x,newpt.y);
+    if(!check_point_area(net->bbox,vpnt)) {
+	    free(vpnt);
+	    return NULL;
+    }
+    free(vpnt);
 
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
     nodeptr = (newpt.lay < Pinlayers) ?

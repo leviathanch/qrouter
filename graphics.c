@@ -418,7 +418,6 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 static void
 draw_net_bbox(NET net) {
 	int x1, x2, y1, y2;
-	//int x0, y0, dx, dy;
 	BBOX_POINT p1, p2;
 
 	if (dpy == NULL) return;
@@ -449,16 +448,18 @@ draw_net_bbox(NET net) {
 	if(net) if(net->netname)
 		XDrawString(dpy, buffer, gc, spacing*x1,height-spacing*y1,net->netname,strlen(net->netname));
 
-	/* // trunk box
+	// trunk box
+	int x0, y0, dx, dy;
 	p1 = get_left_lower_trunk_point(net->bbox);
 	p2 = get_right_upper_trunk_point(net->bbox);
 	x0 = (p1->x)*spacing;
 	y0 = height-(p2->y)*spacing;
 	dx = (p2->x-p1->x)*spacing;
 	dy = (p2->y-p1->y)*spacing;
+	XSetForeground(dpy, gc, goldpix);
 	XDrawRectangle(dpy, buffer, gc, x0, y0, dx, dy);
 	free(p1);
-	free(p2);*/
+	free(p2);
 }
 
 /*--------------------------------------*/
@@ -468,15 +469,21 @@ static void
 draw_ratnet(NET net) {
 	if (dpy == NULL) return;
 	if (net == NULL) return;
+	int x1, x2, y1, y2;
 	XSetForeground(dpy, gc, yellowpix); // set ratnet colour to yellow
 	DPOINT d1tap, d2tap;
 	for(NODE tn1=net->netnodes;tn1;tn1=tn1->next) {
 		d1tap = (tn1->taps == NULL) ? tn1->extend : tn1->taps;
 		if (d1tap == NULL) continue;
+		x1=d1tap->gridx;
+		y1=d1tap->gridy;
 		for(NODE tn2=net->netnodes;tn2;tn2=tn2->next) {
 			d2tap = (tn2->taps == NULL) ? tn2->extend : tn2->taps;
 			if (d2tap == NULL) continue;
-			XDrawLine(dpy, buffer, gc,d1tap->gridx*spacing,height-d1tap->gridy*spacing,d2tap->gridx*spacing,height-d2tap->gridy*spacing);
+			if (d1tap == d2tap) continue;
+			x2=d2tap->gridx;
+			y2=d2tap->gridy;
+			XDrawLine(dpy, buffer, gc,x1*spacing,height-y1*spacing,x2*spacing,height-y2*spacing);
 		}
 	}
 }

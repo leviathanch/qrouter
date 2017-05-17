@@ -1069,8 +1069,8 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 			} else {
 				Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
 				net->active=TRUE;
-				draw_layout();
 			}
+			draw_layout();
 		}
 
 		CurNet[threadnum]=net;
@@ -1083,6 +1083,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 		threadnum++;
 
 		if((threadnum==MAX_NUM_THREADS)||i+1==Numnets) {
+			sleep(10);
 			for(int c=0;c<MAX_NUM_THREADS;c++) {
 				if(thread_params_list[c]) {
 					thread_params_list[c]->net->active=TRUE;
@@ -2797,6 +2798,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   NODE node;
   NODEINFO lnode;
   PROUTE *Pr;
+  iroute->bbox = iroute->net->bbox;
 
   // Make Obs2[][] a copy of Obs[][].  Convert pin obstructions to
   // terminal positions for the net being routed.
@@ -2846,10 +2848,6 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   unroutable = 0;
 
   if (result) {
-     iroute->bbox = iroute->net->bbox;
-     //iroute->bbox.x1 = NumChannelsX[0];
-     //iroute->bbox.y1 = NumChannelsY[0];
-
      while(1) {
         rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist, iroute->bbox, stage);
 	if (rval == -2) {
@@ -3002,8 +3000,8 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
-  NET net = iroute->net;
   BBOX_POINT vpnt = create_bbox_point(0,0);
+  NET net = iroute->net;
   int  i, o;
   int  pass, maskpass;
   u_int forbid;
@@ -3037,14 +3035,13 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     while ((gpoint = iroute->glist) != NULL) {
       iroute->glist = gpoint->next;
-      vpnt->x = gpoint->x;
-      vpnt->y = gpoint->y;
-      FprintfT(stdout, " %s testing point (%d,%d) inside box\n",__FUNCTION__,vpnt->x,vpnt->y);
-      if(check_point_area(iroute->net->bbox,vpnt)) {
-      FprintfT(stdout, " %s point (%d,%d) inside box\n",__FUNCTION__,vpnt->x,vpnt->y);
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
+      vpnt->x = gpoint->x;
+      vpnt->y = gpoint->y;
+      if(!check_point_area(net->bbox,vpnt)) continue;
+      //FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, gpoint->x, gpoint->y);
 
       if (graphdebug) highlight(curpt.x, curpt.y);
 	
@@ -3274,9 +3271,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
     // Regenerate the stack of unprocessed nodes
     iroute->glist = gunproc;
     gunproc = NULL;
-    }  
   } // pass
-  free(vpnt);
   
   if (!first && (Verbose > 2)) {
      FprintfT(stdout, "\n");

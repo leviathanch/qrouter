@@ -1214,7 +1214,7 @@ void find_bounding_box(NET net)
 	 }
       }
       
-      /*for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
             if (dtap->gridx > x2) x2 = dtap->gridx;
@@ -1222,7 +1222,7 @@ void find_bounding_box(NET net)
             if (dtap->gridy > y2) y2 = dtap->gridy;
             if (dtap->gridy < y1) y1 = dtap->gridy;
 	 }
-      }*/
+      }
       
       x1-=BOX_ROOM_X;
       y1-=BOX_ROOM_Y;

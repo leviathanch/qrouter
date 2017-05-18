@@ -25,5 +25,7 @@ int    redraw(ClientData clientData, Tcl_Interp *interp, int objc,
 int    recalc_spacing(void);
 void   resize(Tk_Window tkwind, int locwidth, int locheight);
 
+extern BOOL drawTrunk;
+
 #define GRAPHICS_H
 #endif

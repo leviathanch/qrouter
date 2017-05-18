@@ -363,6 +363,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
     POINT gpoint;
     DPOINT ntap;
     PROUTE *Pr;
+    POINT vpnt;
 
     /* If called from set_routes_to_net, the node has no taps, and the	*/
     /* net is a power bus, just return.					*/
@@ -378,6 +379,12 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
+       vpnt = create_point(x,y,lay);
+       if(!check_point_area(bbox,vpnt,TRUE)) {
+	       free(vpnt);
+	       continue;
+       }
+       free(vpnt);
 
        Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
@@ -412,10 +419,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
-	     gpoint = allocPOINT();
-	     gpoint->x = x;
-	     gpoint->y = y;
-	     gpoint->layer = lay;
+	     gpoint = create_point(x,y,lay);
 	     gpoint->next = *pushlist;
 	     *pushlist = gpoint;
 	  }
@@ -560,17 +564,19 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
     SEG seg;
     NODE n2;
     PROUTE *Pr;
-    BBOX_POINT vpnt = create_bbox_point(0,0);
+    POINT vpnt = create_point(0,0,0);
 
     if (rt) if(rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
 	    lay = seg->layer;
 	    x = seg->x1;
 	    y = seg->y1;
+	    vpnt->x=x;
+	    vpnt->y=y;
+	    if(check_point_area(net->bbox,vpnt,TRUE)) printf("%s: point (%d,%d) inside bbox of %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
+	    else continue;
 	    while (1) {
-		vpnt->x=x;
-		vpnt->y=y;
-		if(check_point_area(net->bbox,vpnt)) printf("%s: point (%d,%d) inside bbox of %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
+		if(check_point_area(net->bbox,vpnt,TRUE)) printf("%s: point (%d,%d) inside bbox of %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
 		else break;
 		Pr = &OBS2VAL(x, y, lay);
 		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
@@ -593,8 +599,8 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 		// then process it, too.
 
 		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
-		printf("%s: netname %s lnode %p\n",__FUNCTION__,net->netname,lnode);
 		n2 = (lnode) ? lnode->nodeloc : NULL;
+		printf("%s: netname %s n2 %p\n",__FUNCTION__,net->netname,n2);
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
@@ -610,25 +616,24 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 		// Move to next grid position in segment
 		if (x == seg->x2 && y == seg->y2) break;
 		vpnt->x=x;
+		vpnt->y=y;
+		if(!check_point_area(net->bbox,vpnt,TRUE)) break;
 		if (seg->x2 > seg->x1) {
 			vpnt->x++;
-			if(check_point_area(net->bbox,vpnt)) x++;
+			if(check_point_area(net->bbox,vpnt,TRUE)) x++;
 		}
 		else if (seg->x2 < seg->x1) {
 			vpnt->x--;
-			if(check_point_area(net->bbox,vpnt)) x--;
+			if(check_point_area(net->bbox,vpnt,TRUE)) x--;
 		}
-		vpnt->y=y;
 		if (seg->y2 > seg->y1) {
 			vpnt->y++;
-			if(check_point_area(net->bbox,vpnt)) y++;
+			if(check_point_area(net->bbox,vpnt,TRUE)) y++;
 		}
 		else if (seg->y2 < seg->y1) {
 			vpnt->y--;
-			if(check_point_area(net->bbox,vpnt)) y--;
+			if(check_point_area(net->bbox,vpnt,TRUE)) y--;
 		}
-		vpnt->x=x;
-		vpnt->y=y;
 	    }
 	}
     }
@@ -944,7 +949,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     PROUTE *Pr, *Pt;
     GRIDP newpt;
     POINT ptret = NULL;
-    BBOX_POINT vpnt;
+    POINT vpnt;
 
     newpt = *ept;
 
@@ -978,8 +983,8 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  break;
     }
 
-    vpnt = create_bbox_point(newpt.x,newpt.y);
-    if(!check_point_area(net->bbox,vpnt)) {
+    vpnt = create_point(newpt.x,newpt.y,newpt.lay);
+    if(!check_point_area(net->bbox,vpnt,TRUE)) {
 	    free(vpnt);
 	    return NULL;
     }
@@ -1365,7 +1370,6 @@ void writeback_segment(SEG seg, int netnum)
 /*  SIDE EFFECTS: Obs update, RT llseg added			*/
 /*--------------------------------------------------------------*/
 
-//TCL_DECLARE_MUTEX(commit_proute_threadMutex)
 int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
@@ -1394,13 +1398,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    // Generate an indexed route, recording the series of predecessors and their
    // positions.
 
-   Tcl_MutexLock(&commit_proute_threadMutex);
-   lrtop = (POINT)malloc(sizeof(struct point_));
-   Tcl_MutexUnlock(&commit_proute_threadMutex);
-   lrtop->x = ept->x;
-   lrtop->y = ept->y;
-   lrtop->layer = ept->lay;
-   lrtop->next = NULL;
+   lrtop = create_point(ept->x,ept->y,ept->lay);
    lrend = lrtop;
 
    while (1) {
@@ -1409,12 +1407,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       dmask = Pr->flags & PR_PRED_DMASK;
       if (dmask == PR_PRED_NONE) break;
 
-      Tcl_MutexLock(&commit_proute_threadMutex);
-      newlr = (POINT)malloc(sizeof(struct point_));
-      Tcl_MutexUnlock(&commit_proute_threadMutex);
-      newlr->x = lrend->x;
-      newlr->y = lrend->y;
-      newlr->layer = lrend->layer;
+      newlr = create_point(lrend->x,lrend->y,lrend->layer);
       lrend->next = newlr;
       newlr->next = NULL;
 
@@ -1631,22 +1624,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
 	       if (mincost < MAXRT) {
 	          pri = &OBS2VAL(minx, miny, cl);
-
-		  Tcl_MutexLock(&commit_proute_threadMutex);
-		  newlr = (POINT)malloc(sizeof(struct point_));
-		  Tcl_MutexUnlock(&commit_proute_threadMutex);
-		  newlr->x = minx;
-		  newlr->y = miny;
-		  newlr->layer = cl;
-
+		  newlr =  create_point(minx,miny,cl);
 	          pri2 = &OBS2VAL(minx, miny, dl);
-
-		  Tcl_MutexLock(&commit_proute_threadMutex);
-		  newlr2 = (POINT)malloc(sizeof(struct point_));
-		  Tcl_MutexUnlock(&commit_proute_threadMutex);
-		  newlr2->x = minx;
-		  newlr2->y = miny;
-		  newlr2->layer = dl;
+		  newlr2 = create_point(minx,miny,dl);
 
 		  lrprev->next = newlr;
 		  newlr->next = newlr2;
@@ -1774,19 +1754,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          }
 
 		  if (mincost < MAXRT) {
-		     Tcl_MutexLock(&commit_proute_threadMutex);
-		     newlr = (POINT)malloc(sizeof(struct point_));
-		     Tcl_MutexUnlock(&commit_proute_threadMutex);
-		     newlr->x = minx;
-		     newlr->y = miny;
-		     newlr->layer = cl;
-
-		     Tcl_MutexLock(&commit_proute_threadMutex);
-		     newlr2 = (POINT)malloc(sizeof(struct point_));
-		     Tcl_MutexUnlock(&commit_proute_threadMutex);
-		     newlr2->x = minx;
-		     newlr2->y = miny;
-		     newlr2->layer = dl;
+		     newlr = create_point(minx,miny,cl);
+		     newlr2 = create_point(minx,miny,dl);
 
 		     // If newlr is a source or target, then make it
 		     // the endpoint, because we have just moved the

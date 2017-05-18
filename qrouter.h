@@ -276,20 +276,11 @@ struct gate_ {
 
 typedef struct net_ *NET;
 typedef struct netlist_ *NETLIST;
-typedef struct bbox_pt_ *BBOX_POINT;
-struct bbox_pt_ {
-	int x;
-	int y;
-	BBOX_POINT last;
-	BBOX_POINT next;
-	BOOL checked;
-};
 
 typedef struct bbox_line_ *BBOX_LINE;
 struct bbox_line_ {
-	BBOX_POINT pt1;
-	BBOX_POINT pt2;
-	BBOX_LINE last;
+	POINT pt1;
+	POINT pt2;
 	BBOX_LINE next;
 };
 

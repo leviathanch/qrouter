@@ -2295,6 +2295,10 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 			}
 			draw_layout();
 		}
+		if(!strcmp(subcmd,"trunk")) {
+			drawTrunk=!drawTrunk;
+			draw_layout();
+		}
 	}
 	if (objc == 3) {
 		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));

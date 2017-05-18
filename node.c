@@ -50,16 +50,16 @@ int compNets(NET *a, NET *b)
    return 0;
 }
 
-BBOX_POINT get_left_lower_trunk_point(BBOX bbox)
+POINT get_left_lower_trunk_point(BBOX bbox)
 {
 	if(!bbox) return NULL;
 	if(!bbox->edges) return NULL;
-	BBOX_POINT pt1, pt2;
+	POINT pt1, pt2;
 	pt1 = bbox->edges->pt1;
 	pt2 = bbox->edges->pt2;
 	if(!pt1) return NULL;
 	if(!pt2) return NULL;
-	BBOX_POINT retpt = create_bbox_point(pt1->x,pt1->y); // creating requested point;
+	POINT retpt = create_point(pt1->x,pt1->y, 0); // creating requested point;
 	for(BBOX_LINE l = bbox->edges; l; l=l->next) {
 		if(!l) continue;
 		pt1 = l->pt1;
@@ -74,17 +74,17 @@ BBOX_POINT get_left_lower_trunk_point(BBOX bbox)
 	return retpt;
 }
 
-BBOX_POINT get_right_upper_trunk_point(BBOX bbox)
+POINT get_right_upper_trunk_point(BBOX bbox)
 {
 	if(!bbox) return NULL;
 	if(!bbox->edges) return NULL;
-	BBOX_POINT pt1, pt2;
+	POINT pt1, pt2;
 	pt1 = bbox->edges->pt1;
 	pt2 = bbox->edges->pt2;
 	if(!pt1) return NULL;
 	if(!pt2) return NULL;
 
-	BBOX_POINT retpt =  create_bbox_point(pt1->x,pt1->y); // creating requested point;
+	POINT retpt =  create_point(pt1->x,pt1->y,0); // creating requested point;
 	for(BBOX_LINE l = bbox->edges; l; l=l->next) {
 		if(!l) continue;
 		pt1 = l->pt1;
@@ -99,62 +99,11 @@ BBOX_POINT get_right_upper_trunk_point(BBOX bbox)
 	return retpt;
 }
 
-/*int get_sub_bbox_area(NET net, BBOX pnt)
-{
-	int area=0;
-	int x = pnt->x, y = pnt->y;
-	BBOX recent_pt;
-	int x2=0,y2=0,dx=0,dy=0;
-	BOOL foundX=FALSE,foundY=FALSE;
-	pnt->checked=TRUE;
-
-	recent_pt = net->bbox;
-	while(recent_pt) {
-		if(recent_pt->x==x) {
-			y2=recent_pt->y;
-			recent_pt->checked = TRUE;
-			foundY=TRUE;
-		}
-		if(recent_pt->y==y) {
-			x2=recent_pt->x;
-			recent_pt->checked = TRUE;
-			foundX=TRUE;
-		}
-		recent_pt = recent_pt->next;
-	}
-	if(foundX&&foundY) {
-		dx = (x<x2) ? (x2-x) : (x-x2); 
-		dy = (y<y2) ? (y2-y) : (y-y2);
-		area = dx * dy;
-	}
-	return area;
-}
-
-int get_bbox_area(NET net)
-{
-	int area = 0;
-	BBOX recent_pt;
-
-	recent_pt = net->bbox;
-	while(recent_pt) {
-		recent_pt->checked = FALSE;
-		recent_pt = recent_pt->next;
-	}
-
-	recent_pt = net->bbox;
-	while(recent_pt) {
-		if(!(recent_pt->checked))
-			area+=get_sub_bbox_area(net,recent_pt);
-		recent_pt = recent_pt->next;
-	}
-
-	return area;
-}*/
 int get_bbox_area(NET net) {return 0;} // TODO: fix this!
 
 int net_absolute_distance(NET net)
 {
-	BBOX_POINT pt1, pt2;
+	POINT pt1, pt2;
 	int distance, x, y;
 	pt1 = get_right_upper_trunk_point(net->bbox);
 	pt2 = get_left_lower_trunk_point(net->bbox);
@@ -164,34 +113,25 @@ int net_absolute_distance(NET net)
 	return distance;
 }
 
-BBOX_POINT clone_bbox_point(BBOX_POINT p)
+POINT clone_point(POINT p)
 {
 	if(!p) return NULL;
-	BBOX_POINT pt = malloc(sizeof(struct bbox_pt_)); // creating requested point
-	if(!pt) {
-		printf("%s: memory leak. dying!\n",__FUNCTION__);
-		exit(0);
-	}
-	pt->x=p->x;
-	pt->y=p->y;
+	POINT pt = create_point(p->x,p->y,p->layer);
 	pt->next = NULL;
-	pt->last = NULL;
-	pt->checked = FALSE;
 	return pt;
 }
 
-BBOX_POINT create_bbox_point(int x, int y)
+POINT create_point(int x, int y, int layer)
 {
-	BBOX_POINT pt = malloc(sizeof(struct bbox_pt_)); // creating requested point
+	POINT pt = malloc(sizeof(struct point_)); // creating requested point
 	if(!pt) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
 		exit(0);
 	}
 	pt->x=x;
 	pt->y=y;
+	pt->layer=layer;
 	pt->next = NULL;
-	pt->last = NULL;
-	pt->checked = FALSE;
 	return pt;
 }
 
@@ -213,8 +153,9 @@ BBOX_LINE clone_line(BBOX_LINE orig)
 	if(!orig->pt1) return NULL;
 	if(!orig->pt2) return NULL;
 	BBOX_LINE r = get_fresh_line();
-	r->pt1=clone_bbox_point(orig->pt1);
-	r->pt2=clone_bbox_point(orig->pt2);
+	r->pt1=clone_point(orig->pt1);
+	r->pt2=clone_point(orig->pt2);
+	r->next = NULL;
 	return r;
 }
 
@@ -225,7 +166,6 @@ BBOX_LINE get_fresh_line()
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
 		exit(0);
 	}
-	r->last = NULL;
 	r->next = NULL;
 	r->pt1 = NULL;
 	r->pt2 = NULL;
@@ -234,19 +174,9 @@ BBOX_LINE get_fresh_line()
 BBOX_LINE clone_line_list(BBOX_LINE orig)
 {
 	if(!orig) return NULL;
-	BBOX_LINE recent = NULL;
-	BBOX_LINE last = NULL;
-	BBOX_LINE ret = NULL;
-	ret = last = clone_line(orig);
-	ret->next = NULL;
-	ret->last = NULL;
-	for(BBOX_LINE l=orig->next;l;l=l->next) {
-		recent = clone_line(l);
-		recent->next = NULL;
-		recent->last = last;
-		last->next = recent;
-		last = recent;
-	}
+	BBOX_LINE ret;
+	ret = clone_line(orig);
+	ret->next = clone_line_list(orig->next);
 	return ret;
 }
 
@@ -260,7 +190,7 @@ BBOX clone_bbox(BBOX orig)
 	return r;
 }
 
-BOOL points_equal(BBOX_POINT p1, BBOX_POINT p2)
+BOOL points_equal(POINT p1, POINT p2)
 {
 	if(!p1) return FALSE;
 	if(!p2) return FALSE;
@@ -292,16 +222,7 @@ BBOX_LINE add_line_to_edge(BBOX_LINE list, BBOX_LINE l)
 		return list;
 	}
 	BBOX_LINE line = clone_line(l); // cloning line
-	if(!line) return list;
-	line->next = NULL;
-	line->last = NULL;
-
-	if(list) {
-		line->last = NULL;
-		line->next = list;
-		list->last = line;
-	}
-
+	line->next = list;
 	return line;
 }
 
@@ -317,12 +238,11 @@ BBOX add_line_to_bbox(BBOX bbox, BBOX_LINE ol)
 
 BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
 {
-	BBOX_LINE l;
 	BBOX_LINE line = NULL; // line to add
-	BBOX b = (bbox)?bbox:create_fresh_bbox();
+	BBOX b = (bbox==NULL)?create_fresh_bbox():bbox;
 	line = get_fresh_line(); // creating requested line
-	line->pt1 = create_bbox_point(x1,y1);
-	line->pt2 = create_bbox_point(x2,y2);
+	line->pt1 = create_point(x1,y1,0);
+	line->pt2 = create_point(x2,y2,0);
 	b->num_edges++; // incrementing line count
 	b->edges=add_line_to_edge(b->edges, line);
 	return b;
@@ -333,7 +253,7 @@ BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
 #define CHECK_POINT_LEFT_VLINE 3
 #define CHECK_POINT_RIGHT_VLINE 4
 
-BOOL check_point_to_line(int mode, BBOX_LINE line, BBOX_POINT pnt)
+BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge)
 {
 	if(!line) return FALSE;
 	if(!pnt) return FALSE;
@@ -368,101 +288,51 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, BBOX_POINT pnt)
 			break;
 	}
 
-	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
-		if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
-	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
-		if((pnt->y>=ymin)&&(pnt->y<=ymax)) return TRUE;
+	if(with_edge) {
+		if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
+			if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
+		if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
+			if((pnt->y>=ymin)&&(pnt->y<=ymax)) return TRUE;
+	} else {
+		if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
+			if((pnt->x>xmin)&&(pnt->x<xmax)) return TRUE;
+		if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
+			if((pnt->y>ymin)&&(pnt->y<ymax)) return TRUE;
+	}
 
 	return FALSE;
 }
 
-BOOL check_point_to_line_wo_edge(int mode, BBOX_LINE line, BBOX_POINT pnt)
+// check whether a line goes through another area
+BOOL check_line_area(BBOX bbox, BBOX_LINE line, BOOL with_edge)
 {
-	if(!line) return FALSE;
-	if(!pnt) return FALSE;
-	if(!line->pt1) return FALSE;
-	if(!line->pt2) return FALSE;
-	int xmin, xmax;
-	int ymin, ymax;
-
-	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE)) {
-		if(line->pt1->y!=line->pt2->y) return FALSE; // not a horizontal line!
-		xmin=(line->pt1->x<line->pt2->x)?line->pt1->x:line->pt2->x;
-		xmax=(line->pt1->x>line->pt2->x)?line->pt1->x:line->pt2->x;
-	}
-	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE)) {
-		if(line->pt1->x!=line->pt2->x) return FALSE; // not a vertical line!
+	BOOL ret = FALSE;
+	int xmin, xmax, ymin, ymax;
+	POINT vpnt = create_point(0,0,0);
+	if(line->pt1->x==line->pt2->x) {
 		ymin=(line->pt1->y<line->pt2->y)?line->pt1->y:line->pt2->y;
 		ymax=(line->pt1->y>line->pt2->y)?line->pt1->y:line->pt2->y;
+		vpnt->x=line->pt1->x;
+		for(vpnt->y=ymin;vpnt->y<ymax;vpnt->y++) if(check_point_area(bbox,vpnt,with_edge)) ret=TRUE;
 	}
-
-	switch(mode) {
-		case CHECK_POINT_ABOVE_HLINE:
-			if(line->pt1->y>pnt->y) return FALSE; // point is under hline y
-			break;
-		case CHECK_POINT_UNDER_HLINE:
-			if(line->pt1->y<pnt->y) return FALSE; // point is over hline y
-			break;
-		case CHECK_POINT_LEFT_VLINE:
-			if(line->pt1->x>pnt->x) return FALSE; // point is right of line
-			break;
-		case CHECK_POINT_RIGHT_VLINE:
-			if(line->pt1->x<pnt->x) return FALSE; // point is left of line
-			break;
+	if(line->pt1->y==line->pt2->y) {
+		xmin=(line->pt1->x<line->pt2->x)?line->pt1->x:line->pt2->x;
+		xmax=(line->pt1->x>line->pt2->x)?line->pt1->x:line->pt2->x;
+		vpnt->y=line->pt1->y;
+		for(vpnt->x=xmin;vpnt->x<xmax;vpnt->x++) if(check_point_area(bbox,vpnt,with_edge)) ret=TRUE;
 	}
-
-	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
-		if((pnt->x>xmin)&&(pnt->x<xmax)) return TRUE;
-	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
-		if((pnt->y>ymin)&&(pnt->y<ymax)) return TRUE;
-
-	return FALSE;
-}
-
-// check whether pnt is within borders
-BOOL check_point_inside_wo_edges(BBOX bbox, BBOX_POINT pnt)
-{
-	if(!bbox) return FALSE;
-	if(!pnt) return FALSE;
-	// first check trunk box
-	BBOX_POINT pt1 = get_left_lower_trunk_point(bbox);
-	BBOX_POINT pt2 = get_right_upper_trunk_point(bbox);
-	if(!pt1) return FALSE;
-	if(!pt2) return FALSE;
-	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) return FALSE; // outside trunk
-	// now check structure
-	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
-	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
-	for(BBOX_LINE hll = hlines;hll;hll=hll->next) { // horizontal lower line hll
-		if(check_point_to_line_wo_edge(CHECK_POINT_ABOVE_HLINE,hll,pnt)) {
-			for(BBOX_LINE vrl = vlines;vrl;vrl=vrl->next) { // vertical right line vrl
-				if(check_point_to_line_wo_edge(CHECK_POINT_LEFT_VLINE,vrl,pnt)) {
-					for(BBOX_LINE hul = hlines;hul;hul=hul->next) { // horizontal upper line hul
-						if(check_point_to_line_wo_edge(CHECK_POINT_UNDER_HLINE,hul,pnt)) {
-							for(BBOX_LINE vll = vlines;vll;vll=vll->next) { // vertical left line vll
-								if(check_point_to_line_wo_edge(CHECK_POINT_RIGHT_VLINE,vll,pnt)) {
-									return TRUE;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	free_line_list(hlines);
-	free_line_list(vlines);
-	return FALSE;
+	free(vpnt);
+	return ret;
 }
 
 // check whether pnt of tap is within borders
-BOOL check_point_area(BBOX bbox, BBOX_POINT pnt)
+BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge)
 {
 	if(!bbox) return FALSE;
 	if(!pnt) return FALSE;
 	// first check trunk box
-	BBOX_POINT pt1 = get_left_lower_trunk_point(bbox);
-	BBOX_POINT pt2 = get_right_upper_trunk_point(bbox);
+	POINT pt1 = get_left_lower_trunk_point(bbox);
+	POINT pt2 = get_right_upper_trunk_point(bbox);
 	if(!pt1) return FALSE;
 	if(!pt2) return FALSE;
 	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) return FALSE; // outside trunk
@@ -470,13 +340,13 @@ BOOL check_point_area(BBOX bbox, BBOX_POINT pnt)
 	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
 	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
 	for(BBOX_LINE hll = hlines;hll;hll=hll->next) { // horizontal lower line hll
-		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt)) {
+		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge)) {
 			for(BBOX_LINE vrl = vlines;vrl;vrl=vrl->next) { // vertical right line vrl
-				if(check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt)) {
+				if(check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge)) {
 					for(BBOX_LINE hul = hlines;hul;hul=hul->next) { // horizontal upper line hul
-						if(check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt)) {
+						if(check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge)) {
 							for(BBOX_LINE vll = vlines;vll;vll=vll->next) { // vertical left line vll
-								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt)) {
+								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge)) {
 									return TRUE;
 								}
 							}
@@ -496,20 +366,8 @@ BOOL partial_bbox_overlap(BBOX b1, BBOX b2)
 {
 	if(!b1) return FALSE;
 	if(!b2) return FALSE;
-	BBOX_POINT p1, p2;
 	BOOL ret=FALSE;
-	for(BBOX_LINE l=b2->edges;l;l=l->next) {
-		p1=l->pt1;
-		p2=l->pt2;
-		if(check_point_area(b1,p1)) ret=TRUE;
-		if(check_point_area(b1,p2)) ret=TRUE;
-	}
-	for(BBOX_LINE l=b1->edges;l;l=l->next) {
-		p1=l->pt1;
-		p2=l->pt2;
-		if(check_point_area(b2,p1)) ret=TRUE;
-		if(check_point_area(b2,p2)) ret=TRUE;
-	}
+	for(BBOX_LINE l=b2->edges;l;l=l->next) if(check_line_area(b1,l,TRUE)) ret=TRUE;
 	return ret;
 }
 
@@ -518,13 +376,13 @@ BOOL box2_inside_box1(BBOX b1, BBOX b2)
 {
 	if(!b1) return FALSE;
 	if(!b2) return FALSE;
-	BBOX_POINT p1, p2;
+	POINT p1, p2;
 	BOOL ret=TRUE;
 	for(BBOX_LINE l=b2->edges;l;l=l->next) {
 		p1=l->pt1;
 		p2=l->pt2;
-		if(!check_point_area(b1,p1)) ret=FALSE;
-		if(!check_point_area(b1,p2)) ret=FALSE;
+		if(!check_point_area(b1,p1,TRUE)) ret=FALSE;
+		if(!check_point_area(b1,p2,TRUE)) ret=FALSE;
 	}
 	return ret;
 }
@@ -538,6 +396,7 @@ BOOL check_single_bbox_collision(BBOX box1, BBOX box2)
 	if(box2_inside_box1(box1,box2)) ret=TRUE;
 	if(box2_inside_box1(box2,box1)) ret=TRUE;
 	if(partial_bbox_overlap(box1,box2)) ret=TRUE;
+	if(partial_bbox_overlap(box2,box1)) ret=TRUE;
 	return ret;
 }
 
@@ -552,7 +411,7 @@ POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
 		for(int i=0; i<MAX_NUM_THREADS; i++) {
 			n = CurNet[i];
 			if(n) {
-				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+				if(n!=net) {
 					if(check_single_bbox_collision(net->bbox,n->bbox)) {
 						ret=postpone_net(ret,n);
 					}
@@ -584,7 +443,7 @@ BOOL check_bbox_collisions(NET net, BOOL thread)
 		for(int i=0; i<MAX_NUM_THREADS; i++) {
 			n = CurNet[i];
 			if(n) {
-				if((n!=net)&&!is_gndnet(n)&&!is_vddnet(n)&&!is_clknet(n)) {
+				if(n!=net) {
 					if(check_single_bbox_collision(net->bbox,n->bbox)) {
 						ret=TRUE;
 					}
@@ -625,8 +484,10 @@ int count_line_list(BBOX_LINE list)
 void free_line(BBOX_LINE t)
 {
 	if(!t) return;
-	if(t->pt1) free(t->pt1);
-	if(t->pt2) free(t->pt2);
+	if(!t->pt1) return;
+	if(!t->pt2) return;
+	free(t->pt1);
+	free(t->pt2);
 	free(t);
 }
 
@@ -634,18 +495,16 @@ BBOX_LINE delete_line_from_edge(BBOX_LINE vbox, BBOX_LINE l)
 {
 	if(!vbox) return NULL;
 	if(!l) return vbox;
-	if(!edge_contains_line(vbox,l)) {
-		return vbox;
-	}
-	BBOX_LINE lp = NULL;
-	for(BBOX_LINE tp=vbox;tp;tp=tp->next) {
-		if(lines_equal(lp,l)) {
-			if(lp->next) lp->next->last=tp;
-			if(lp->last) lp->last->next=tp;
-			else vbox=lp->next;
-			free_line(lp);
+	if(edge_contains_line(vbox,l)) {
+		BBOX_LINE i = vbox;
+		BBOX_LINE last = NULL;
+		while(!lines_equal(i,l)) {
+			last=i;
+			i=i->next;
 		}
-		lp=tp;
+		if(last) last->next=i->next;
+		else vbox=i->next;
+		free(i);
 	}
 	return vbox;
 }
@@ -654,19 +513,19 @@ BOOL is_closed_shape(BBOX_LINE obj)
 {
 	BOOL ret = FALSE;
 	BBOX_LINE edge = NULL;
-	BBOX_POINT pt = clone_bbox_point(obj->pt1);
+	POINT pt = clone_point(obj->pt1);
 	for(BBOX_LINE l2=obj;l2;l2=l2->next) {
 		for(BBOX_LINE l=obj;l;l=l->next) {
 			if(edge_contains_line(edge,l)) continue;
 			if(points_equal(pt,l->pt1)) {
 				free(pt);
-				pt=clone_bbox_point(l->pt2);
+				pt=clone_point(l->pt2);
 				edge=add_line_to_edge(edge,l);
 				break;
 			}
 			if(points_equal(pt,l->pt2)) {
 				free(pt);
-				pt=clone_bbox_point(l->pt1);
+				pt=clone_point(l->pt1);
 				edge=add_line_to_edge(edge,l);
 				break;
 			}
@@ -686,18 +545,19 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 	if(!vbox) return FALSE;
 	if(!vbox->edges) return FALSE;
 	if(vbox->num_edges<4) return FALSE;
+	if(!is_closed_shape(vbox->edges)) return FALSE;
 
-	BBOX_POINT vpnt;
+	POINT vpnt;
 	DPOINT dtap;
 	BOOL ok;
 
-	vpnt = create_bbox_point(0,0);
+	vpnt = create_point(0,0,0);
 	for(NODE tn = net->netnodes; tn; tn=tn->next) {
 		dtap = (tn->taps == NULL) ? tn->extend : tn->taps;
 		if (dtap == NULL) continue;
 		vpnt->x=dtap->gridx;
 		vpnt->y=dtap->gridy;
-		ok=check_point_area(vbox, vpnt);
+		ok=check_point_area(vbox, vpnt,TRUE);
 		if(!ok) {
 			free(vpnt);
 			return FALSE;
@@ -711,12 +571,11 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 void free_line_list(BBOX_LINE t)
 {
 	if(!t) return;
-	BBOX_LINE lp = NULL;
-	for(BBOX_LINE tp=t;tp;tp=tp->next) {
-		free_line(lp);
-		lp=tp;
+	BBOX_LINE curr, head=t;
+	while ((curr = head) != NULL) {
+		head = head->next;
+		free_line(curr);
 	}
-	free_line(lp);
 }
 
 BBOX_LINE get_vertical_lines(BBOX_LINE box)
@@ -743,7 +602,7 @@ BBOX_LINE get_horizontal_lines(BBOX_LINE box)
 	return ret;
 }
 
-BBOX_POINT get_line_intersection(BBOX_LINE a, BBOX_LINE b)
+POINT get_line_intersection(BBOX_LINE a, BBOX_LINE b)
 {
 	if(!a) return NULL;
 	if(!a->pt1) return NULL;
@@ -772,7 +631,7 @@ BBOX_POINT get_line_intersection(BBOX_LINE a, BBOX_LINE b)
 		by=by1;
 		if((aymin<=by)&&(aymax>=by)) // line a is vertical here
 			if((bxmin<=ax)&&(bxmax>=ax))  // line b must be horizontal here
-				return create_bbox_point(ax,by);
+				return create_point(ax,by,0);
 	} else if((ay1==ay2)&&(bx1==bx2)) { // line a is horizontal, line b is vertical
 		axmin = (ax1<ax2)?ax1:ax2;
 		axmax = (ax1>ax2)?ax1:ax2;
@@ -782,7 +641,7 @@ BBOX_POINT get_line_intersection(BBOX_LINE a, BBOX_LINE b)
 		bx=bx1;
 		if((axmin<=bx)&&(axmax>=bx)) // line a is horizontal here
 			if((bymin<=ay)&&(bymax>=ay))  // line b must be vertical here
-				return create_bbox_point(bx,ay);
+				return create_point(bx,ay,0);
 	}
 	return NULL;
 }
@@ -792,7 +651,7 @@ BOOL lines_are_intersecting(BBOX_LINE a, BBOX_LINE b)
 	if(!a) return FALSE;
 	if(!b) return FALSE;
 	BOOL ret = FALSE;
-	BBOX_POINT p = get_line_intersection(a,b);
+	POINT p = get_line_intersection(a,b);
 	if(p) {
 		ret=TRUE;
 		free(p);
@@ -800,7 +659,7 @@ BOOL lines_are_intersecting(BBOX_LINE a, BBOX_LINE b)
 	return ret;
 }
 
-BOOL point_on_edge(BBOX box, BBOX_POINT pnt)
+BOOL point_on_edge(BBOX box, POINT pnt)
 {
 	BBOX_LINE hlines = get_horizontal_lines(box->edges);
 	BBOX_LINE vlines = get_vertical_lines(box->edges);
@@ -830,17 +689,10 @@ BBOX_LINE get_intersecting_lines(BBOX box1, BBOX box2)
 	if(!box1) return NULL;
 	if(!box2) return NULL;
 	BBOX_LINE ret = NULL;
-	for(BBOX_LINE la=box1->edges; la; la=la->next) {
-		if(point_on_edge(box2,la->pt1)&&point_on_edge(box2,la->pt2)) { // whole line on the edge
-			ret = add_line_to_edge(ret, la);
-		} else if(point_on_edge(box2,la->pt1)) { // point on the edge
-			ret = add_line_to_edge(ret, la);
-		} else if(point_on_edge(box2,la->pt2)) { // point on the edge
-			ret = add_line_to_edge(ret, la);
-		} else {
-			for(BBOX_LINE lb=box2->edges; lb; lb=lb->next) if(lines_are_intersecting(la,lb)) ret = add_line_to_edge(ret, la);
-		}
-	}
+	for(BBOX_LINE la=box1->edges; la; la=la->next)
+		for(BBOX_LINE lb=box2->edges; lb; lb=lb->next)
+			if(lines_are_intersecting(la,lb))
+				ret = add_line_to_edge(ret, la);
 	return ret;
 }
 
@@ -851,19 +703,19 @@ BBOX_LINE connect_edge_gaps(BBOX box)
 	BBOX_LINE line = NULL;
 	BBOX_LINE edge = clone_line_list(box->edges);
 	if(!edge) return NULL;
-	BBOX_POINT pt = clone_bbox_point(edge->pt1);
+	POINT pt = clone_point(edge->pt1);
 
 	for(BBOX_LINE l1=box->edges;l1;l1=l1->next) {
 		for(BBOX_LINE l2=edge;l2;l2=l2->next) {
 			if(points_equal(pt,l2->pt1)) {
 				free(pt);
-				pt=clone_bbox_point(l2->pt2);
+				pt=clone_point(l2->pt2);
 				edge=delete_line_from_edge(edge,l2);
 				break;
 			}
 			if(points_equal(pt,l2->pt2)) {
 				free(pt);
-				pt=clone_bbox_point(l2->pt1);
+				pt=clone_point(l2->pt1);
 				edge=delete_line_from_edge(edge,l2);
 				break;
 			}
@@ -875,21 +727,21 @@ BBOX_LINE connect_edge_gaps(BBOX box)
 			for(BBOX_LINE l=edge;l;l=l->next) {
 				if(((pt->x==l->pt1->x)&&(pt->y!=l->pt1->y))||((pt->x!=l->pt1->x)&&(pt->y==l->pt1->y))) {
 					line=get_fresh_line();
-					line->pt1=clone_bbox_point(pt);
-					line->pt2=clone_bbox_point(l->pt1);
+					line->pt1=clone_point(pt);
+					line->pt2=clone_point(l->pt1);
 					ret=add_line_to_edge(ret,line);
 					free_line(line);
 					free(pt);
-					pt=clone_bbox_point(l->pt2);
+					pt=clone_point(l->pt2);
 				}
 				if(((pt->x==l->pt2->x)&&(pt->y!=l->pt2->y))||((pt->x!=l->pt2->x)&&(pt->y==l->pt2->y))) {
 					line=get_fresh_line();
-					line->pt1=clone_bbox_point(pt);
-					line->pt2=clone_bbox_point(l->pt2);
+					line->pt1=clone_point(pt);
+					line->pt2=clone_point(l->pt2);
 					ret=add_line_to_edge(ret,line);
 					free_line(line);
 					free(pt);
-					pt=clone_bbox_point(l->pt2);
+					pt=clone_point(l->pt2);
 				}
 			}
 		}
@@ -921,7 +773,7 @@ BBOX_LINE get_cutout_edge(BBOX box1, BBOX box2)
 	BBOX_LINE ret = NULL; // return value
 	BBOX_LINE tl = NULL; // temporary line
 	BBOX_LINE vtl = NULL; // vertical temporary line
-	BBOX_POINT i = NULL; // intersect point
+	POINT i = NULL; // intersect point
 	
 	for(BBOX_LINE line=box2->edges; line; line=line->next) {
 		if(point_on_edge(box1,line->pt1)&&point_on_edge(box1,line->pt2)) { // whole line on the edge
@@ -930,41 +782,41 @@ BBOX_LINE get_cutout_edge(BBOX box1, BBOX box2)
 			continue;
 		} else if(point_on_edge(box1,line->pt2)) { // point on the edge
 			continue;
-		} else if(check_point_inside_wo_edges(box1,line->pt1)&&check_point_inside_wo_edges(box1,line->pt2)) { // whole line within our box (without edges)
+		} else if(check_point_area(box1,line->pt1,FALSE)&&check_point_area(box1,line->pt2,FALSE)) { // whole line within our box (without edges)
 			tl = clone_line(line);
 			ret = add_line_to_edge(ret,tl);
 			free_line(tl);
-		} else if(check_point_inside_wo_edges(box1,line->pt1)) {
+		} else if(check_point_area(box1,line->pt1,FALSE)) {
 			for(vtl=box1->edges;vtl;vtl=vtl->next) {
 				if(lines_are_parallel(vtl,line)) continue;
 				i=get_line_intersection(line,vtl);
 				if(i) {
 					tl = get_fresh_line();
-					tl->pt1 = clone_bbox_point(line->pt1);
-					tl->pt2 = clone_bbox_point(i);
+					tl->pt1 = clone_point(line->pt1);
+					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
 					free_line(tl);
 					tl = get_fresh_line();
-					tl->pt1 = clone_bbox_point(check_point_area(box2,vtl->pt1)?vtl->pt2:vtl->pt1);
-					tl->pt2 = clone_bbox_point(i);
+					tl->pt1 = clone_point(check_point_area(box2,vtl->pt1,TRUE)?vtl->pt2:vtl->pt1);
+					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
 					free_line(tl);
 					free(i);
 				}
 			}
-		} else if(check_point_inside_wo_edges(box1,line->pt2)) {
+		} else if(check_point_area(box1,line->pt2,FALSE)) {
 			for(vtl=box1->edges;vtl;vtl=vtl->next) {
 				if(lines_are_parallel(vtl,line)) continue;
 				i=get_line_intersection(line,vtl);
 				if(i) {
 					tl = get_fresh_line();
-					tl->pt1 = clone_bbox_point(line->pt2);
-					tl->pt2 = clone_bbox_point(i);
+					tl->pt1 = clone_point(line->pt2);
+					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
 					free_line(tl);
 					tl = get_fresh_line();
-					tl->pt1 = clone_bbox_point(check_point_area(box2,vtl->pt1)?vtl->pt2:vtl->pt1);
-					tl->pt2 = clone_bbox_point(i);
+					tl->pt1 = clone_point(check_point_area(box2,vtl->pt1,TRUE)?vtl->pt2:vtl->pt1);
+					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
 					free_line(tl);
 					free(i);
@@ -980,8 +832,10 @@ BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l)
 	if(!l) return bbox;
 	if(!bbox) return bbox;
 	if(!bbox->edges) return bbox;
-	bbox->edges=delete_line_from_edge(bbox->edges,l);
-	bbox->num_edges--;
+	if(edge_contains_line(bbox->edges,l)) {
+		bbox->edges=delete_line_from_edge(bbox->edges,l);
+		bbox->num_edges--;
+	}
 	return bbox;
 }
 
@@ -995,21 +849,17 @@ BOOL fit_competing_net_bboxes(NET n1, NET n2)
 	if(n2->bbox->num_edges<4) return FALSE;
 	if(box2_inside_box1(n1->bbox,n2->bbox)) return FALSE; // don't cut out inside
 
-	BBOX bbox_temp = NULL; // copy of bbox1
-	BBOX_LINE edge1 = NULL;
-	BBOX_LINE edge2 = NULL;
+	BBOX bbox_temp = clone_bbox(n1->bbox); // copy of bbox1
+	BBOX_LINE edge1 = get_intersecting_lines(bbox_temp,n2->bbox);
+	BBOX_LINE edge2 = get_cutout_edge(bbox_temp,n2->bbox);
 
-	edge1 = get_intersecting_lines(n1->bbox,n2->bbox);
-	edge2 = get_cutout_edge(n1->bbox,n2->bbox);
-	bbox_temp = clone_bbox(n1->bbox);
-
-	for(BBOX_LINE l=edge2;l;l=l->next) bbox_temp=add_line_to_bbox(bbox_temp, l);
 	for(BBOX_LINE l=edge1;l;l=l->next) bbox_temp=delete_line_from_bbox(bbox_temp, l);
+	for(BBOX_LINE l=edge2;l;l=l->next) bbox_temp=add_line_to_bbox(bbox_temp, l);
 
 	free_line_list(edge1);
 	free_line_list(edge2);
 
-	if(check_bbox_consistency(n1, bbox_temp)&&is_closed_shape(bbox_temp->edges)) { // check whether all taps are still within the box
+	if(check_bbox_consistency(n1, bbox_temp)) { // check whether all taps are still within the box
 		free_bbox(n1->bbox);
 		n1->bbox=bbox_temp;
 		return TRUE;
@@ -1031,14 +881,12 @@ BOOL resolve_bbox_collisions(NET net, BOOL thread)
 			if(is_gndnet(n)||is_vddnet(n)||is_clknet(n)) {
 				continue;
 			} else {
-				if(check_single_bbox_collision(net->bbox,n->bbox)) {
-					Fprintf(stdout,"fiting net %s with net %s: ",net->netname,n->netname);
-					if(fit_competing_net_bboxes(net, n)) {
-						Fprintf(stdout,"fit successful\n");
-					} else {
-						Fprintf(stdout,"fitting failed\n");
-						ret=FALSE;
-					}
+				Fprintf(stdout,"fiting net %s with net %s: ",net->netname,n->netname);
+				if(fit_competing_net_bboxes(net, n)) {
+					Fprintf(stdout,"fit successful\n");
+				} else {
+					Fprintf(stdout,"fitting failed\n");
+					ret=FALSE;
 				}
 			}
 		}
@@ -1059,10 +907,10 @@ int altCompNets(NET *a, NET *b)
 {
    NET p = *a;
    NET q = *b;
-   BBOX_POINT llpt_p = get_left_lower_trunk_point(p->bbox);
-   BBOX_POINT rupt_p = get_right_upper_trunk_point(p->bbox);
-   BBOX_POINT llpt_q = get_left_lower_trunk_point(q->bbox);
-   BBOX_POINT rupt_q = get_right_upper_trunk_point(q->bbox);
+   POINT llpt_p = get_left_lower_trunk_point(p->bbox);
+   POINT rupt_p = get_right_upper_trunk_point(p->bbox);
+   POINT llpt_q = get_left_lower_trunk_point(q->bbox);
+   POINT rupt_q = get_right_upper_trunk_point(q->bbox);
 
    int pwidth, qwidth, pheight, qheight, pdim, qdim;
 
@@ -1263,7 +1111,7 @@ void define_route_tree(NET net)
 
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
-    BBOX_POINT p1, p2;
+    POINT p1, p2;
     if(net->bbox->num_edges>3) {
     p1 = get_left_lower_trunk_point(net->bbox);
     p2 = get_right_upper_trunk_point(net->bbox);

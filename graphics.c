@@ -19,7 +19,7 @@
 #include "maze.h"
 #include "lef.h"
 
-#define SPACE 20
+BOOL drawTrunk = FALSE;
 
 /*------------------------------*/
 /* Type declarations		*/
@@ -305,7 +305,7 @@ map_estimate()
     int xspc, yspc, hspc;
     int i, x, y, nwidth, nheight, area, length, value;
     float density, *Congestion, norm, maxval;
-    BBOX_POINT pt1, pt2;
+    POINT pt1, pt2;
 
     hspc = spacing >> 1;
 
@@ -418,7 +418,7 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 static void
 draw_net_bbox(NET net) {
 	int x1, x2, y1, y2;
-	BBOX_POINT p1, p2;
+	POINT p1, p2;
 
 	if (dpy == NULL) return;
 	if (net == NULL) return;
@@ -450,6 +450,7 @@ draw_net_bbox(NET net) {
 
 	// trunk box
 	int x0, y0, dx, dy;
+	if(drawTrunk) {
 	p1 = get_left_lower_trunk_point(net->bbox);
 	p2 = get_right_upper_trunk_point(net->bbox);
 	x0 = (p1->x)*spacing;
@@ -460,6 +461,7 @@ draw_net_bbox(NET net) {
 	XDrawRectangle(dpy, buffer, gc, x0, y0, dx, dy);
 	free(p1);
 	free(p2);
+	}
 }
 
 /*--------------------------------------*/
@@ -550,8 +552,7 @@ draw_net_nodes(NET net) {
     }
     else if (n > 2) {
         /* Compute center point */
-        POINT midpoint = (POINT)malloc(sizeof(struct point_));
-        midpoint->x = midpoint->y = 0;
+        POINT midpoint = create_point(0,0,0);
 
         for (bboxit = bboxlist; bboxit != NULL; bboxit = bboxit->next) {
             midpoint->x += (bboxit->x1 + bboxit->x2)/2;

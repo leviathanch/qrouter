@@ -924,20 +924,18 @@ void route_essential_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 		thread_params->graphdebug=graphdebug;
 		thread_params->thnum=0;
 		thread_params_list[0]=thread_params;
+		net->active=TRUE;
+		draw_layout();
 		thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[0], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 		if( thret == TCL_OK) {
 			threadIDs[0]=idPtr;
 			Fprintf(stdout,"routing net %s\n",thread_params_list[0]->net->netname);
-			thread_params_list[0]->net->active=TRUE;
 		} else {
 			exit(0);
 		}
-		draw_layout();
 		Tcl_JoinThread(threadIDs[0], NULL );
-		free(thread_params_list[0]);
+		if(thread_params_list[0]) free(thread_params_list[0]);
 		thread_params_list[0]=NULL;
-		CurNet[0]->active=FALSE;
-		draw_layout();
 		CurNet[0]=NULL;		
 	}
 }
@@ -962,32 +960,30 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 			thread_params->thnum=threadnum;
 			thread_params_list[threadnum]=thread_params;
 			threadnum++;
-
+			net->active=TRUE;
+			draw_layout();
 			if(threadnum==MAX_NUM_THREADS) {
 				for(int c=0;c<MAX_NUM_THREADS;c++) {
 					thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 					if( thret == TCL_OK) {
 						threadIDs[c]=idPtr;
 						Fprintf(stdout,"routing net %s\n",thread_params_list[c]->net->netname);
-						thread_params_list[c]->net->active=TRUE;
 					} else {
 						exit(0);
 					}
 				}
-				draw_layout();
 				for(int c=0;c<MAX_NUM_THREADS;c++) {
 					Tcl_JoinThread( threadIDs[c], NULL );
-					l=delete_postponed(l,CurNet[c]);
-					free(thread_params_list[c]);
+					if(CurNet[c]) l=delete_postponed(l,CurNet[c]);
+					if(thread_params_list[c]) free(thread_params_list[c]);
 					thread_params_list[c]=NULL;
-					CurNet[c]->active=FALSE;
-					draw_layout();
 					CurNet[c]=NULL;
 				}
 				threadnum=0;
 			}
 			
 		}
+		draw_layout();
 		for(int c=0;c<MAX_NUM_THREADS;c++) {
 			if(thread_params_list[c]) {
 				thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
@@ -1000,17 +996,14 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 				}
 			}
 		}
-		draw_layout();
 		for(int c=0;c<MAX_NUM_THREADS;c++) {
 			if(thread_params_list[c]) {
 				Tcl_JoinThread( threadIDs[c], NULL );
-				l=delete_postponed(l,CurNet[c]);
+				if(CurNet[c]) l=delete_postponed(l,CurNet[c]);
 				free(thread_params_list[c]);
-				thread_params_list[c]=NULL;
-				CurNet[c]->active=FALSE;
-				draw_layout();
-				CurNet[c]=NULL;
 			}
+			thread_params_list[c]=NULL;
+			CurNet[c]=NULL;
 		}
 	}
 }
@@ -1044,6 +1037,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
  
    hide_all_nets();
    for(int c=0;c<MAX_NUM_THREADS;c++) thread_params_list[c]=NULL;
+   for(int c=0;c<MAX_NUM_THREADS;c++) CurNet[c]=NULL;
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 		net=getnettoroute(i);
 		if(!net) continue;
@@ -1061,16 +1055,13 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 		}
 		if(check_bbox_collisions(net,FOR_THREAD)) {
 			Fprintf(stdout,"%s: Box of %s overlaps. Trying to find alternative shape\n", __FUNCTION__,  net->netname);
+			resolve_bbox_collisions(net,FOR_THREAD);
 			if(check_bbox_collisions(net,FOR_THREAD)) {
 				Fprintf(stdout,"%s: Box of %s still overlaps. Post-Pony-ing\n", __FUNCTION__, net->netname);
-				net->active=FALSE;
 				postponed=postpone_net(postponed,net);
 				continue;
-			} else {
-				Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
-				net->active=TRUE;
 			}
-			draw_layout();
+			Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
 		}
 
 		CurNet[threadnum]=net;
@@ -1083,10 +1074,11 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 		threadnum++;
 
 		if((threadnum==MAX_NUM_THREADS)||i+1==Numnets) {
-			sleep(10);
+			hide_all_nets();
+			for(int c=0;c<MAX_NUM_THREADS;c++) if(CurNet[c]) CurNet[c]->active=TRUE;
+			draw_layout();
 			for(int c=0;c<MAX_NUM_THREADS;c++) {
 				if(thread_params_list[c]) {
-					thread_params_list[c]->net->active=TRUE;
 					thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 					if( thret == TCL_OK) {
 						threadIDs[c]=idPtr;
@@ -1100,20 +1092,22 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 				if(thread_params_list[c]) {
 					Tcl_JoinThread( threadIDs[c], NULL );
 					free(thread_params_list[c]);
-					thread_params_list[c]=NULL;
-					CurNet[c]->active=FALSE;
-					draw_layout();
-					CurNet[c]=NULL;
 				}
+				thread_params_list[c]=NULL;
+				CurNet[c]=NULL;
 			}
 			threadnum=0;
 		}
       if (debug_netnum >= 0) break;
    }
-   route_postponed_nets(postponed,&remaining,graphdebug);
+   /*route_postponed_nets(postponed,&remaining,graphdebug);
+   draw_layout();
    route_essential_nets(clknets,&remaining,graphdebug);
+   draw_layout();
    route_essential_nets(vddnets,&remaining,graphdebug);
+   draw_layout();
    route_essential_nets(gndnets,&remaining,graphdebug);
+   draw_layout();*/
 
    failcount = countlist(FailedNets);
    if (debug_netnum >= 0) return failcount;
@@ -2161,10 +2155,10 @@ static void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
-    BBOX_POINT pt1, pt2, vpnt;
+    POINT pt1, pt2, vpnt;
     pt1 = get_left_lower_trunk_point(net->bbox);
     pt2 = get_right_upper_trunk_point(net->bbox);
-    vpnt = create_bbox_point(0,0);
+    vpnt = create_point(0,0,0);
 
     fillMask((u_char)halo);
     
@@ -2180,7 +2174,7 @@ static void createBboxMask(NET net, u_char halo)
 	for (gy1 = ymin; gy1 <= ymax; gy1++) {
 	    vpnt->x=gx1;
 	    vpnt->y=gy1;
-	    if(check_point_area(net->bbox,vpnt)) RMASK(gx1, gy1) = (u_char)0;
+	    if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, gy1) = (u_char)0;
 	}
 
     for (i = 1; i <= halo; i++) {
@@ -2190,7 +2184,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsY[0]) {
 		 vpnt->x=gx1;
 		 vpnt->y=j;
-		 if(check_point_area(net->bbox,vpnt)) RMASK(gx1, j) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, j) = (u_char)i;
 	      }
 
 	gx2 = xmax + i;
@@ -2199,7 +2193,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsY[0]) {
 		 vpnt->x=gx2;
 		 vpnt->y=j;
-		 if(check_point_area(net->bbox,vpnt)) RMASK(gx2, j) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx2, j) = (u_char)i;
 	      }
 
 	gy1 = ymin - i;
@@ -2208,7 +2202,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0]) {
 		 vpnt->x=j;
 		 vpnt->y=gy1;
-		 if(check_point_area(net->bbox,vpnt)) RMASK(j, gy1) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy1) = (u_char)i;
 	      }
 
 	gy2 = ymax + i;
@@ -2217,7 +2211,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0]) {
 		 vpnt->x=j;
 		 vpnt->y=gy2;
-		 if(check_point_area(net->bbox,vpnt)) RMASK(j, gy2) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy2) = (u_char)i;
 	      }
      }
      free(vpnt);
@@ -2238,8 +2232,8 @@ static int analyzeCongestion(BBOX box)
 	int xmin, xmax;
 	int ymin, ymax;
 	int *score, minscore;
-	BBOX_POINT vpnt = create_bbox_point(0,0);
-	BBOX_POINT pt1, pt2;
+	POINT vpnt = create_point(0,0,0);
+	POINT pt1, pt2;
 	pt1 = get_left_lower_trunk_point(box);
 	pt2 = get_right_upper_trunk_point(box);
 	xmin = pt1->x;
@@ -2253,7 +2247,7 @@ static int analyzeCongestion(BBOX box)
 		sidx = y - ymin;
 		score[sidx] = Num_layers;
 		for (x = xmin; x <= xmax; x++) {
-			if(check_point_area(box,vpnt)) {
+			if(check_point_area(box,vpnt,TRUE)) {
 				for (i = 0; i < Num_layers; i++) {
 					n = OBSVAL(x, y, i);
 					if (n & ROUTED_NET) score[sidx]++;
@@ -2310,11 +2304,11 @@ static void createMask(NET net, u_char slack, u_char halo)
   int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
-  BBOX_POINT pt1, pt2;
-  BBOX_POINT vpnt;
+  POINT pt1, pt2;
+  POINT vpnt;
   pt1 = get_left_lower_trunk_point(net->bbox);
   pt2 = get_right_upper_trunk_point(net->bbox);
-  vpnt = create_bbox_point(0,0);
+  vpnt = create_point(0,0,0);
 
   fillMask((u_char)halo);
 
@@ -2346,7 +2340,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   vpnt->x=i;
 	   vpnt->y=j;
-	   if(check_point_area(net->bbox,vpnt)) RMASK(i, j) = (u_char)0;
+	   if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2358,12 +2352,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gy1 >= 0) {
 	      vpnt->x=j;
 	      vpnt->y=gy1;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy1) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy1) = (u_char)i;
 	   }
 	   if (gy2 < NumChannelsY[0]) {
 	      vpnt->x=j;
 	      vpnt->y=gy2;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy2) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy2) = (u_char)i;
 	   }
 	}
 	gx1 = xmin - slack - i;
@@ -2373,12 +2367,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gx1 >= 0) {
 	      vpnt->x=gx1;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(gx1, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, j) = (u_char)i;
 	   }
 	   if (gx2 < NumChannelsX[0]) {
 	      vpnt->x=gx2;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(gx2, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx2, j) = (u_char)i;
 	   }
 	}
      }
@@ -2394,7 +2388,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   vpnt->x=i;
 	   vpnt->y=j;
-	   if(check_point_area(net->bbox,vpnt)) RMASK(i, j) = (u_char)0;
+	   if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2406,12 +2400,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gx1 >= 0) {
 	      vpnt->x=gx1;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(gx1, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, j) = (u_char)i;
 	   }
 	   if (gx2 < NumChannelsX[0]) {
 	      vpnt->x=gx2;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(gx2, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx2, j) = (u_char)i;
 	   }
 	}
 	gy1 = ymin - slack - i;
@@ -2421,12 +2415,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gy1 >= 0) {
 	      vpnt->x=j;
 	      vpnt->y=gy1;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy1) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy1) = (u_char)i;
 	   }
 	   if (gy2 < NumChannelsY[0]) {
 	      vpnt->x=j;
 	      vpnt->y=gy2;
-	      if(check_point_area(net->bbox,vpnt)) RMASK(j, gy2) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy2) = (u_char)i;
 	   }
 	}
      }
@@ -2740,7 +2734,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
   // Check for the possibility that there is already a route to the target
 
-  /*if (!result) {
+  if (!result) {
 
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
@@ -2758,7 +2752,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
      free_glist(iroute);
      return 0;
-  }*/
+  }
 
   if (!iroute->do_pwrbus) {
 
@@ -2945,7 +2939,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   // algorithm.  If the initial max cost is so low that no route can
   // be found, it will be doubled on each pass.
 
-  BBOX_POINT p1, p2;
+  POINT p1, p2;
   if (iroute->do_pwrbus)
      iroute->maxcost = 20;	// Maybe make this SegCost * row height?
   else {
@@ -2997,7 +2991,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
-  BBOX_POINT vpnt = create_bbox_point(0,0);
+  POINT vpnt = create_point(0,0,0);
   NET net = iroute->net;
   int  i, o;
   int  pass, maskpass;
@@ -3039,7 +3033,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       vpnt->y = gpoint->y;
       //if(check_point_area(net->bbox,vpnt)) FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, vpnt->x, gpoint->y);
       //else continue;
-      if(!check_point_area(net->bbox,vpnt)) continue;
+      if(!check_point_area(net->bbox,vpnt,TRUE)) continue;
 
       if (graphdebug) highlight(curpt.x, curpt.y);
 	

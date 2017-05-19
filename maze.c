@@ -198,10 +198,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	 if (Pr->flags & PR_TARGET) {
 	    if (Pr->flags & PR_PROCESSED) {
 		Pr->flags &= ~PR_PROCESSED;
-		gpoint = allocPOINT();
-		gpoint->x = x;
-		gpoint->y = y;
-		gpoint->layer = lay;
+		gpoint = create_point(x,y,lay);
 		gpoint->next = *pushlist;
 		*pushlist = gpoint;
 	    }
@@ -217,10 +214,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_TARGET) {
 		if (Pr->flags & PR_PROCESSED) {
 		    Pr->flags &= ~PR_PROCESSED;
-		    gpoint = allocPOINT();
-		    gpoint->x = x;
-		    gpoint->y = y;
-		    gpoint->layer = lay;
+		    gpoint = create_point(x,y,lay);
 		    gpoint->next = *pushlist;
 		    *pushlist = gpoint;
 		}
@@ -363,7 +357,6 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
     POINT gpoint;
     DPOINT ntap;
     PROUTE *Pr;
-    POINT vpnt;
 
     /* If called from set_routes_to_net, the node has no taps, and the	*/
     /* net is a power bus, just return.					*/
@@ -379,16 +372,10 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
-       vpnt = create_point(x,y,lay);
-       if(!check_point_area(bbox,vpnt,TRUE)) {
-	       free(vpnt);
-	       continue;
-       }
-       free(vpnt);
 
        Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
-	  FprintfT(stderr, "Error:  Tap position %d, %d layer %d not "
+	  FprintfT(stdout, "Error:  Tap position %d, %d layer %d not "
 			"marked as source!\n", x, y, lay);
 	  return -1;	// This should not happen.
        }
@@ -461,22 +448,11 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
 	  // push this point on the stack to process
 
 	  if (pushlist != NULL) {
-	     gpoint = allocPOINT();
-	     gpoint->x = x;
-	     gpoint->y = y;
-	     gpoint->layer = lay;
+	     gpoint = create_point(x,y,lay);
 	     gpoint->next = *pushlist;
 	     *pushlist = gpoint;
 	  }
 	  found_one = (u_char)1;
-
-	  // record extents
-	  /*if (bbox) {
-	     if (x < bbox->x1) bbox->x1 = x;
-	     if (x > bbox->x2) bbox->x2 = x;
-	     if (y < bbox->y1) bbox->y1 = y;
-	     if (y > bbox->y2) bbox->y2 = y;
-	  }*/
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -555,7 +531,7 @@ int disable_node_nets(NODE node)
 /* source nodes) is routable by definition. . .			*/
 /*--------------------------------------------------------------*/
 
-int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox, u_char stage)
+int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char stage)
 {
     int x, y, lay;
     int result = 0;
@@ -564,20 +540,20 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
     SEG seg;
     NODE n2;
     PROUTE *Pr;
-    POINT vpnt = create_point(0,0,0);
 
     if (rt) if(rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
 	    lay = seg->layer;
 	    x = seg->x1;
 	    y = seg->y1;
-	    vpnt->x=x;
-	    vpnt->y=y;
-	    if(check_point_area(net->bbox,vpnt,TRUE)) printf("%s: point (%d,%d) inside bbox of %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
-	    else continue;
+	    gpoint = create_point(x,y,lay);
+	    if(check_point_area(net->bbox,gpoint,TRUE)) {
+		    free(gpoint);
+	    } else {
+		    free(gpoint);
+		    continue;
+	    }
 	    while (1) {
-		if(check_point_area(net->bbox,vpnt,TRUE)) printf("%s: point (%d,%d) inside bbox of %s\n",__FUNCTION__,vpnt->x,vpnt->y,net->netname);
-		else break;
 		Pr = &OBS2VAL(x, y, lay);
 		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
 		// Conflicts should not happen (check for this?)
@@ -587,12 +563,9 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 		// push this point on the stack to process
 
 		if (pushlist != NULL) {
-	  	   gpoint = allocPOINT();
-	  	   gpoint->x = x;
-	  	   gpoint->y = y;
-	  	   gpoint->layer = lay;
-	  	   gpoint->next = *pushlist;
-	 	   *pushlist = gpoint;
+			gpoint = create_point(x,y,lay);
+			gpoint->next = *pushlist;
+			*pushlist = gpoint;
 		}
 
 		// If we found another node connected to the route,
@@ -600,10 +573,10 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 
 		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
 		n2 = (lnode) ? lnode->nodeloc : NULL;
-		printf("%s: netname %s n2 %p\n",__FUNCTION__,net->netname,n2);
+		//printf("%s: netname %s n2 %p\n",__FUNCTION__,net->netname,n2);
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
-		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
+		   result = set_node_to_net(n2, newflags, pushlist, net->bbox, stage);
 		   // On error, continue processing
 		}
 
@@ -615,25 +588,10 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, BBOX bbox
 		}
 		// Move to next grid position in segment
 		if (x == seg->x2 && y == seg->y2) break;
-		vpnt->x=x;
-		vpnt->y=y;
-		if(!check_point_area(net->bbox,vpnt,TRUE)) break;
-		if (seg->x2 > seg->x1) {
-			vpnt->x++;
-			if(check_point_area(net->bbox,vpnt,TRUE)) x++;
-		}
-		else if (seg->x2 < seg->x1) {
-			vpnt->x--;
-			if(check_point_area(net->bbox,vpnt,TRUE)) x--;
-		}
-		if (seg->y2 > seg->y1) {
-			vpnt->y++;
-			if(check_point_area(net->bbox,vpnt,TRUE)) y++;
-		}
-		else if (seg->y2 < seg->y1) {
-			vpnt->y--;
-			if(check_point_area(net->bbox,vpnt,TRUE)) y--;
-		}
+		if (seg->x2 > seg->x1) x++;
+		else if (seg->x2 < seg->x1) x--;
+		if (seg->y2 > seg->y1) y++;
+		else if (seg->y2 < seg->y1) y--;
 	    }
 	}
     }
@@ -651,7 +609,7 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, BBOX bbox, u_char 
     int result = 0;
 
     for (rt = net->routes; rt; rt = rt->next)
-	result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
+	result = set_route_to_net(net, rt, newflags, pushlist, stage);
 
     return result;
 }
@@ -983,12 +941,12 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  break;
     }
 
-    vpnt = create_point(newpt.x,newpt.y,newpt.lay);
+    /*vpnt = create_point(newpt.x,newpt.y,newpt.lay);
     if(!check_point_area(net->bbox,vpnt,TRUE)) {
 	    free(vpnt);
 	    return NULL;
     }
-    free(vpnt);
+    free(vpnt);*/
 
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
     nodeptr = (newpt.lay < Pinlayers) ?
@@ -1165,10 +1123,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 		newpt.x, newpt.y, newpt.lay);
        }
        if (~(Pr->flags & PR_ON_STACK)) {
-	  ptret = allocPOINT();
-	  ptret->x = newpt.x;
-	  ptret->y = newpt.y;
-	  ptret->layer = newpt.lay;
+	  ptret = create_point(newpt.x,newpt.y,newpt.lay);
 	  ptret->next = NULL;
 	  Pr->flags |= PR_ON_STACK;
 	  return ptret;
@@ -1370,7 +1325,7 @@ void writeback_segment(SEG seg, int netnum)
 /*  SIDE EFFECTS: Obs update, RT llseg added			*/
 /*--------------------------------------------------------------*/
 
-int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
+int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
 {
    SEG  seg, lseg;
    NODEINFO lnode1, lnode2;
@@ -1382,12 +1337,21 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    u_char pflags, p2flags;
    PROUTE *Pr;
    POINT newlr, newlr2, lrtop, lrend, lrnext, lrcur, lrprev;
+   POINT vpnt;
 
    if (Verbose > 1) {
       FprintfT(stdout, "\n%s: commit: TotalRoutes = %d\n", __FUNCTION__, TotalRoutes);
    }
 
    netnum = rt->netnum;
+
+   vpnt = create_point(ept->x, ept->y, ept->lay);
+   if(!check_point_area(net->bbox,vpnt,TRUE)) {
+      FprintfT(stderr, "commit_proute(): impossible - terminal not within boundaries!\n");
+      free(vpnt);
+      return -1;
+   }
+   free(vpnt);
 
    Pr = &OBS2VAL(ept->x, ept->y, ept->lay);
    if (!(Pr->flags & PR_COST)) {

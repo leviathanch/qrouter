@@ -17,6 +17,7 @@ void   highlight_mask(void);
 
 void   draw_net(NET net, u_char single, int *lastlayer);
 void   draw_layout(void);
+void   draw_ratnet(NET net);
 
 int    GUI_init(Tcl_Interp *interp);
 void   expose(Tk_Window tkwind);

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <unistd.h>
 
 #include <X11/Intrinsic.h>
 #include <X11/StringDefs.h>
@@ -54,11 +55,11 @@ int bluevector[LONGSPAN];
 /* Highlight a position on the graph.  Do this on the actual	*/
 /* screen, not the buffer.					*/
 /*--------------------------------------------------------------*/
-
+TCL_DECLARE_MUTEX(highlight_m);
 void highlight(int x, int y) {
-
     int i, xspc, yspc, hspc;
     PROUTE *Pr;
+    Tcl_MutexLock(&highlight_m);
 
     // If Obs2[] at x, y is a source or dest, don't highlight
     // Do this only for layer 0;  it doesn't have to be rigorous. 
@@ -76,17 +77,19 @@ void highlight(int x, int y) {
     XSetForeground(dpy, gc, yellowpix);
     XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
     XFlush(dpy);
+    sleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&highlight_m);
 }
 
 /*--------------------------------------*/
 /* Highlight source (in magenta)	*/
 /*--------------------------------------*/
-
+TCL_DECLARE_MUTEX(highlight_source_m);
 void highlight_source() {
-
     int xspc, yspc, hspc;
     int i, x, y;
     PROUTE *Pr;
+    Tcl_MutexLock(&highlight_source_m);
 
     if (Obs2[0] == NULL) return;
 
@@ -111,17 +114,19 @@ void highlight_source() {
 	}
     }
     XFlush(dpy);
+    sleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&highlight_source_m);
 }
 
 /*--------------------------------------*/
 /* Highlight destination (in purple)	*/
 /*--------------------------------------*/
-
+TCL_DECLARE_MUTEX(highlight_dest_m);
 void highlight_dest() {
-
     int xspc, yspc, hspc, dspc;
     int i, x, y;
     PROUTE *Pr;
+    Tcl_MutexLock(&highlight_dest_m);
 
     if (Obs2[0] == NULL) return;
 
@@ -146,16 +151,18 @@ void highlight_dest() {
 	}
     }
     XFlush(dpy);
+    sleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&highlight_dest_m);
 }
 
 /*----------------------------------------------*/
 /* Highlight all the search starting points	*/
 /*----------------------------------------------*/
-
+TCL_DECLARE_MUTEX(highlight_starts_m);
 void highlight_starts(POINT glist) {
-
     int xspc, yspc, hspc;
     POINT gpoint;
+    Tcl_MutexLock(&highlight_starts_m);
 
     // Determine the number of routes per width and height, if
     // it has not yet been computed
@@ -169,6 +176,8 @@ void highlight_starts(POINT glist) {
 	XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
     }
     XFlush(dpy);
+    sleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&highlight_starts_m);
 }
 
 /*--------------------------------------*/
@@ -176,7 +185,6 @@ void highlight_starts(POINT glist) {
 /*--------------------------------------*/
 
 void highlight_mask(void) {
-
     int xspc, yspc, hspc;
     int x, y;
 
@@ -467,8 +475,7 @@ draw_net_bbox(NET net) {
 /*--------------------------------------*/
 /* Draw the ratnet of the net on the display	*/
 /*--------------------------------------*/
-static void
-draw_ratnet(NET net) {
+void draw_ratnet(NET net) {
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	int x1, x2, y1, y2;
@@ -496,7 +503,6 @@ draw_ratnet(NET net) {
 
 static void
 draw_net_nodes(NET net) {
-
     NODE node;
     SEG bboxlist = NULL; /* bbox list of all the nodes in the net */
     SEG lastbbox, bboxit;

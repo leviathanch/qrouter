@@ -198,6 +198,12 @@ BOOL points_equal(POINT p1, POINT p2)
 	return FALSE;
 }
 
+BOOL gpoints_equal(GRIDP p1, GRIDP p2)
+{
+	if((p1.x==p2.x)&&(p1.y==p2.y)) return TRUE;
+	return FALSE;
+}
+
 BOOL lines_equal(BBOX_LINE l1, BBOX_LINE l2)
 {
 	if(!l1) return FALSE;
@@ -400,9 +406,9 @@ BOOL check_single_bbox_collision(BBOX box1, BBOX box2)
 	return ret;
 }
 
-POSTPONED_NET get_bbox_collisions(NET net, BOOL thread)
+NETLIST get_bbox_collisions(NET net, BOOL thread)
 {
-	POSTPONED_NET ret = NULL;
+	NETLIST ret = NULL;
 	NET n;
 	if(!net) return NULL;
 	if(!net->bbox) return NULL;
@@ -874,8 +880,8 @@ BOOL resolve_bbox_collisions(NET net, BOOL thread)
 	NET n;
 	BOOL ret = TRUE;
 	if(!net) return FALSE;
-	POSTPONED_NET pp=get_bbox_collisions(net,thread);
-	for(POSTPONED_NET p=pp;p;p=p->next) {
+	NETLIST pp=get_bbox_collisions(net,thread);
+	for(NETLIST p=pp;p;p=p->next) {
 		n = p->net;
 		if((net!=n)&&n) {
 			if(is_gndnet(n)||is_vddnet(n)||is_clknet(n)) {

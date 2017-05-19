@@ -1103,9 +1103,7 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     if (net == NULL)
 	failcount = dosecondstage(dodebug, dostep);
     else {
-	failcount = 0;
-	for (int c = 0;c<MAX_NUM_THREADS;c++)
-		failcount += route_net_ripup(c, net, dodebug);
+	failcount = route_net_ripup(net, dodebug);
     }
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
@@ -2253,7 +2251,7 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
             int objc, Tcl_Obj *CONST objv[])
 {
 	char *subcmd,*subcmdpar, *par1, *par2;
-	POSTPONED_NET pp = NULL;
+	NETLIST pp = NULL;
 	NET net;
 	NET n1, n2;
 	if (objc == 2) {
@@ -2368,7 +2366,7 @@ qrouter_borders(ClientData clientData, Tcl_Interp *interp,
 					net->bbox_color="red";
 					Tcl_AppendElement(interp, "there are collisions with: ");
 					pp=get_bbox_collisions(net,NOT_FOR_THREAD);
-					for(POSTPONED_NET tmpp=pp;tmpp;tmpp=tmpp->next) {
+					for(NETLIST tmpp=pp;tmpp;tmpp=tmpp->next) {
 						Tcl_AppendElement(interp, tmpp->net->netname);
 					}
 					free_postponed(pp);

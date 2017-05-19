@@ -5,14 +5,16 @@
 /* Modified by Tim Edwards 2011-2013				*/
 /*--------------------------------------------------------------*/
 
-#define THREADS 5
+#ifndef QROUTER_H
+
+#define THREADS 2
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 
 #define BOX_SPACING_X 1
 #define BOX_SPACING_Y 1
 
-#ifndef QROUTER_H
+#define DEBUG_DELAY 2
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -312,12 +314,6 @@ struct net_ {
    char *bbox_color;
 };
 
-typedef struct postponed_net_ *POSTPONED_NET;
-struct postponed_net_ {
-	NET net;
-	POSTPONED_NET next;
-};
-
 // Flags used by NET "flags" record
 
 #define NET_PENDING  		1	// pending being placed on "abandoned" list
@@ -351,9 +347,9 @@ struct routeinfo_ {
    BBOX bbox;
 };
 
-#define MAXRT		10000		// "Infinite" route cost
-#define BOX_ROOM_X 1
-#define BOX_ROOM_Y 1
+#define MAXRT		100000		// "Infinite" route cost
+#define BOX_ROOM_X 2
+#define BOX_ROOM_Y 2
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect
@@ -470,9 +466,9 @@ extern u_char ripLimit;
 extern char *vddnet;
 extern char *gndnet;
 extern char *clknet;
-extern POSTPONED_NET gndnets;
-extern POSTPONED_NET vddnets;
-extern POSTPONED_NET clknets;
+extern NETLIST gndnets;
+extern NETLIST vddnets;
+extern NETLIST clknets;
 
 /* Tcl output to console handling */
 
@@ -520,10 +516,10 @@ int    dothirdstage(u_char graphdebug, int debug_netnum);
 int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
 NET getnetbyname(char *name);
-int    route_net_ripup(int thnum, NET net, u_char graphdebug);
+int    route_net_ripup(NET net, u_char graphdebug);
 
-POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net);
-void free_postponed(POSTPONED_NET postponed);
+NETLIST postpone_net(NETLIST postponed, NET net);
+void free_postponed(NETLIST postponed);
 void free_bbox(BBOX t);
 void hide_all_nets();
 

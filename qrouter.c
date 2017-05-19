@@ -71,23 +71,23 @@ ScaleRec Scales;	// record of input and output scales
 
 /* Prototypes for some local functions */
 static void initMask(void);
-static void fillMask(u_char value);
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static void fillMask(NET net, u_char value);
+static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
+static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
 static void helpmessage(void);
 
-POSTPONED_NET gndnets = NULL;
-POSTPONED_NET vddnets = NULL;
-POSTPONED_NET clknets = NULL;
+NETLIST gndnets = NULL;
+NETLIST vddnets = NULL;
+NETLIST clknets = NULL;
 
 BOOL is_vddnet(NET net)
 {
 	if(!net) return FALSE;
 	if(vddnet) if(!strcmp(vddnet,net->netname)) return TRUE;
-	for(POSTPONED_NET p=vddnets;p;p=p->next) if(p->net==net) return TRUE;
+	for(NETLIST p=vddnets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
 }
 
@@ -95,7 +95,7 @@ BOOL is_gndnet(NET net)
 {
 	if(!net) return FALSE;
 	if(gndnet) if(!strcmp(gndnet,net->netname)) return TRUE;
-	for(POSTPONED_NET p=gndnets;p;p=p->next) if(p->net==net) return TRUE;
+	for(NETLIST p=gndnets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
 }
 
@@ -103,26 +103,26 @@ BOOL is_clknet(NET net)
 {
 	if(!net) return FALSE;
 	if(clknet) if(!strcmp(clknet,net->netname)) return TRUE;
-	for(POSTPONED_NET p=clknets;p;p=p->next) if(p->net==net) return TRUE;
+	for(NETLIST p=clknets;p;p=p->next) if(p->net==net) return TRUE;
 	return FALSE;
 }
 
-void free_postponed(POSTPONED_NET postponed) {
+void free_postponed(NETLIST postponed) {
 	if(!postponed) return;
-	POSTPONED_NET lp = NULL;
-	for(POSTPONED_NET t=postponed;t;t=t->next) {
+	NETLIST lp = NULL;
+	for(NETLIST t=postponed;t;t=t->next) {
 		if(lp) free(lp);
 		lp=t;
 	}
 }
 
-POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net)
+NETLIST postpone_net(NETLIST postponed, NET net)
 {
 	if(!net) return postponed;
-	for(POSTPONED_NET pp=postponed;pp;pp=pp->next) {
+	for(NETLIST pp=postponed;pp;pp=pp->next) {
 		if(pp->net==net) return postponed; // already in list
 	}
-	POSTPONED_NET p = malloc(sizeof(struct postponed_net_));
+	NETLIST p = malloc(sizeof(struct netlist_));
 	if(!p) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
 		exit(0);
@@ -133,13 +133,13 @@ POSTPONED_NET postpone_net(POSTPONED_NET postponed, NET net)
 	return p;
 }
 
-POSTPONED_NET delete_postponed(POSTPONED_NET postponed, NET net)
+NETLIST delete_postponed(NETLIST postponed, NET net)
 {
 	if(!postponed) return NULL;
 	if(!net) return postponed;
-	POSTPONED_NET np = NULL;
-	POSTPONED_NET lp = NULL;
-	for(POSTPONED_NET p=postponed;p;p=p->next) {
+	NETLIST np = NULL;
+	NETLIST lp = NULL;
+	for(NETLIST p=postponed;p;p=p->next) {
 		np=p->next;
 		if(p->net==net) {
 			if(lp) lp->next = np;
@@ -848,7 +848,6 @@ void dofirststage_thread(ClientData parm)
 {
 	NET net;
 	qThreadData *thread_params = (qThreadData*)parm;
-	int thnum = thread_params->thnum;
 	int result=0;
 	int *remaining = thread_params->remaining;
 	u_char graphdebug = thread_params->graphdebug;
@@ -891,10 +890,10 @@ qThreadData *get_thread_data()
 	return ret;
 }
 
-int count_postponed_nets(POSTPONED_NET l)
+int count_postponed_nets(NETLIST l)
 {
 	int ret=0;
-	for(POSTPONED_NET n=l;n;n=n->next) ret++;
+	for(NETLIST n=l;n;n=n->next) ret++;
 	return ret;
 }
 
@@ -908,13 +907,13 @@ void hide_all_nets()
 	}
 }
 
-void route_essential_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
+void route_essential_nets(NETLIST l, int *remaining, u_char graphdebug)
 {
 	qThreadData *thread_params;
 	Tcl_ThreadId idPtr;
 	int thret;
 	NET net;
-	for(POSTPONED_NET pn=l;pn;pn=pn->next) {
+	for(NETLIST pn=l;pn;pn=pn->next) {
 		net=pn->net;
 		if(check_bbox_collisions(net,FOR_THREAD)) continue;
 		CurNet[0]=net;
@@ -940,7 +939,7 @@ void route_essential_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 	}
 }
 
-void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
+void route_postponed_nets(NETLIST l, int *remaining, u_char graphdebug)
 {
 	qThreadData *thread_params;
 	Tcl_ThreadId idPtr;
@@ -949,7 +948,7 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 	NET net;
 	while(count_postponed_nets(l)) {
 		threadnum=0;
-		for(POSTPONED_NET pn=l;pn;pn=pn->next) {
+		for(NETLIST pn=l;pn;pn=pn->next) {
 			net=pn->net;
 			if(check_bbox_collisions(net,FOR_THREAD)) continue;
 			CurNet[threadnum]=net;
@@ -960,9 +959,10 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 			thread_params->thnum=threadnum;
 			thread_params_list[threadnum]=thread_params;
 			threadnum++;
-			net->active=TRUE;
-			draw_layout();
 			if(threadnum==MAX_NUM_THREADS) {
+				hide_all_nets();
+				for(int c=0;c<MAX_NUM_THREADS;c++) if(CurNet[c]) CurNet[c]->active=TRUE;
+				draw_layout();
 				for(int c=0;c<MAX_NUM_THREADS;c++) {
 					thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 					if( thret == TCL_OK) {
@@ -983,6 +983,8 @@ void route_postponed_nets(POSTPONED_NET l, int *remaining, u_char graphdebug)
 			}
 			
 		}
+		hide_all_nets();
+		for(int c=0;c<MAX_NUM_THREADS;c++) if(CurNet[c]) CurNet[c]->active=TRUE;
 		draw_layout();
 		for(int c=0;c<MAX_NUM_THREADS;c++) {
 			if(thread_params_list[c]) {
@@ -1015,7 +1017,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    NETLIST nl;
    Tcl_ThreadId idPtr;
    qThreadData *thread_params;
-   POSTPONED_NET postponed = NULL;
+   NETLIST postponed = NULL;
    int threadnum = 0;
    int thret;
 
@@ -1100,11 +1102,11 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 		}
       if (debug_netnum >= 0) break;
    }
-   /*route_postponed_nets(postponed,&remaining,graphdebug);
+   route_postponed_nets(postponed,&remaining,graphdebug);
    draw_layout();
    route_essential_nets(clknets,&remaining,graphdebug);
    draw_layout();
-   route_essential_nets(vddnets,&remaining,graphdebug);
+   /*route_essential_nets(vddnets,&remaining,graphdebug);
    draw_layout();
    route_essential_nets(gndnets,&remaining,graphdebug);
    draw_layout();*/
@@ -1677,7 +1679,7 @@ static int ripup_colliding(NET net)
 /* net "net".							*/
 /*--------------------------------------------------------------*/
 
-int route_net_ripup(int thnum, NET net, u_char graphdebug)
+int route_net_ripup(NET net, u_char graphdebug)
 {
     int result;
     NETLIST nl, nl2;
@@ -1744,12 +1746,11 @@ int
 dosecondstage(u_char graphdebug, u_char singlestep)
 {
    int failcount, origcount, result, maxtries;
-   NET net;
+   NET net = CurNet[0];
    NETLIST nl, nl2;
    NETLIST Abandoned;	// Abandoned routes---not even trying any more.
    ROUTE rt, rt2;
    SEG seg;
-   int thnum = 0;
 
    origcount = countlist(FailedNets);
    if (FailedNets) {
@@ -1759,7 +1760,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
    } else
       maxtries = 0;
 
-   fillMask((u_char)0);
+   fillMask(net, (u_char)0);
    Abandoned = NULL;
 
    // Clear the "noripup" field from all of the failed nets, in case
@@ -2160,7 +2161,7 @@ static void createBboxMask(NET net, u_char halo)
     pt2 = get_right_upper_trunk_point(net->bbox);
     vpnt = create_point(0,0,0);
 
-    fillMask((u_char)halo);
+    fillMask(net, (u_char)halo);
     
     xmin = pt1->x;
     xmax = pt2->x;
@@ -2240,6 +2241,9 @@ static int analyzeCongestion(BBOX box)
 	ymin = pt1->y;
 	xmax = pt2->x;
 	ymax = pt2->y;
+	
+	free(pt1);
+	free(pt2);
 
 	score = (int *)malloc((ymax - ymin + 1) * sizeof(int));
 
@@ -2310,7 +2314,7 @@ static void createMask(NET net, u_char slack, u_char halo)
   pt2 = get_right_upper_trunk_point(net->bbox);
   vpnt = create_point(0,0,0);
 
-  fillMask((u_char)halo);
+  fillMask(net, (u_char)halo);
 
   xmin = pt1->x;
   xmax = pt2->x;
@@ -2514,10 +2518,19 @@ static void createMask(NET net, u_char slack, u_char halo)
 /* bad guess about the optimal route positions.			*/
 /*--------------------------------------------------------------*/
 
-static void fillMask(u_char value) {
-   memset((void *)RMask, (int)value,
-		(size_t)(NumChannelsX[0] * NumChannelsY[0]
-		* sizeof(u_char)));
+static void fillMask(NET net, u_char value) {
+	POINT p1, p2, vpnt;
+	p1 = get_left_lower_trunk_point(net->bbox);
+	p2 = get_right_upper_trunk_point(net->bbox);
+	vpnt = create_point(0,0,0);
+	for(vpnt->x=p1->x;vpnt->x<p2->x;vpnt->x++) {
+		for(vpnt->y=p1->y;vpnt->y<p2->y;vpnt->y++) {
+			if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(vpnt->x, vpnt->y) = value;
+		}
+	}
+	free(vpnt);
+	free(p1);
+	free(p2);
 }
 
 /*--------------------------------------------------------------*/
@@ -2551,12 +2564,11 @@ free_glist(struct routeinfo_ *iroute)
 /*   SIDE EFFECTS: 						*/
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
-TCL_DECLARE_MUTEX(dorouteMutex)
 int doroute(NET net, u_char stage, u_char graphdebug)
 {
   ROUTE rt1, lrt;
   NETLIST nlist;
-  int result, lastlayer, unroutable;
+  int result = 0, lastlayer, unroutable;
   struct routeinfo_ iroute;
 
   if (!net) {
@@ -2578,9 +2590,9 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   /* Set up Obs2[] matrix for first route */
 
-  result = route_setup(&iroute, stage);
+  result = route_setup(net, &iroute, stage);
   unroutable = result - 1;
-  if (graphdebug) highlight_mask();
+  //if (graphdebug) highlight_mask();
 
   // Keep going until we are unable to route to a terminal
 
@@ -2589,7 +2601,8 @@ int doroute(NET net, u_char stage, u_char graphdebug)
      if (graphdebug) highlight_source();
      if (graphdebug) highlight_dest();
      if (graphdebug) highlight_starts(iroute.glist);
-     rt1 = createemptyroute(); // only one calloc at a time
+
+     rt1 = createemptyroute();
      rt1->netnum = net->netnum;
      iroute.rt = rt1;
 
@@ -2634,7 +2647,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
      if (iroute.do_pwrbus) free_glist(&iroute);
 
      /* Set up for next route and check if routing is done */
-     result = next_route_setup(&iroute, stage);
+     result = next_route_setup(net, &iroute, stage);
   }
 
   /* Finished routing (or error occurred) */
@@ -2679,7 +2692,7 @@ static void unable_to_route(char *netname, NODE node, unsigned char forced)
 /* next_route_setup --						*/
 /*								*/
 /*--------------------------------------------------------------*/
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
+static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
   NODE node;
@@ -2720,7 +2733,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
      // Set positions on last route to PR_SOURCE
      if (rt) {
-	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, iroute->bbox, stage);
+	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, stage);
 
         if (result == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
@@ -2739,16 +2752,26 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
 
-     for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   if(Nodeinfo[i][j]) {
-	      node = Nodeinfo[i][j]->nodeloc;
-	      if (node != (NODE)NULL)
-	         if (node->netnum == iroute->net->netnum)
-		    Nodeinfo[i][j]->nodeloc = (NODE)NULL;
-	   }
-        }
-     }
+  POINT pt1 = get_left_lower_trunk_point(net->bbox);
+  POINT pt2 = get_right_upper_trunk_point(net->bbox);
+  POINT vpnt = create_point(0,0,0);
+  for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
+	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
+		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
+			if(check_point_area(net->bbox,vpnt,TRUE)) {
+				if(Nodeinfo[vpnt->layer]) if(NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)) {
+					node = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc;
+					if (node != (NODE)NULL)
+						if (node->netnum == iroute->net->netnum)
+							NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc = (NODE)NULL;
+				}
+			}
+		}
+	}
+  }
+  free(vpnt);
+  free(pt1);
+  free(pt2);
 
      free_glist(iroute);
      return 0;
@@ -2781,7 +2804,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 /*								*/
 /*--------------------------------------------------------------*/
 
-static int route_setup(struct routeinfo_ *iroute, u_char stage)
+static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 {
   int  i, j;
   u_int netnum, dir;
@@ -2793,23 +2816,32 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 
   // Make Obs2[][] a copy of Obs[][].  Convert pin obstructions to
   // terminal positions for the net being routed.
-
-  for (i = 0; i < Num_layers; i++) {
-      for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	  netnum = Obs[i][j] & (~BLOCKED_MASK);
-	  Pr = &Obs2[i][j];
-	  if (netnum != 0) {
-	      Pr->flags = 0;		// Clear all flags
-	      if (netnum == DRC_BLOCKAGE)
-	         Pr->prdata.net = netnum;
-	      else
-	         Pr->prdata.net = netnum & NETNUM_MASK;
-	   } else {
-	      Pr->flags = PR_COST;		// This location is routable
-	      Pr->prdata.cost = MAXRT;
-	   }
-      }
+  POINT pt1 = get_left_lower_trunk_point(net->bbox);
+  POINT pt2 = get_right_upper_trunk_point(net->bbox);
+  POINT vpnt = create_point(0,0,0);
+  for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
+	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
+		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
+			if(check_point_area(net->bbox,vpnt,TRUE)) {
+				netnum = OBSVAL(vpnt->x, vpnt->y, vpnt->layer) & (~BLOCKED_MASK);
+				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
+				if (netnum != 0) {
+					Pr->flags = 0;		// Clear all flags
+					if (netnum == DRC_BLOCKAGE)
+						Pr->prdata.net = netnum;
+					else
+						Pr->prdata.net = netnum & NETNUM_MASK;
+				} else {
+					Pr->flags = PR_COST;		// This location is routable
+					Pr->prdata.cost = MAXRT;
+				}
+			}
+		}
+	}
   }
+  free(vpnt);
+  free(pt1);
+  free(pt2);
 
   if (iroute->net->netnum == VDD_NET || iroute->net->netnum == GND_NET) {
      // The normal method of selecting source and target is not amenable
@@ -2901,17 +2933,26 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
   if (!result) {
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
      // used for crossover costing of future routes.
-
-     for (i = 0; i < Pinlayers; i++) {
-	for (j = 0; j < NumChannelsX[i] * NumChannelsY[i]; j++) {
-	   if (Nodeinfo[i][j]) {
-	      iroute->nsrc = Nodeinfo[i][j]->nodeloc;
-	      if (iroute->nsrc != (NODE)NULL)
-	         if (iroute->nsrc->netnum == iroute->net->netnum)
-		    Nodeinfo[i][j]->nodeloc = (NODE)NULL;
-	   }
-        }
-     }
+	POINT pt1 = get_left_lower_trunk_point(net->bbox);
+	POINT pt2 = get_right_upper_trunk_point(net->bbox);
+	POINT vpnt = create_point(0,0,0);
+	for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
+		for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
+			for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
+				if(check_point_area(net->bbox,vpnt,TRUE)) {
+					if(NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)) {
+						iroute->nsrc = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc;
+						if (iroute->nsrc != (NODE)NULL)
+							if (iroute->nsrc->netnum == iroute->net->netnum)
+								NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc = (NODE)NULL;
+					}
+				}
+			}
+		}
+	}
+	free(vpnt);
+	free(pt1);
+	free(pt2);
 
      free_glist(iroute);
      return 0;
@@ -2925,7 +2966,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 	createMask(iroute->net, MASK_LARGE, (u_char)Numpasses);
   }
   else if ((iroute->do_pwrbus == TRUE) || (maskMode == MASK_NONE))
-     fillMask((u_char)0);
+     fillMask(iroute->net, (u_char)0);
   else if (maskMode == MASK_BBOX)
      createBboxMask(iroute->net, (u_char)Numpasses);
   else
@@ -2991,7 +3032,6 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
-  POINT vpnt = create_point(0,0,0);
   NET net = iroute->net;
   int  i, o;
   int  pass, maskpass;
@@ -3026,14 +3066,15 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     while ((gpoint = iroute->glist) != NULL) {
       iroute->glist = gpoint->next;
+      if(check_point_area(net->bbox,gpoint,TRUE)) {
+		//FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, gpoint->x, gpoint->y);
+	} else {
+		FprintfT(stdout, "\n\n%s: (%d,%d) not in! box\n\n",__FUNCTION__, gpoint->x, gpoint->y);
+		continue;
+	}
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
-      vpnt->x = gpoint->x;
-      vpnt->y = gpoint->y;
-      //if(check_point_area(net->bbox,vpnt)) FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, vpnt->x, gpoint->y);
-      //else continue;
-      if(!check_point_area(net->bbox,vpnt,TRUE)) continue;
 
       if (graphdebug) highlight(curpt.x, curpt.y);
 	
@@ -3230,15 +3271,15 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     // If we found a route, save it and return
 
-    if (best.cost <= iroute->maxcost) {
+    if (!gpoints_equal(curpt,best)&&(best.cost < iroute->maxcost)) {
 	curpt.x = best.x;
 	curpt.y = best.y;
 	curpt.lay = best.lay;
-	if ((rval = commit_proute(iroute->rt, &curpt, stage)) != 1) break;
+	curpt.cost = best.cost;
+	if ((rval = commit_proute(net, iroute->rt, &curpt, stage)) != 1) break;
 	if (Verbose > 2) {
 	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
-	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n",
-			best.x, best.y, curpt.x, curpt.y);
+	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n", best.x, best.y, curpt.x, curpt.y);
 	}
 	goto done;	/* route success */
     }

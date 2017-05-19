@@ -33,6 +33,8 @@ void find_route_blocks();
 void clip_gate_taps(void);
 BBOX create_fresh_bbox();
 POINT create_point(int x, int y, int layer);
+BOOL points_equal(POINT p1, POINT p2);
+BOOL gpoints_equal(GRIDP p1, GRIDP p2);
 BBOX add_line_to_bbox(BBOX bbox, BBOX_LINE line);
 BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l);
 POINT get_left_lower_trunk_point(BBOX bbox);
@@ -52,7 +54,7 @@ BOOL is_clknet(NET net);
 BBOX_LINE get_horizontal_lines(BBOX_LINE box);
 BBOX_LINE get_vertical_lines(BBOX_LINE box);
 BOOL check_bbox_collisions(NET net, BOOL thread);
-POSTPONED_NET get_bbox_collisions(NET net, BOOL thread);
+NETLIST get_bbox_collisions(NET net, BOOL thread);
 BOOL resolve_bbox_collisions(NET net, BOOL thread);
 BOOL check_single_bbox_collision(BBOX box1, BBOX box2);
 

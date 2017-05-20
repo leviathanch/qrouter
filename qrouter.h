@@ -7,14 +7,14 @@
 
 #ifndef QROUTER_H
 
-#define THREADS 2
+#define THREADS 1
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 
-#define BOX_SPACING_X 1
-#define BOX_SPACING_Y 1
+#define BOX_SPACING_X 2
+#define BOX_SPACING_Y 2
 
-#define DEBUG_DELAY 2
+#define DEBUG_DELAY 500
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))

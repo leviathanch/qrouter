@@ -77,7 +77,7 @@ void highlight(int x, int y) {
     XSetForeground(dpy, gc, yellowpix);
     XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
     XFlush(dpy);
-    sleep(DEBUG_DELAY);
+    usleep(DEBUG_DELAY);
     Tcl_MutexUnlock(&highlight_m);
 }
 
@@ -86,10 +86,10 @@ void highlight(int x, int y) {
 /*--------------------------------------*/
 TCL_DECLARE_MUTEX(highlight_source_m);
 void highlight_source() {
+    Tcl_MutexLock(&highlight_source_m);
     int xspc, yspc, hspc;
     int i, x, y;
     PROUTE *Pr;
-    Tcl_MutexLock(&highlight_source_m);
 
     if (Obs2[0] == NULL) return;
 
@@ -114,7 +114,7 @@ void highlight_source() {
 	}
     }
     XFlush(dpy);
-    sleep(DEBUG_DELAY);
+    usleep(DEBUG_DELAY);
     Tcl_MutexUnlock(&highlight_source_m);
 }
 
@@ -151,7 +151,7 @@ void highlight_dest() {
 	}
     }
     XFlush(dpy);
-    sleep(DEBUG_DELAY);
+    usleep(DEBUG_DELAY);
     Tcl_MutexUnlock(&highlight_dest_m);
 }
 
@@ -176,15 +176,16 @@ void highlight_starts(POINT glist) {
 	XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
     }
     XFlush(dpy);
-    sleep(DEBUG_DELAY);
+    usleep(DEBUG_DELAY);
     Tcl_MutexUnlock(&highlight_starts_m);
 }
 
 /*--------------------------------------*/
 /* Highlight mask (in tan)		*/
 /*--------------------------------------*/
-
+TCL_DECLARE_MUTEX(highlight_mask_m);
 void highlight_mask(void) {
+    Tcl_MutexLock(&highlight_mask_m);
     int xspc, yspc, hspc;
     int x, y;
 
@@ -205,6 +206,8 @@ void highlight_mask(void) {
 	}
     }
     XFlush(dpy);
+    usleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&highlight_mask_m);
 }
 
 /*----------------------------------------------*/
@@ -363,12 +366,13 @@ map_estimate()
 /*--------------------------------------*/
 /* Draw one net on the display		*/
 /*--------------------------------------*/
-
+TCL_DECLARE_MUTEX(draw_net_m);
 void draw_net(NET net, u_char single, int *lastlayer) {
 
     int layer;
     SEG seg;
     ROUTE rt;
+    Tcl_MutexLock(&draw_net_m);
 
     if (dpy == NULL) return;
 
@@ -418,6 +422,7 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 	XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);
 	XFlush(dpy);
     }
+    Tcl_MutexUnlock(&draw_net_m);
 }
 
 /*--------------------------------------*/
@@ -475,7 +480,9 @@ draw_net_bbox(NET net) {
 /*--------------------------------------*/
 /* Draw the ratnet of the net on the display	*/
 /*--------------------------------------*/
+TCL_DECLARE_MUTEX(draw_ratnet_m);
 void draw_ratnet(NET net) {
+	Tcl_MutexLock(&draw_ratnet_m);
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	int x1, x2, y1, y2;
@@ -495,14 +502,17 @@ void draw_ratnet(NET net) {
 			XDrawLine(dpy, buffer, gc,x1*spacing,height-y1*spacing,x2*spacing,height-y2*spacing);
 		}
 	}
+	usleep(DEBUG_DELAY);
+	Tcl_MutexUnlock(&draw_ratnet_m);
 }
 
 /*--------------------------------------*/
 /* Draw one unrouted net on the display	*/
 /*--------------------------------------*/
-
+TCL_DECLARE_MUTEX(draw_net_nodes_m);
 static void
 draw_net_nodes(NET net) {
+    Tcl_MutexLock(&draw_net_nodes_m);
     NODE node;
     SEG bboxlist = NULL; /* bbox list of all the nodes in the net */
     SEG lastbbox, bboxit;
@@ -582,15 +592,17 @@ draw_net_nodes(NET net) {
         lastbbox = bboxit->next;
         free(bboxit);
     }
+    usleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&draw_net_nodes_m);
 }
 
 
 /*--------------------------------------*/
 /* Graphical display of the layout	*/
 /*--------------------------------------*/
-
+Tcl_MutexLock(&draw_layout_m);
 void draw_layout() {
-
+    Tcl_MutexLock(&draw_layout_m);
     int lastlayer;
     int i;
     NET net;
@@ -657,6 +669,8 @@ void draw_layout() {
 
     /* Copy double-buffer onto display window */
     XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);
+    usleep(DEBUG_DELAY);
+    Tcl_MutexUnlock(&draw_layout_m);
 }
 
 /*--------------------------------------*/

@@ -2592,7 +2592,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   result = route_setup(net, &iroute, stage);
   unroutable = result - 1;
-  //if (graphdebug) highlight_mask();
+  if (graphdebug) highlight_mask();
 
   // Keep going until we are unable to route to a terminal
 
@@ -2618,15 +2618,10 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 	// If we failed this on the last round, then stop
 	// working on this net and move on to the next.
 	if (FailedNets && (FailedNets->net == net)) break;
-
-	nlist = (NETLIST)malloc(sizeof(struct netlist_));
-	nlist->net = net;
-	nlist->next = FailedNets;
-	FailedNets = nlist;
+	FailedNets = 	postpone_net(FailedNets,net);
 	free(rt1);
      }
      else {
-
         Tcl_MutexLock(&TotalRoutesMutex);
         TotalRoutes++;
         Tcl_MutexUnlock(&TotalRoutesMutex);
@@ -2638,7 +2633,8 @@ int doroute(NET net, u_char stage, u_char graphdebug)
         else {
 	   net->routes = rt1;
         }
-        draw_net(net, TRUE, &lastlayer);
+        //if(graphdebug) sleep(10);
+        //draw_net(net, TRUE, &lastlayer);
      }
 
      // For power routing, clear the list of existing pending route
@@ -2654,14 +2650,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   free_glist(&iroute);
 
   /* Route failure due to no taps or similar error---Log it */
-  if ((result < 0) || (unroutable > 0)) {
-     if ((FailedNets == NULL) || (FailedNets->net != net)) {
-	nlist = (NETLIST)malloc(sizeof(struct netlist_));
-	nlist->net = net;
-	nlist->next = FailedNets;
-	FailedNets = nlist;
-     }
-  }
+  if ((result < 0) || (unroutable > 0)) FailedNets = postpone_net(FailedNets,net);
   return result;
   
 } /* doroute() */
@@ -2733,7 +2722,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 
      // Set positions on last route to PR_SOURCE
      if (rt) {
-	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, stage);
+	//result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, stage);
 
         if (result == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
@@ -2789,8 +2778,11 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      clear_non_source_targets(iroute->net, &iroute->glist);
   }
 
+  int num_taps;
   if (Verbose > 1) {
      FprintfT(stdout, "%s: netname = %s, route number %d\n", __FUNCTION__,iroute->net->netname, TotalRoutes);
+     num_taps=count_targets(net);
+     FprintfT(stdout, "Amount of taps: %d\n", num_taps);
   }
 
   if (iroute->maxcost > 2)
@@ -2872,6 +2864,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 
   if (result) {
      while(1) {
+        if (iroute->nsrc == NULL) break;
         rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist, iroute->bbox, stage);
 	if (rval == -2) {
 	   iroute->nsrc = iroute->nsrc->next;
@@ -3001,10 +2994,13 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      return -1;
   }
 
+  int num_taps;
   if (Verbose > 2) {
      FprintfT(stdout, "Source node @ %gum %gum layer=%d grid=(%d %d)\n",
 	  iroute->nsrctap->x, iroute->nsrctap->y, iroute->nsrctap->layer,
 	  iroute->nsrctap->gridx, iroute->nsrctap->gridy);
+     num_taps=count_targets(net);
+     FprintfT(stdout, "Amount of taps: %d\n", num_taps);
   }
 
   if (Verbose > 1) {
@@ -3066,17 +3062,9 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     while ((gpoint = iroute->glist) != NULL) {
       iroute->glist = gpoint->next;
-      if(check_point_area(net->bbox,gpoint,TRUE)) {
-		//FprintfT(stdout, "%s: (%d,%d) within box\n",__FUNCTION__, gpoint->x, gpoint->y);
-	} else {
-		FprintfT(stdout, "\n\n%s: (%d,%d) not in! box\n\n",__FUNCTION__, gpoint->x, gpoint->y);
-		continue;
-	}
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
-
-      if (graphdebug) highlight(curpt.x, curpt.y);
 	
       Pr = &OBS2VAL(curpt.x, curpt.y, curpt.lay);
 
@@ -3086,6 +3074,11 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 freePOINT(gpoint);
 	 continue;
       }
+      /*if (graphdebug) highlight_mask();
+      if (graphdebug) highlight_source();
+      if (graphdebug) highlight_dest();*/
+      if (graphdebug) highlight(curpt.x, curpt.y);
+      //if (graphdebug) draw_ratnet(net);
 
       if (Pr->flags & PR_COST)
 	 curpt.cost = Pr->prdata.cost;	// Route points, including target
@@ -3271,16 +3264,16 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     // If we found a route, save it and return
 
-    if (!gpoints_equal(curpt,best)&&(best.cost < iroute->maxcost)) {
+    if (best.cost <= iroute->maxcost) {
+	if (Verbose > 2) {
+	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
+	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n", best.x, best.y, curpt.x, curpt.y);
+	}
 	curpt.x = best.x;
 	curpt.y = best.y;
 	curpt.lay = best.lay;
 	curpt.cost = best.cost;
 	if ((rval = commit_proute(net, iroute->rt, &curpt, stage)) != 1) break;
-	if (Verbose > 2) {
-	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
-	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n", best.x, best.y, curpt.x, curpt.y);
-	}
 	goto done;	/* route success */
     }
 

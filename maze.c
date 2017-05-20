@@ -546,13 +546,6 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 	    lay = seg->layer;
 	    x = seg->x1;
 	    y = seg->y1;
-	    gpoint = create_point(x,y,lay);
-	    if(check_point_area(net->bbox,gpoint,TRUE)) {
-		    free(gpoint);
-	    } else {
-		    free(gpoint);
-		    continue;
-	    }
 	    while (1) {
 		Pr = &OBS2VAL(x, y, lay);
 		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
@@ -573,7 +566,6 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 
 		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
 		n2 = (lnode) ? lnode->nodeloc : NULL;
-		//printf("%s: netname %s n2 %p\n",__FUNCTION__,net->netname,n2);
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, net->bbox, stage);
@@ -907,7 +899,6 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     PROUTE *Pr, *Pt;
     GRIDP newpt;
     POINT ptret = NULL;
-    POINT vpnt;
 
     newpt = *ept;
 
@@ -941,16 +932,8 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  break;
     }
 
-    /*vpnt = create_point(newpt.x,newpt.y,newpt.lay);
-    if(!check_point_area(net->bbox,vpnt,TRUE)) {
-	    free(vpnt);
-	    return NULL;
-    }
-    free(vpnt);*/
-
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
-    nodeptr = (newpt.lay < Pinlayers) ?
-		NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
+    nodeptr = (newpt.lay < Pinlayers) ? NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes

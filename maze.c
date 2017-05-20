@@ -557,6 +557,11 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 
 		if (pushlist != NULL) {
 			gpoint = create_point(x,y,lay);
+			if(!check_point_area(net->bbox,gpoint,FALSE)) {
+				printf("%s point not in box!\n",__FUNCTION__);
+				free(gpoint);
+				break;
+			}
 			gpoint->next = *pushlist;
 			*pushlist = gpoint;
 		}
@@ -1329,7 +1334,7 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
    netnum = rt->netnum;
 
    vpnt = create_point(ept->x, ept->y, ept->lay);
-   if(!check_point_area(net->bbox,vpnt,TRUE)) {
+   if(!check_point_area(net->bbox,vpnt,FALSE)) {
       FprintfT(stderr, "commit_proute(): impossible - terminal not within boundaries!\n");
       free(vpnt);
       return -1;

@@ -107,6 +107,13 @@ BOOL is_clknet(NET net)
 	return FALSE;
 }
 
+BOOL is_failed_net(NET net)
+{
+	if(!net) return FALSE;
+	for(NETLIST p=FailedNets;p;p=p->next) if(p->net==net) return TRUE;
+	return FALSE;
+}
+
 void free_postponed(NETLIST postponed) {
 	if(!postponed) return;
 	NETLIST lp = NULL;
@@ -2175,7 +2182,7 @@ static void createBboxMask(NET net, u_char halo)
 	for (gy1 = ymin; gy1 <= ymax; gy1++) {
 	    vpnt->x=gx1;
 	    vpnt->y=gy1;
-	    if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, gy1) = (u_char)0;
+	    if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, gy1) = (u_char)0;
 	}
 
     for (i = 1; i <= halo; i++) {
@@ -2185,7 +2192,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsY[0]) {
 		 vpnt->x=gx1;
 		 vpnt->y=j;
-		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, j) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, j) = (u_char)i;
 	      }
 
 	gx2 = xmax + i;
@@ -2194,7 +2201,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsY[0]) {
 		 vpnt->x=gx2;
 		 vpnt->y=j;
-		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx2, j) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx2, j) = (u_char)i;
 	      }
 
 	gy1 = ymin - i;
@@ -2203,7 +2210,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0]) {
 		 vpnt->x=j;
 		 vpnt->y=gy1;
-		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy1) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy1) = (u_char)i;
 	      }
 
 	gy2 = ymax + i;
@@ -2212,7 +2219,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0]) {
 		 vpnt->x=j;
 		 vpnt->y=gy2;
-		 if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy2) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy2) = (u_char)i;
 	      }
      }
      free(vpnt);
@@ -2251,7 +2258,7 @@ static int analyzeCongestion(BBOX box)
 		sidx = y - ymin;
 		score[sidx] = Num_layers;
 		for (x = xmin; x <= xmax; x++) {
-			if(check_point_area(box,vpnt,TRUE)) {
+			if(check_point_area(box,vpnt,FALSE)) {
 				for (i = 0; i < Num_layers; i++) {
 					n = OBSVAL(x, y, i);
 					if (n & ROUTED_NET) score[sidx]++;
@@ -2344,7 +2351,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   vpnt->x=i;
 	   vpnt->y=j;
-	   if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(i, j) = (u_char)0;
+	   if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2356,12 +2363,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gy1 >= 0) {
 	      vpnt->x=j;
 	      vpnt->y=gy1;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy1) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy1) = (u_char)i;
 	   }
 	   if (gy2 < NumChannelsY[0]) {
 	      vpnt->x=j;
 	      vpnt->y=gy2;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy2) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy2) = (u_char)i;
 	   }
 	}
 	gx1 = xmin - slack - i;
@@ -2371,12 +2378,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gx1 >= 0) {
 	      vpnt->x=gx1;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, j) = (u_char)i;
 	   }
 	   if (gx2 < NumChannelsX[0]) {
 	      vpnt->x=gx2;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx2, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx2, j) = (u_char)i;
 	   }
 	}
      }
@@ -2392,7 +2399,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   vpnt->x=i;
 	   vpnt->y=j;
-	   if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(i, j) = (u_char)0;
+	   if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2404,12 +2411,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gx1 >= 0) {
 	      vpnt->x=gx1;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx1, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, j) = (u_char)i;
 	   }
 	   if (gx2 < NumChannelsX[0]) {
 	      vpnt->x=gx2;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(gx2, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx2, j) = (u_char)i;
 	   }
 	}
 	gy1 = ymin - slack - i;
@@ -2419,12 +2426,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gy1 >= 0) {
 	      vpnt->x=j;
 	      vpnt->y=gy1;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy1) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy1) = (u_char)i;
 	   }
 	   if (gy2 < NumChannelsY[0]) {
 	      vpnt->x=j;
 	      vpnt->y=gy2;
-	      if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(j, gy2) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy2) = (u_char)i;
 	   }
 	}
      }
@@ -2525,7 +2532,7 @@ static void fillMask(NET net, u_char value) {
 	vpnt = create_point(0,0,0);
 	for(vpnt->x=p1->x;vpnt->x<p2->x;vpnt->x++) {
 		for(vpnt->y=p1->y;vpnt->y<p2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,TRUE)) RMASK(vpnt->x, vpnt->y) = value;
+			if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(vpnt->x, vpnt->y) = value;
 		}
 	}
 	free(vpnt);
@@ -2590,9 +2597,15 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   /* Set up Obs2[] matrix for first route */
 
+  int num_points=0;
+  for (POINT p=iroute.glist; p; p=p->next) num_points++;
+  printf("%s num points before route_setup %d\n",__FUNCTION__,num_points);
   result = route_setup(net, &iroute, stage);
+  num_points=0;
+  for (POINT p=iroute.glist; p; p=p->next) num_points++;
+  printf("%s num points after route_setup %d\n",__FUNCTION__,num_points);
   unroutable = result - 1;
-  if (graphdebug) highlight_mask();
+  //if (graphdebug) highlight_mask();
 
   // Keep going until we are unable to route to a terminal
 
@@ -2611,17 +2624,18 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 	       net->netnum, net->netnodes->nodenum);
      }
 
+     num_points=0;
+     for (POINT p=iroute.glist; p; p=p->next) num_points++;
+     printf("%s num points before route_segs %d\n",__FUNCTION__,num_points);
      result = route_segs(&iroute, stage, graphdebug);
 
      if (result < 0) {		// Route failure.
-
 	// If we failed this on the last round, then stop
 	// working on this net and move on to the next.
-	if (FailedNets && (FailedNets->net == net)) break;
+	if(is_failed_net(net))  break;
 	FailedNets = 	postpone_net(FailedNets,net);
 	free(rt1);
-     }
-     else {
+     } else {
         Tcl_MutexLock(&TotalRoutesMutex);
         TotalRoutes++;
         Tcl_MutexUnlock(&TotalRoutesMutex);
@@ -2633,8 +2647,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
         else {
 	   net->routes = rt1;
         }
-        //if(graphdebug) sleep(10);
-        //draw_net(net, TRUE, &lastlayer);
+        if(graphdebug) sleep(2);
      }
 
      // For power routing, clear the list of existing pending route
@@ -2715,15 +2728,13 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	    else if (rval < 0) return -1;
 	}
      }
-  }
-  else {
+  } else {
 
      for (rt = iroute->net->routes; (rt && rt->next); rt = rt->next);
 
      // Set positions on last route to PR_SOURCE
      if (rt) {
-	//result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, stage);
-
+	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, stage);
         if (result == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
            return -1;
@@ -2747,7 +2758,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,TRUE)) {
+			if(check_point_area(net->bbox,vpnt,FALSE)) {
 				if(Nodeinfo[vpnt->layer]) if(NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)) {
 					node = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc;
 					if (node != (NODE)NULL)
@@ -2814,7 +2825,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,TRUE)) {
+			if(check_point_area(net->bbox,vpnt,FALSE)) {
 				netnum = OBSVAL(vpnt->x, vpnt->y, vpnt->layer) & (~BLOCKED_MASK);
 				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
 				if (netnum != 0) {
@@ -2932,7 +2943,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 		for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 			for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-				if(check_point_area(net->bbox,vpnt,TRUE)) {
+				if(check_point_area(net->bbox,vpnt,FALSE)) {
 					if(NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)) {
 						iroute->nsrc = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc;
 						if (iroute->nsrc != (NODE)NULL)
@@ -3090,7 +3101,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
       if (Pr->flags & PR_TARGET) {
 
- 	 if (curpt.cost < best.cost) {
+ 	 if (curpt.cost <= best.cost) {
 	    if (first) {
 	       if (Verbose > 2)
 		  FprintfT(stdout, "%s: Found a route of cost \n",__FUNCTION__);
@@ -3110,7 +3121,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
 	    // If a complete route has been found, then there's no point
 	    // in searching paths with a greater cost than this one.
-	    if (best.cost < iroute->maxcost) iroute->maxcost = best.cost;
+	    if (best.cost <= iroute->maxcost) iroute->maxcost = best.cost;
 	 }
 
          // Don't continue processing from the target

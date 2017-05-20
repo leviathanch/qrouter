@@ -563,7 +563,7 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 		if (dtap == NULL) continue;
 		vpnt->x=dtap->gridx;
 		vpnt->y=dtap->gridy;
-		ok=check_point_area(vbox, vpnt,TRUE);
+		ok=check_point_area(vbox, vpnt,FALSE);
 		if(!ok) {
 			free(vpnt);
 			return FALSE;

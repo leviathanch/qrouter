@@ -2825,7 +2825,10 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,FALSE)) {
+			if(point_on_edge(net->bbox,vpnt)) {
+				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
+				Pr->prdata.net = DRC_BLOCKAGE;
+			} else if(check_point_area(net->bbox,vpnt,FALSE)) {
 				netnum = OBSVAL(vpnt->x, vpnt->y, vpnt->layer) & (~BLOCKED_MASK);
 				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
 				if (netnum != 0) {

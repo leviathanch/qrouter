@@ -1335,7 +1335,7 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
 
    vpnt = create_point(ept->x, ept->y, ept->lay);
    if(!check_point_area(net->bbox,vpnt,FALSE)) {
-      FprintfT(stderr, "commit_proute(): impossible - terminal not within boundaries!\n");
+      FprintfT(stdout, "commit_proute(): impossible - terminal not within boundaries!\n");
       free(vpnt);
       return -1;
    }

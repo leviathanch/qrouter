@@ -57,6 +57,7 @@ BOOL check_bbox_collisions(NET net, BOOL thread);
 NETLIST get_bbox_collisions(NET net, BOOL thread);
 BOOL resolve_bbox_collisions(NET net, BOOL thread);
 BOOL check_single_bbox_collision(BBOX box1, BBOX box2);
+BOOL point_on_edge(BBOX box, POINT pnt);
 
 #define NODE_H
 #endif 

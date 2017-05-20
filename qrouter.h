@@ -11,9 +11,6 @@
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 
-#define BOX_SPACING_X 2
-#define BOX_SPACING_Y 2
-
 #define DEBUG_DELAY 500
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
@@ -348,8 +345,8 @@ struct routeinfo_ {
 };
 
 #define MAXRT		100000		// "Infinite" route cost
-#define BOX_ROOM_X 2
-#define BOX_ROOM_Y 2
+#define BOX_ROOM_X 4
+#define BOX_ROOM_Y 4
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect

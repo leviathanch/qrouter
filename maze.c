@@ -199,8 +199,12 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_PROCESSED) {
 		Pr->flags &= ~PR_PROCESSED;
 		gpoint = create_point(x,y,lay);
-		gpoint->next = *pushlist;
-		*pushlist = gpoint;
+		if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+			gpoint->next = *pushlist;
+			*pushlist = gpoint;
+		} else {
+			free(gpoint);
+		}
 	    }
 	 }
       }
@@ -215,8 +219,12 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 		if (Pr->flags & PR_PROCESSED) {
 		    Pr->flags &= ~PR_PROCESSED;
 		    gpoint = create_point(x,y,lay);
-		    gpoint->next = *pushlist;
-		    *pushlist = gpoint;
+		    if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+			gpoint->next = *pushlist;
+			*pushlist = gpoint;
+		    } else {
+			free(gpoint);
+		    }
 		}
 	    }
          }
@@ -407,8 +415,12 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
 
 	  if (pushlist != NULL) {
 	     gpoint = create_point(x,y,lay);
-	     gpoint->next = *pushlist;
-	     *pushlist = gpoint;
+	     if(check_point_area(bbox,gpoint,FALSE,WIRE_ROOM)) {
+		     gpoint->next = *pushlist;
+		     *pushlist = gpoint;
+	     } else {
+		     free(gpoint);
+	     }
 	  }
 	  found_one = (u_char)1;
        }
@@ -449,8 +461,12 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char 
 
 	  if (pushlist != NULL) {
 	     gpoint = create_point(x,y,lay);
-	     gpoint->next = *pushlist;
-	     *pushlist = gpoint;
+	     if(check_point_area(bbox,gpoint,FALSE,WIRE_ROOM)) {
+		     gpoint->next = *pushlist;
+		     *pushlist = gpoint;
+	     } else {
+		     free(gpoint);
+	     }
 	  }
 	  found_one = (u_char)1;
        }
@@ -540,6 +556,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
     SEG seg;
     NODE n2;
     PROUTE *Pr;
+    POINT vpnt = create_point(0,0,0);
 
     if (rt) if(rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
@@ -547,51 +564,55 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 	    x = seg->x1;
 	    y = seg->y1;
 	    while (1) {
-		Pr = &OBS2VAL(x, y, lay);
-		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
-		// Conflicts should not happen (check for this?)
-		// if (Pr->prdata.net != node->netnum) Pr->flags |= PR_CONFLICT;
-		Pr->prdata.cost = (newflags == PR_SOURCE) ? 0 : MAXRT;
-
-		// push this point on the stack to process
-
 		if (pushlist != NULL) {
 			gpoint = create_point(x,y,lay);
-			if(!check_point_area(net->bbox,gpoint,FALSE)) {
-				printf("%s point not in box!\n",__FUNCTION__);
+			if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+				Pr = &OBS2VAL(x, y, lay);
+				Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
+				// Conflicts should not happen (check for this?)
+				// if (Pr->prdata.net != node->netnum) Pr->flags |= PR_CONFLICT;
+				Pr->prdata.cost = (newflags == PR_SOURCE) ? 0 : MAXRT;
+				// push this point on the stack to process
+				gpoint->next = *pushlist;
+				*pushlist = gpoint;
+				// If we found another node connected to the route,
+				// then process it, too.
+
+				lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
+				n2 = (lnode) ? lnode->nodeloc : NULL;
+				if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
+					if (newflags == PR_SOURCE) clear_target_node(n2);
+					result = set_node_to_net(n2, newflags, pushlist, net->bbox, stage);
+					// On error, continue processing
+				}
+
+				// Process top part of via
+				if (seg->segtype & ST_VIA) {
+					if (lay != seg->layer) break;
+					lay++;
+					continue;
+				}
+				// Move to next grid position in segment
+				if (x == seg->x2 && y == seg->y2) break;
+				if (seg->x2 > seg->x1) 	x++;
+				else if (seg->x2 < seg->x1) x--;
+				else if (seg->y2 > seg->y1) y++;
+				else if (seg->y2 < seg->y1) y--;
+				vpnt->x=x;
+				vpnt->y=y;
+				vpnt->layer=lay;
+				//if(!check_point_area(net->bbox,vpnt,FALSE)) break;
+			} else {
 				free(gpoint);
 				break;
 			}
-			gpoint->next = *pushlist;
-			*pushlist = gpoint;
+		} else {
+			break;
 		}
-
-		// If we found another node connected to the route,
-		// then process it, too.
-
-		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
-		n2 = (lnode) ? lnode->nodeloc : NULL;
-		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
-		   if (newflags == PR_SOURCE) clear_target_node(n2);
-		   result = set_node_to_net(n2, newflags, pushlist, net->bbox, stage);
-		   // On error, continue processing
-		}
-
-		// Process top part of via
-		if (seg->segtype & ST_VIA) {
-		   if (lay != seg->layer) break;
-		   lay++;
-		   continue;
-		}
-		// Move to next grid position in segment
-		if (x == seg->x2 && y == seg->y2) break;
-		if (seg->x2 > seg->x1) x++;
-		else if (seg->x2 < seg->x1) x--;
-		if (seg->y2 > seg->y1) y++;
-		else if (seg->y2 < seg->y1) y--;
 	    }
 	}
     }
+    free(vpnt);
     return result;
 }
 
@@ -600,7 +621,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 /* to SOURCE in Obs2[]						*/
 /*--------------------------------------------------------------*/
 
-int set_routes_to_net(NET net, int newflags, POINT *pushlist, BBOX bbox, u_char stage)
+int set_routes_to_net(NET net, int newflags, POINT *pushlist, u_char stage)
 {
     ROUTE rt;
     int result = 0;
@@ -1042,13 +1063,12 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     // so that routing over it could block it entirely.
 
     if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
-	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL)
-		&& ((node = lnode->nodeloc) != NULL)) {
+	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL) && ((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay - 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
-		if (node->taps && (node->taps->next == NULL))
-		   thiscost += BlockCost;	// Cost to block out a tap
-		else if (node->taps == NULL) {
+		if (node->taps) if(node->taps->next == NULL) {
+			thiscost += BlockCost;	// Cost to block out a tap
+		} else if (node->taps == NULL) {
 		   if (node->extend != NULL) {
 			if (node->extend->next == NULL)
 			   // Node has only one extended access point:  Try
@@ -1067,8 +1087,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	}
     }
     if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
-	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1)) != (NODEINFO)NULL)
-		&& ((node = lnode->nodeloc) != NULL)) {
+	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1)) != (NODEINFO)NULL)) if(((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay + 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
 		if (node->taps && (node->taps->next == NULL))
@@ -1114,7 +1133,12 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  ptret = create_point(newpt.x,newpt.y,newpt.lay);
 	  ptret->next = NULL;
 	  Pr->flags |= PR_ON_STACK;
-	  return ptret;
+	  if(check_point_area(net->bbox,ptret,FALSE,WIRE_ROOM)) {
+		  return ptret;
+	  } else {
+		  free(ptret);
+		  return NULL;
+	  }
        }
     }
     return NULL;	// New position did not get a lower cost
@@ -1325,21 +1349,12 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
    u_char pflags, p2flags;
    PROUTE *Pr;
    POINT newlr, newlr2, lrtop, lrend, lrnext, lrcur, lrprev;
-   POINT vpnt;
 
    if (Verbose > 1) {
       FprintfT(stdout, "\n%s: commit: TotalRoutes = %d\n", __FUNCTION__, TotalRoutes);
    }
 
    netnum = rt->netnum;
-
-   vpnt = create_point(ept->x, ept->y, ept->lay);
-   if(!check_point_area(net->bbox,vpnt,FALSE)) {
-      FprintfT(stdout, "commit_proute(): impossible - terminal not within boundaries!\n");
-      free(vpnt);
-      return -1;
-   }
-   free(vpnt);
 
    Pr = &OBS2VAL(ept->x, ept->y, ept->lay);
    if (!(Pr->flags & PR_COST)) {
@@ -1352,6 +1367,11 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
 
    lrtop = create_point(ept->x,ept->y,ept->lay);
    lrend = lrtop;
+   if (!check_point_area(net->bbox,lrtop,FALSE,WIRE_ROOM)) {
+      FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
+      free(lrtop);
+      return -1;
+   }
 
    while (1) {
 

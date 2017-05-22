@@ -2182,7 +2182,7 @@ static void createBboxMask(NET net, u_char halo)
 	for (gy1 = ymin; gy1 <= ymax; gy1++) {
 	    vpnt->x=gx1;
 	    vpnt->y=gy1;
-	    if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, gy1) = (u_char)0;
+	    if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx1, gy1) = (u_char)0;
 	}
 
     for (i = 1; i <= halo; i++) {
@@ -2192,7 +2192,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsY[0]) {
 		 vpnt->x=gx1;
 		 vpnt->y=j;
-		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, j) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx1, j) = (u_char)i;
 	      }
 
 	gx2 = xmax + i;
@@ -2201,7 +2201,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsY[0]) {
 		 vpnt->x=gx2;
 		 vpnt->y=j;
-		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx2, j) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx2, j) = (u_char)i;
 	      }
 
 	gy1 = ymin - i;
@@ -2210,7 +2210,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0]) {
 		 vpnt->x=j;
 		 vpnt->y=gy1;
-		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy1) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(j, gy1) = (u_char)i;
 	      }
 
 	gy2 = ymax + i;
@@ -2219,7 +2219,7 @@ static void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0]) {
 		 vpnt->x=j;
 		 vpnt->y=gy2;
-		 if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy2) = (u_char)i;
+		 if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(j, gy2) = (u_char)i;
 	      }
      }
      free(vpnt);
@@ -2258,7 +2258,7 @@ static int analyzeCongestion(BBOX box)
 		sidx = y - ymin;
 		score[sidx] = Num_layers;
 		for (x = xmin; x <= xmax; x++) {
-			if(check_point_area(box,vpnt,FALSE)) {
+			if(check_point_area(box,vpnt,FALSE,WIRE_ROOM)) {
 				for (i = 0; i < Num_layers; i++) {
 					n = OBSVAL(x, y, i);
 					if (n & ROUTED_NET) score[sidx]++;
@@ -2351,7 +2351,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   vpnt->x=i;
 	   vpnt->y=j;
-	   if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(i, j) = (u_char)0;
+	   if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2363,12 +2363,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gy1 >= 0) {
 	      vpnt->x=j;
 	      vpnt->y=gy1;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy1) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(j, gy1) = (u_char)i;
 	   }
 	   if (gy2 < NumChannelsY[0]) {
 	      vpnt->x=j;
 	      vpnt->y=gy2;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy2) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(j, gy2) = (u_char)i;
 	   }
 	}
 	gx1 = xmin - slack - i;
@@ -2378,12 +2378,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gx1 >= 0) {
 	      vpnt->x=gx1;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx1, j) = (u_char)i;
 	   }
 	   if (gx2 < NumChannelsX[0]) {
 	      vpnt->x=gx2;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx2, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx2, j) = (u_char)i;
 	   }
 	}
      }
@@ -2399,7 +2399,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (j < 0 || j >= NumChannelsY[0]) continue;
 	   vpnt->x=i;
 	   vpnt->y=j;
-	   if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(i, j) = (u_char)0;
+	   if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(i, j) = (u_char)0;
 	}
      }
 
@@ -2411,12 +2411,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gx1 >= 0) {
 	      vpnt->x=gx1;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx1, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx1, j) = (u_char)i;
 	   }
 	   if (gx2 < NumChannelsX[0]) {
 	      vpnt->x=gx2;
 	      vpnt->y=j;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(gx2, j) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(gx2, j) = (u_char)i;
 	   }
 	}
 	gy1 = ymin - slack - i;
@@ -2426,12 +2426,12 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if (gy1 >= 0) {
 	      vpnt->x=j;
 	      vpnt->y=gy1;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy1) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(j, gy1) = (u_char)i;
 	   }
 	   if (gy2 < NumChannelsY[0]) {
 	      vpnt->x=j;
 	      vpnt->y=gy2;
-	      if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(j, gy2) = (u_char)i;
+	      if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(j, gy2) = (u_char)i;
 	   }
 	}
      }
@@ -2532,7 +2532,7 @@ static void fillMask(NET net, u_char value) {
 	vpnt = create_point(0,0,0);
 	for(vpnt->x=p1->x;vpnt->x<p2->x;vpnt->x++) {
 		for(vpnt->y=p1->y;vpnt->y<p2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,FALSE)) RMASK(vpnt->x, vpnt->y) = value;
+			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(vpnt->x, vpnt->y) = value;
 		}
 	}
 	free(vpnt);
@@ -2596,14 +2596,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   lastlayer = -1;
 
   /* Set up Obs2[] matrix for first route */
-
-  int num_points=0;
-  for (POINT p=iroute.glist; p; p=p->next) num_points++;
-  printf("%s num points before route_setup %d\n",__FUNCTION__,num_points);
   result = route_setup(net, &iroute, stage);
-  num_points=0;
-  for (POINT p=iroute.glist; p; p=p->next) num_points++;
-  printf("%s num points after route_setup %d\n",__FUNCTION__,num_points);
   unroutable = result - 1;
   //if (graphdebug) highlight_mask();
 
@@ -2611,9 +2604,10 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   while (net && (result > 0)) {
 
-     if (graphdebug) highlight_source();
-     if (graphdebug) highlight_dest();
-     if (graphdebug) highlight_starts(iroute.glist);
+     //if (graphdebug) highlight_source();
+     //if (graphdebug) highlight_dest();
+     //if (graphdebug) highlight_starts(iroute.glist);
+     //if(graphdebug) sleep(2);
 
      rt1 = createemptyroute();
      rt1->netnum = net->netnum;
@@ -2624,9 +2618,6 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 	       net->netnum, net->netnodes->nodenum);
      }
 
-     num_points=0;
-     for (POINT p=iroute.glist; p; p=p->next) num_points++;
-     printf("%s num points before route_segs %d\n",__FUNCTION__,num_points);
      result = route_segs(&iroute, stage, graphdebug);
 
      if (result < 0) {		// Route failure.
@@ -2755,15 +2746,19 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   POINT pt1 = get_left_lower_trunk_point(net->bbox);
   POINT pt2 = get_right_upper_trunk_point(net->bbox);
   POINT vpnt = create_point(0,0,0);
+  NODEINFO nodeptr;
   for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,FALSE)) {
-				if(Nodeinfo[vpnt->layer]) if(NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)) {
-					node = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc;
-					if (node != (NODE)NULL)
-						if (node->netnum == iroute->net->netnum)
-							NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc = (NODE)NULL;
+			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
+				if(Nodeinfo[vpnt->layer]) {
+					nodeptr = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer);
+					if(nodeptr) {
+						node = nodeptr->nodeloc;
+						if (node != (NODE)NULL)
+							if (node->netnum == iroute->net->netnum)
+								nodeptr->nodeloc = (NODE)NULL;
+					}
 				}
 			}
 		}
@@ -2825,10 +2820,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 		for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-			if(point_on_edge(net->bbox,vpnt)) {
-				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
-				Pr->prdata.net = DRC_BLOCKAGE;
-			} else if(check_point_area(net->bbox,vpnt,FALSE)) {
+			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
 				netnum = OBSVAL(vpnt->x, vpnt->y, vpnt->layer) & (~BLOCKED_MASK);
 				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
 				if (netnum != 0) {
@@ -2841,6 +2833,9 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 					Pr->flags = PR_COST;		// This location is routable
 					Pr->prdata.cost = MAXRT;
 				}
+			} else if(check_point_area(net->bbox,vpnt,TRUE,0)) {
+				Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
+				Pr->prdata.net = DRC_BLOCKAGE;
 			}
 		}
 	}
@@ -2895,7 +2890,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      if (iroute->do_pwrbus == FALSE) {
 
         // Set associated routes to PR_SOURCE
-        rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist, iroute->bbox, stage);
+        rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist, stage);
 
         if (rval == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
@@ -2946,7 +2941,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 		for(vpnt->x=pt1->x;vpnt->x<pt2->x;vpnt->x++) {
 			for(vpnt->y=pt1->y;vpnt->y<pt2->y;vpnt->y++) {
-				if(check_point_area(net->bbox,vpnt,FALSE)) {
+				if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
 					if(NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)) {
 						iroute->nsrc = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)->nodeloc;
 						if (iroute->nsrc != (NODE)NULL)
@@ -3079,6 +3074,11 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
+      if(!check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+	      Pr->flags &= ~PR_ON_STACK;
+	      freePOINT(gpoint);
+	      continue;
+      }
 	
       Pr = &OBS2VAL(curpt.x, curpt.y, curpt.lay);
 
@@ -3091,7 +3091,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       /*if (graphdebug) highlight_mask();
       if (graphdebug) highlight_source();
       if (graphdebug) highlight_dest();*/
-      if (graphdebug) highlight(curpt.x, curpt.y);
+      //if (graphdebug) highlight(curpt.x, curpt.y);
       //if (graphdebug) draw_ratnet(net);
 
       if (Pr->flags & PR_COST)
@@ -3192,6 +3192,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       // pulled and processed.  Therefore we evaluate and drop positions to check
       // on the stack in reverse order (5 to 0).
 
+      POINT vpnt = create_point(curpt.x,curpt.x,curpt.lay);
       for (i = 5; i >= 0; i--) {
 	 predecessor = 0;
 	 switch (check_order[i]) {
@@ -3199,7 +3200,10 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case EAST:
 	       predecessor |= PR_PRED_W;
-               if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
+	       vpnt->x = curpt.x + 1;
+	       vpnt->y = curpt.y;
+	       vpnt->layer = curpt.lay;
+               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
          	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3211,7 +3215,10 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case WEST:
 	       predecessor |= PR_PRED_E;
-               if ((curpt.x - 1) >= 0) {
+	       vpnt->x = curpt.x - 1;
+	       vpnt->y = curpt.y;
+	       vpnt->layer = curpt.lay;
+               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
          	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3223,7 +3230,10 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
-               if ((curpt.y - 1) >= 0) {
+	       vpnt->x = curpt.x;
+	       vpnt->y = curpt.y - 1;
+	       vpnt->layer = curpt.lay;
+               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
          	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3235,7 +3245,10 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
-               if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
+	       vpnt->x = curpt.x;
+	       vpnt->y = curpt.y + 1;
+	       vpnt->layer = curpt.lay;
+               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
          	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3247,27 +3260,38 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case DOWN:
 	       predecessor |= PR_PRED_U;
-               if (curpt.lay > 0) {
-         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
-         	  }
-               }
+	       vpnt->x = curpt.x;
+	       vpnt->y = curpt.y;
+	       vpnt->layer = curpt.lay;
+	       if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
+			if (curpt.lay > 0) {
+				if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
+					gpoint->next = iroute->glist;
+					iroute->glist = gpoint;
+				}
+			}
+	       }
 	       break;
          
 	    case UP | PR_CONFLICT:
 	       predecessor = PR_CONFLICT;
 	    case UP:
 	       predecessor |= PR_PRED_D;
-               if (curpt.lay < (Num_layers - 1)) {
-         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
-         	  }
-               }
+	       vpnt->x = curpt.x;
+	       vpnt->y = curpt.y;
+	       vpnt->layer = curpt.lay;
+	       if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
+			if (curpt.lay < (Num_layers - 1)) {
+				if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
+					gpoint->next = iroute->glist;
+					iroute->glist = gpoint;
+				}
+			}
+	       }
 	       break;
             }
          }
+         free(vpnt);
 
       // Mark this node as processed
       Pr->flags |= PR_PROCESSED;

@@ -368,11 +368,10 @@ map_estimate()
 /*--------------------------------------*/
 TCL_DECLARE_MUTEX(draw_net_m);
 void draw_net(NET net, u_char single, int *lastlayer) {
-
+    Tcl_MutexLock(&draw_net_m);
     int layer;
     SEG seg;
     ROUTE rt;
-    Tcl_MutexLock(&draw_net_m);
 
     if (dpy == NULL) return;
 
@@ -428,8 +427,10 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
 /*--------------------------------------*/
+TCL_DECLARE_MUTEX(draw_net_bbox_m);
 static void
 draw_net_bbox(NET net) {
+	Tcl_MutexLock(&draw_net_bbox_m);
 	int x1, x2, y1, y2;
 	POINT p1, p2;
 
@@ -475,6 +476,8 @@ draw_net_bbox(NET net) {
 	free(p1);
 	free(p2);
 	}
+	usleep(DEBUG_DELAY);
+	Tcl_MutexUnlock(&draw_net_bbox_m);
 }
 
 /*--------------------------------------*/

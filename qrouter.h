@@ -7,7 +7,7 @@
 
 #ifndef QROUTER_H
 
-#define THREADS 1
+#define THREADS 4
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 
@@ -287,6 +287,10 @@ typedef struct bbox_ *BBOX;
 struct bbox_ {
 	BBOX_LINE edges;
 	int num_edges;
+	BOOL x1_exception;
+	BOOL y1_exception;
+	BOOL x2_exception;
+	BOOL y2_exception;
 };
 
 struct net_ {
@@ -345,8 +349,10 @@ struct routeinfo_ {
 };
 
 #define MAXRT		100000		// "Infinite" route cost
-#define BOX_ROOM_X 4
-#define BOX_ROOM_Y 4
+#define BOX_ROOM_X 3
+#define BOX_ROOM_Y 3
+#define TAP_ROOM 1
+#define WIRE_ROOM 2
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect

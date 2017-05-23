@@ -7,11 +7,15 @@
 
 #ifndef QROUTER_H
 
-#define THREADS 4
+#include <X11/Xlibint.h> // needed for type BOOL
+
+#define THREADS 6
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
+extern int numThreadsRunningG;
 
-#define DEBUG_DELAY 500
+#define DEBUG_DELAY 300
+#define PIXEL_DRAW_DELAY 200
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -49,8 +53,6 @@ typedef unsigned long  u_long;
 #if defined(__APPLE__)
 typedef int (*__compar_fn_t)(const void*, const void*);
 #endif
-
-typedef int BOOL;
 
 /* Maximum number of route layers */
 #define MAX_LAYERS    9

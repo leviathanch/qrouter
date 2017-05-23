@@ -60,7 +60,6 @@ main(argc, argv)
    char **argv;
 {
 //     set_limits(MAX_MEM,MAX_MEM);
-    XInitThreads();
     Tcl_Main(argc, argv, qrouter_AppInit);
     return 0;
 }

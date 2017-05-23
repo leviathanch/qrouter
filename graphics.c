@@ -55,11 +55,10 @@ int bluevector[LONGSPAN];
 /* Highlight a position on the graph.  Do this on the actual	*/
 /* screen, not the buffer.					*/
 /*--------------------------------------------------------------*/
-TCL_DECLARE_MUTEX(highlight_m);
 void highlight(int x, int y) {
+
     int i, xspc, yspc, hspc;
     PROUTE *Pr;
-    Tcl_MutexLock(&highlight_m);
 
     // If Obs2[] at x, y is a source or dest, don't highlight
     // Do this only for layer 0;  it doesn't have to be rigorous. 
@@ -76,19 +75,26 @@ void highlight(int x, int y) {
 
     XSetForeground(dpy, gc, yellowpix);
     XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
-    XFlush(dpy);
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&highlight_m);
 }
 
 /*--------------------------------------*/
 /* Highlight source (in magenta)	*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(highlight_source_m);
-void highlight_source() {
-    Tcl_MutexLock(&highlight_source_m);
+void highlight_source(NET net) {
+    POINT vpnt = create_point(0,0,0);
+    POINT pmax = get_right_upper_trunk_point(net->bbox);
+    POINT pmin = get_left_lower_trunk_point(net->bbox);
+    int xmax, ymax;
+    int xmin, ymin;
+    xmin = pmin->x;
+    ymin = pmin->y;
+    xmax = pmax->x;
+    ymax = pmax->y;
+    free(pmin);
+    free(pmax);
+
     int xspc, yspc, hspc;
-    int i, x, y;
+    int i;
     PROUTE *Pr;
 
     if (Obs2[0] == NULL) return;
@@ -101,32 +107,41 @@ void highlight_source() {
 
     // Draw source pins as magenta squares
     XSetForeground(dpy, gc, magentapix);
-    for (i = 0; i < Num_layers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
-	    xspc = (x + 1) * spacing - hspc;
-	    for (y = 0; y < NumChannelsY[i]; y++) {
-		Pr = &OBS2VAL(x, y, i);
-		if (Pr->flags & PR_SOURCE) {
-		    yspc = height - (y + 1) * spacing - hspc;
-		    XFillRectangle(dpy, win, gc, xspc, yspc,spacing, spacing);
-		}
+    for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
+	for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
+	    xspc = (vpnt->x + 1) * spacing - hspc;
+	    for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
+		    if(check_point_area(net->bbox,vpnt,TRUE,0)) {
+			Pr = &OBS2VAL(vpnt->x, vpnt->y, i);
+			if (Pr->flags & PR_SOURCE) {
+				yspc = height - (vpnt->y + 1) * spacing - hspc;
+				XFillRectangle(dpy, win, gc, xspc, yspc,spacing, spacing);
+			}
+		    }
 	    }
 	}
     }
-    XFlush(dpy);
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&highlight_source_m);
+    free(vpnt);
 }
 
 /*--------------------------------------*/
 /* Highlight destination (in purple)	*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(highlight_dest_m);
-void highlight_dest() {
+void highlight_dest(NET net) {
+    POINT vpnt = create_point(0,0,0);
+    POINT pmax = get_right_upper_trunk_point(net->bbox);
+    POINT pmin = get_left_lower_trunk_point(net->bbox);
+    int xmax, ymax;
+    int xmin, ymin;
+    xmin = pmin->x;
+    ymin = pmin->y;
+    xmax = pmax->x;
+    ymax = pmax->y;
+    free(pmin);
+    free(pmax);
+
     int xspc, yspc, hspc, dspc;
-    int i, x, y;
     PROUTE *Pr;
-    Tcl_MutexLock(&highlight_dest_m);
 
     if (Obs2[0] == NULL) return;
 
@@ -138,31 +153,28 @@ void highlight_dest() {
 
     // Draw destination pins as purple squares
     XSetForeground(dpy, gc, purplepix);
-    for (i = 0; i < Num_layers; i++) {
-	for (x = 0; x < NumChannelsX[i]; x++) {
-	    xspc = (x + 1) * spacing - hspc;
-	    for (y = 0; y < NumChannelsY[i]; y++) {
-		Pr = &OBS2VAL(x, y, i);
-		if (Pr->flags & PR_TARGET) {
-		    yspc = height - (y + 1) * spacing - hspc;
-		    XFillRectangle(dpy, win, gc, xspc, yspc,dspc, dspc);
+    for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
+	for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
+	    xspc = (vpnt->x + 1) * spacing - hspc;
+	   for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
+		   if(check_point_area(net->bbox,vpnt,TRUE,0)) {
+			Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
+			if (Pr->flags & PR_TARGET) {
+				yspc = height - (vpnt->y + 1) * spacing - hspc;
+				XFillRectangle(dpy, win, gc, xspc, yspc,dspc, dspc);
+			}
 		}
 	    }
 	}
     }
-    XFlush(dpy);
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&highlight_dest_m);
 }
 
 /*----------------------------------------------*/
 /* Highlight all the search starting points	*/
 /*----------------------------------------------*/
-TCL_DECLARE_MUTEX(highlight_starts_m);
 void highlight_starts(POINT glist) {
     int xspc, yspc, hspc;
     POINT gpoint;
-    Tcl_MutexLock(&highlight_starts_m);
 
     // Determine the number of routes per width and height, if
     // it has not yet been computed
@@ -175,19 +187,41 @@ void highlight_starts(POINT glist) {
 	yspc = height - (gpoint->y + 1) * spacing - hspc;
 	XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
     }
-    XFlush(dpy);
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&highlight_starts_m);
 }
 
 /*--------------------------------------*/
 /* Highlight mask (in tan)		*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(highlight_mask_m);
-void highlight_mask(void) {
-    Tcl_MutexLock(&highlight_mask_m);
+void draw_pixel(int color, int xspc, int yspc, int spacing)
+{
+	if(!dpy) return;
+	if(!gc) return;
+	if(!win) return;
+
+	XLockDisplay(dpy);
+	XSetForeground(dpy, gc, color);
+	XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
+	XUnlockDisplay(dpy);
+}
+
+TCL_DECLARE_MUTEX(drawing);
+void highlight_mask(NET net) {
+    if(!dpy) return;
+    if(!gc) return;
+    if(!win) return;
+
     int xspc, yspc, hspc;
-    int x, y;
+    POINT vpnt = create_point(0,0,0);
+    POINT pmax = get_right_upper_trunk_point(net->bbox);
+    POINT pmin = get_left_lower_trunk_point(net->bbox);
+    int xmax, ymax;
+    int xmin, ymin;
+    xmin = pmin->x;
+    ymin = pmin->y;
+    xmax = pmax->x;
+    ymax = pmax->y;
+    free(pmin);
+    free(pmax);
 
     if (RMask == NULL) return;
 
@@ -196,18 +230,24 @@ void highlight_mask(void) {
 
     hspc = spacing >> 1;
 
+    xmax--;
+    ymax--;
     // Draw destination pins as tan squares
-    for (x = 0; x < NumChannelsX[0]; x++) {
-	xspc = (x + 1) * spacing - hspc;
-	for (y = 0; y < NumChannelsY[0]; y++) {
-	    XSetForeground(dpy, gc, brownvector[RMASK(x, y)]);
-	    yspc = height - (y + 1) * spacing - hspc;
-	    XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
+    for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
+	Tcl_MutexLock(drawing);
+	xspc = (vpnt->x + 1) * spacing - hspc;
+	for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
+		if(check_point_area(net->bbox,vpnt,FALSE,0)) {
+			yspc = height - (vpnt->y + 1) * spacing - hspc;
+			draw_pixel(greenpix, xspc, yspc, spacing);
+			//draw_pixel(brownvector[RMASK(vpnt->x, vpnt->y)], xspc, yspc, spacing);
+			//usleep(PIXEL_DRAW_DELAY);
+		}
 	}
+	//XFlush(dpy);
+	Tcl_MutexUnlock(drawing);
     }
-    XFlush(dpy);
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&highlight_mask_m);
+    free(vpnt);
 }
 
 /*----------------------------------------------*/
@@ -235,7 +275,6 @@ map_obstruction()
 	    }
 	}
     }
-
     // Draw pins as gray squares
     XSetForeground(dpy, gc, graypix);
     for (i = 0; i < Pinlayers; i++) {
@@ -366,9 +405,7 @@ map_estimate()
 /*--------------------------------------*/
 /* Draw one net on the display		*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(draw_net_m);
 void draw_net(NET net, u_char single, int *lastlayer) {
-    Tcl_MutexLock(&draw_net_m);
     int layer;
     SEG seg;
     ROUTE rt;
@@ -421,23 +458,20 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 	XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);
 	XFlush(dpy);
     }
-    Tcl_MutexUnlock(&draw_net_m);
 }
 
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(draw_net_bbox_m);
 static void
 draw_net_bbox(NET net) {
-	Tcl_MutexLock(&draw_net_bbox_m);
 	int x1, x2, y1, y2;
 	POINT p1, p2;
 
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	if (net->bbox == NULL) return;
-	//if(net->bbox->num_edges<4) return;
+	if(net->bbox->num_edges<4) return;
 
 	if(net->bbox_color) {
 		if(!strcmp(net->bbox_color,"green"))
@@ -476,16 +510,12 @@ draw_net_bbox(NET net) {
 	free(p1);
 	free(p2);
 	}
-	usleep(DEBUG_DELAY);
-	Tcl_MutexUnlock(&draw_net_bbox_m);
 }
 
 /*--------------------------------------*/
 /* Draw the ratnet of the net on the display	*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(draw_ratnet_m);
 void draw_ratnet(NET net) {
-	Tcl_MutexLock(&draw_ratnet_m);
 	if (dpy == NULL) return;
 	if (net == NULL) return;
 	int x1, x2, y1, y2;
@@ -505,17 +535,13 @@ void draw_ratnet(NET net) {
 			XDrawLine(dpy, buffer, gc,x1*spacing,height-y1*spacing,x2*spacing,height-y2*spacing);
 		}
 	}
-	usleep(DEBUG_DELAY);
-	Tcl_MutexUnlock(&draw_ratnet_m);
 }
 
 /*--------------------------------------*/
 /* Draw one unrouted net on the display	*/
 /*--------------------------------------*/
-TCL_DECLARE_MUTEX(draw_net_nodes_m);
 static void
 draw_net_nodes(NET net) {
-    Tcl_MutexLock(&draw_net_nodes_m);
     NODE node;
     SEG bboxlist = NULL; /* bbox list of all the nodes in the net */
     SEG lastbbox, bboxit;
@@ -595,17 +621,13 @@ draw_net_nodes(NET net) {
         lastbbox = bboxit->next;
         free(bboxit);
     }
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&draw_net_nodes_m);
 }
 
 
 /*--------------------------------------*/
 /* Graphical display of the layout	*/
 /*--------------------------------------*/
-Tcl_MutexLock(&draw_layout_m);
 void draw_layout() {
-    Tcl_MutexLock(&draw_layout_m);
     int lastlayer;
     int i;
     NET net;
@@ -672,8 +694,6 @@ void draw_layout() {
 
     /* Copy double-buffer onto display window */
     XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);
-    usleep(DEBUG_DELAY);
-    Tcl_MutexUnlock(&draw_layout_m);
 }
 
 /*--------------------------------------*/
@@ -857,7 +877,6 @@ int recalc_spacing()
    yspc = height / (NumChannelsY[0] + 1);
    spacing = (xspc < yspc) ? xspc : yspc;
    if (spacing == 0) spacing = 1;
-
    return (spacing == oldspacing) ? 0 : 1;
 }
 
@@ -865,7 +884,6 @@ int recalc_spacing()
 
 void resize(Tk_Window tkwind, int locwidth, int locheight)
 {
-
    if ((locwidth == 0) || (locheight == 0)) return;
 
    if (buffer != (Pixmap)0)

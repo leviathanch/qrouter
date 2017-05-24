@@ -9,13 +9,19 @@
 
 #include <X11/Xlibint.h> // needed for type BOOL
 
-#define THREADS 6
+#define THREADS 1
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 extern int numThreadsRunningG;
 
 #define DEBUG_DELAY 300
 #define PIXEL_DRAW_DELAY 200
+
+#define MAXRT		100000		// "Infinite" route cost
+#define BOX_ROOM_X 4
+#define BOX_ROOM_Y 4
+#define TAP_ROOM 2
+#define WIRE_ROOM 0
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
@@ -349,12 +355,6 @@ struct routeinfo_ {
    int pwrbus_src;
    BBOX bbox;
 };
-
-#define MAXRT		100000		// "Infinite" route cost
-#define BOX_ROOM_X 3
-#define BOX_ROOM_Y 3
-#define TAP_ROOM 1
-#define WIRE_ROOM 2
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect

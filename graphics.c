@@ -233,20 +233,20 @@ void highlight_mask(NET net) {
     xmax--;
     ymax--;
     // Draw destination pins as tan squares
+    Tcl_MutexLock(drawing);
     for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
-	Tcl_MutexLock(drawing);
 	xspc = (vpnt->x + 1) * spacing - hspc;
 	for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
-		if(check_point_area(net->bbox,vpnt,FALSE,0)) {
+		if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
 			yspc = height - (vpnt->y + 1) * spacing - hspc;
-			draw_pixel(greenpix, xspc, yspc, spacing);
-			//draw_pixel(brownvector[RMASK(vpnt->x, vpnt->y)], xspc, yspc, spacing);
-			//usleep(PIXEL_DRAW_DELAY);
+			//draw_pixel(greenpix, xspc, yspc, spacing);
+			draw_pixel(brownvector[RMASK(vpnt->x, vpnt->y)], xspc, yspc, spacing);
 		}
 	}
 	//XFlush(dpy);
-	Tcl_MutexUnlock(drawing);
+	//usleep(PIXEL_DRAW_DELAY);
     }
+    Tcl_MutexUnlock(drawing);
     free(vpnt);
 }
 

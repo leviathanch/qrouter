@@ -360,13 +360,21 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
 	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
 	for(BBOX_LINE hll = hlines;hll;hll=hll->next) { // horizontal lower line hll
-		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,edge_distance)) {
+		if(bbox->y1_exception?
+			check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,FALSE,0):
+			check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,edge_distance)) {
 			for(BBOX_LINE vrl = vlines;vrl;vrl=vrl->next) { // vertical right line vrl
-				if(check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge,edge_distance)) {
+				if(bbox->x2_exception?
+					check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,FALSE,0):
+					check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge,edge_distance)) {
 					for(BBOX_LINE hul = hlines;hul;hul=hul->next) { // horizontal upper line hul
-						if(check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge,edge_distance)) {
+						if(bbox->y2_exception?
+							check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,FALSE,0):
+							check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge,edge_distance)) {
 							for(BBOX_LINE vll = vlines;vll;vll=vll->next) { // vertical left line vll
-								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,edge_distance)) {
+								if(bbox->x1_exception?
+									check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,FALSE,0):
+									check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,edge_distance)) {
 									return TRUE;
 								}
 							}

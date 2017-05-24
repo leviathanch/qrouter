@@ -73,8 +73,12 @@ void highlight(int x, int y) {
     xspc = (x + 1) * spacing - hspc;
     yspc = height - (y + 1) * spacing - hspc;
 
+    XLockDisplay(dpy);
+    FlushGC(dpy, gc);
     XSetForeground(dpy, gc, yellowpix);
     XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
+    XUnlockDisplay(dpy);
+    SyncHandle();
 }
 
 /*--------------------------------------*/
@@ -106,6 +110,8 @@ void highlight_source(NET net) {
     if (hspc == 0) hspc = 1;
 
     // Draw source pins as magenta squares
+    XLockDisplay(dpy);
+    FlushGC(dpy, gc);
     XSetForeground(dpy, gc, magentapix);
     for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
@@ -115,12 +121,14 @@ void highlight_source(NET net) {
 			Pr = &OBS2VAL(vpnt->x, vpnt->y, i);
 			if (Pr->flags & PR_SOURCE) {
 				yspc = height - (vpnt->y + 1) * spacing - hspc;
-				XFillRectangle(dpy, win, gc, xspc, yspc,spacing, spacing);
+				XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
 			}
 		    }
 	    }
 	}
     }
+    XUnlockDisplay(dpy);
+    SyncHandle();
     free(vpnt);
 }
 
@@ -152,6 +160,8 @@ void highlight_dest(NET net) {
     hspc = dspc >> 1;
 
     // Draw destination pins as purple squares
+    XLockDisplay(dpy);
+    FlushGC(dpy, gc);
     XSetForeground(dpy, gc, purplepix);
     for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
 	for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
@@ -161,12 +171,14 @@ void highlight_dest(NET net) {
 			Pr = &OBS2VAL(vpnt->x, vpnt->y, vpnt->layer);
 			if (Pr->flags & PR_TARGET) {
 				yspc = height - (vpnt->y + 1) * spacing - hspc;
-				XFillRectangle(dpy, win, gc, xspc, yspc,dspc, dspc);
+				XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
 			}
 		}
 	    }
 	}
     }
+    XUnlockDisplay(dpy);
+    SyncHandle();
 }
 
 /*----------------------------------------------*/
@@ -192,23 +204,13 @@ void highlight_starts(POINT glist) {
 /*--------------------------------------*/
 /* Highlight mask (in tan)		*/
 /*--------------------------------------*/
-void draw_pixel(int color, int xspc, int yspc, int spacing)
-{
-	if(!dpy) return;
-	if(!gc) return;
-	if(!win) return;
-
-	XLockDisplay(dpy);
-	XSetForeground(dpy, gc, color);
-	XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
-	XUnlockDisplay(dpy);
-}
-
 TCL_DECLARE_MUTEX(drawing);
 void highlight_mask(NET net) {
     if(!dpy) return;
     if(!gc) return;
     if(!win) return;
+    if(!net->bbox) return;
+    if(net->bbox->num_edges<4) return;
 
     int xspc, yspc, hspc;
     POINT vpnt = create_point(0,0,0);
@@ -233,20 +235,27 @@ void highlight_mask(NET net) {
     xmax--;
     ymax--;
     // Draw destination pins as tan squares
-    Tcl_MutexLock(drawing);
+    Tcl_MutexLock(&drawing);
+    XFlush(dpy);
+    XLockDisplay(dpy);
+    FlushGC(dpy, gc);
+    XSetForeground(dpy, gc, greenpix);
     for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
 	xspc = (vpnt->x + 1) * spacing - hspc;
 	for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
 		if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
 			yspc = height - (vpnt->y + 1) * spacing - hspc;
-			//draw_pixel(greenpix, xspc, yspc, spacing);
-			draw_pixel(brownvector[RMASK(vpnt->x, vpnt->y)], xspc, yspc, spacing);
+			//XSetForeground(dpy, gc, brownvector[RMASK(vpnt->x, vpnt->y)]);
+			XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
+			usleep(PIXEL_DRAW_DELAY);
 		}
 	}
-	//XFlush(dpy);
-	//usleep(PIXEL_DRAW_DELAY);
     }
-    Tcl_MutexUnlock(drawing);
+    XUnlockDisplay(dpy);
+    SyncHandle();
+    XFlush(dpy);
+    sleep(1);
+    Tcl_MutexUnlock(&drawing);
     free(vpnt);
 }
 
@@ -635,6 +644,9 @@ void draw_layout() {
     if (dpy == NULL) return;
     else if (buffer == (Pixmap)NULL) return;
 
+    XLockDisplay(dpy);
+    FlushGC(dpy, gc);
+
     XSetForeground(dpy, gc, whitepix);
     XFillRectangle(dpy, buffer, gc, 0, 0, width, height);
 
@@ -694,6 +706,9 @@ void draw_layout() {
 
     /* Copy double-buffer onto display window */
     XCopyArea(dpy, buffer, win, gc, 0, 0, width, height, 0, 0);
+
+    XUnlockDisplay(dpy);
+    SyncHandle();
 }
 
 /*--------------------------------------*/

@@ -794,6 +794,29 @@ static int post_def_setup()
    return 0;
 }
 
+NETLIST get_net_queue(NETLIST q, int debug_netnum)
+{
+	NET net;
+	for (int i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
+		net=getnettoroute(i);
+		if(!net) continue;
+		if(is_clknet(net)) {
+			Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__,  net->netname);
+			continue;
+		}
+		if(is_vddnet(net)) {
+			Fprintf(stdout,"%s: Post-Pony-ing VDD net %s\n", __FUNCTION__,  net->netname);
+			continue;
+		}
+		if(is_gndnet(net)) {
+			Fprintf(stdout,"%s: Post-Pony-ing GND net %s\n", __FUNCTION__,  net->netname);
+			continue;
+		}
+		q=postpone_net(q,net);
+	}
+	return q;
+}
+
 /*--------------------------------------------------------------*/
 /* read_def ---							*/
 /*								*/
@@ -803,6 +826,7 @@ static int post_def_setup()
 void read_def(char *filename)
 {
    double oscale, precis;
+   NETLIST nl;
 
    if ((filename == NULL) && (DEFfilename == NULL)) {
       Fprintf(stderr, "No DEF file specified, nothing to read.\n");
@@ -831,6 +855,9 @@ void read_def(char *filename)
 		1.0 / (double)Scales.iscale);
 
    post_def_setup();
+   nl=get_net_queue(nl, 0);
+   fit_all_bboxes(nl);
+   free_postponed(nl);
 }
 
 /*--------------------------------------------------------------*/
@@ -983,14 +1010,13 @@ void route_postponed_nets(NETLIST l, int *remaining, u_char graphdebug)
 		hide_all_nets();
 		for(int c=0;c<threadnum;c++) thread_params_list[c]->net->active=TRUE;
 		draw_layout();
-		if(graphdebug) sleep(1);
 		for(int c=0;c<threadnum;c++) {
 			netname = thread_params_list[c]->net->netname;
 			thret = Tcl_CreateThread(&idPtr,  &dofirststage_thread, thread_params_list[c], TCL_THREAD_STACK_DEFAULT, TCL_THREAD_JOINABLE);
 			if(thret == TCL_OK) {
 				threadIDs[c]=idPtr;
-				printf("%s: routing net %s\n", __FUNCTION__, netname);
-				//Fprintf(stdout, "%s: routing net %s\n", __FUNCTION__, netname);
+				if(graphdebug) FprintfT(stdout, "%s: routing net %s\n", __FUNCTION__, netname);
+				else Fprintf(stdout, "%s: routing net %s\n", __FUNCTION__, netname);
 				numThreadsRunningG++;
 			} else {
 				exit(0);
@@ -1004,31 +1030,7 @@ void route_postponed_nets(NETLIST l, int *remaining, u_char graphdebug)
 			CurNet[c]=NULL;
 		}
 		draw_layout();
-		if(graphdebug) sleep(1);
 	}
-}
-
-NETLIST get_net_queue(NETLIST q, int debug_netnum)
-{
-	NET net;
-	for (int i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
-		net=getnettoroute(i);
-		if(!net) continue;
-		if(is_clknet(net)) {
-			Fprintf(stdout,"%s: Post-Pony-ing clock net %s\n", __FUNCTION__,  net->netname);
-			continue;
-		}
-		if(is_vddnet(net)) {
-			Fprintf(stdout,"%s: Post-Pony-ing VDD net %s\n", __FUNCTION__,  net->netname);
-			continue;
-		}
-		if(is_gndnet(net)) {
-			Fprintf(stdout,"%s: Post-Pony-ing GND net %s\n", __FUNCTION__,  net->netname);
-			continue;
-		}
-		q=postpone_net(q,net);
-	}
-	return q;
 }
 
 int dofirststage(u_char graphdebug, int debug_netnum)
@@ -2545,7 +2547,6 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   result = route_setup(net, &iroute, stage);
   unroutable = result - 1;
   if(graphdebug) highlight_mask(net);
-  if(graphdebug) sleep(1);
 
   // Keep going until we are unable to route to a terminal
   while (net && (result > 0)) {
@@ -3017,10 +3018,11 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 freePOINT(gpoint);
 	 continue;
       }
-      //if (graphdebug) highlight_mask();
+      //if (graphdebug) highlight_mask(net);
       //if (graphdebug) highlight_source(net);
-      //if (graphdebug) highlight_dest();
+      //if (graphdebug) highlight_dest(net);
       //if (graphdebug) highlight(curpt.x, curpt.y);
+      if (graphdebug) usleep(DEBUG_DELAY);
 
       if (Pr->flags & PR_COST)
 	 curpt.cost = Pr->prdata.cost;	// Route points, including target

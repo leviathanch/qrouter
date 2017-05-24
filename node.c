@@ -273,7 +273,7 @@ BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
 #define CHECK_POINT_LEFT_VLINE 3
 #define CHECK_POINT_RIGHT_VLINE 4
 
-BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, int edge_distance)
+BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_ends, int edge_distance)
 {
 	if(!line) return FALSE;
 	if(!pnt) return FALSE;
@@ -308,7 +308,7 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, in
 			break;
 	}
 
-	if(with_edge) {
+	if(with_ends) {
 		if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
 			if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
 		if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
@@ -355,26 +355,22 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	POINT pt2 = get_right_upper_trunk_point(bbox);
 	if(!pt1) return FALSE;
 	if(!pt2) return FALSE;
-	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) return FALSE; // outside trunk
+	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) { // outside trunk
+		free(pt1);
+		free(pt2);
+		return FALSE;
+	}
 	// now check structure
 	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
 	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
 	for(BBOX_LINE hll = hlines;hll;hll=hll->next) { // horizontal lower line hll
-		if(bbox->y1_exception?
-			check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,FALSE,0):
-			check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,edge_distance)) {
+		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,edge_distance)) {
 			for(BBOX_LINE vrl = vlines;vrl;vrl=vrl->next) { // vertical right line vrl
-				if(bbox->x2_exception?
-					check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,FALSE,0):
-					check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge,edge_distance)) {
+				if(check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge,edge_distance)) {
 					for(BBOX_LINE hul = hlines;hul;hul=hul->next) { // horizontal upper line hul
-						if(bbox->y2_exception?
-							check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,FALSE,0):
-							check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge,edge_distance)) {
+						if(check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge,edge_distance)) {
 							for(BBOX_LINE vll = vlines;vll;vll=vll->next) { // vertical left line vll
-								if(bbox->x1_exception?
-									check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,FALSE,0):
-									check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,edge_distance)) {
+								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,edge_distance)) {
 									return TRUE;
 								}
 							}
@@ -586,7 +582,7 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 		vpnt->x=dtap->gridx;
 		vpnt->y=dtap->gridy;
 		if(net->bbox->x1_exception||net->bbox->y1_exception||net->bbox->x2_exception||net->bbox->y2_exception)
-			ok=check_point_area(vbox, vpnt,FALSE,0);
+			ok=check_point_area(vbox, vpnt,TRUE,0);
 		else
 			ok=check_point_area(vbox, vpnt,FALSE,TAP_ROOM);
 		if(!ok) {
@@ -858,6 +854,60 @@ BBOX_LINE get_cutout_edge(BBOX box1, BBOX box2)
 	return ret;
 }
 
+void fit_all_bboxes(NETLIST list)
+{
+	NET net;
+	for(NETLIST li=list;li;li=li->next) {
+		net=li->net;
+		if(net) if(net->bbox) if(net->bbox->edges) { 
+			for(BBOX_LINE l=net->bbox->edges;l;l=l->next) {
+				for(int lay=0;lay<Num_layers;lay++) {
+					if(l->pt1) {
+						if(l->pt1->x>NumChannelsX[lay]) {
+							l->pt1->x=NumChannelsX[lay];
+							net->bbox->x2_exception=TRUE;
+						}
+						if(l->pt1->y>NumChannelsY[lay]) {
+							l->pt1->y=NumChannelsY[lay];
+							net->bbox->y2_exception=TRUE;
+						}
+					}
+					if(l->pt2) {
+						if(l->pt2->x>NumChannelsX[lay]) {
+							l->pt2->x=NumChannelsX[lay];
+							net->bbox->x2_exception=TRUE;
+						}
+						if(l->pt2->y>NumChannelsY[lay]) {
+							l->pt2->y=NumChannelsY[lay];
+							net->bbox->y2_exception=TRUE;
+						}
+					}
+				}
+				if(l->pt1) {
+					if(l->pt1->x<0) {
+						l->pt1->x=0;
+						net->bbox->x1_exception=TRUE;
+					}
+					if(l->pt1->y<0) {
+						l->pt1->y=0;
+						net->bbox->y1_exception=TRUE;
+					}
+				}
+				if(l->pt2) {
+					if(l->pt2->x<0) {
+						l->pt2->x=0;
+						net->bbox->x1_exception=TRUE;
+					}
+					if(l->pt2->y<0) {
+						l->pt2->y=0;
+						net->bbox->y1_exception=TRUE;
+					}
+				}
+			}
+		}
+	}
+}
+
 BBOX delete_line_from_bbox(BBOX bbox, BBOX_LINE l)
 {
 	if(!l) return bbox;
@@ -1110,31 +1160,10 @@ void find_bounding_box(NET net)
       net->bbox->x2_exception=FALSE;
       net->bbox->y2_exception=FALSE;
 
-      if((x1-BOX_ROOM_X)<0) {
-	      printf("%s violates Xlowerbound\n",__FUNCTION__);
-	      printf("%s Xlowerbound %d\n",__FUNCTION__,(int)Xlowerbound);
-	      net->bbox->x1_exception=TRUE;
-      }
-      if((y1-BOX_ROOM_Y)<0) {
-	      printf("%s violates Ylowerbound\n",__FUNCTION__);
-	      printf("%s Ylowerbound %d\n",__FUNCTION__,(int)Ylowerbound);
-	      net->bbox->y1_exception=TRUE;
-      }
-      if((x2+BOX_ROOM_X)>Xupperbound) {
-	      printf("%s violates Xupperbound\n",__FUNCTION__);
-	      printf("%s Xupperbound %d\n",__FUNCTION__,(int)Xupperbound);
-	      net->bbox->y2_exception=TRUE;
-      }
-      if((y2+BOX_ROOM_Y)>Yupperbound) {
-	      printf("%s violates Yupperbound\n",__FUNCTION__);
-	      printf("%s Yupperbound %d\n",__FUNCTION__,(int)Yupperbound);
-	      net->bbox->y2_exception=TRUE;
-      }
-
-      x1=((x1-BOX_ROOM_X)>=0)?(x1-BOX_ROOM_X):0;
-      y1=((y1-BOX_ROOM_Y)>=0)?(y1-BOX_ROOM_Y):0;
-      x2=((x2+BOX_ROOM_X)<=Xupperbound)?(x2+BOX_ROOM_X):Xupperbound;
-      y2=((y2+BOX_ROOM_Y)<=Yupperbound)?(y2+BOX_ROOM_Y):Yupperbound;
+      x1-=BOX_ROOM_X;
+      y1-=BOX_ROOM_Y;
+      x2+=BOX_ROOM_X;
+      y2+=BOX_ROOM_Y;
 
       net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x1, y2); // left lower point -> left upper point
       net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x2, y1); // left lower point -> right lower point
@@ -2315,14 +2344,12 @@ void create_obstructions_inside_nodes(void)
 			 if (dy > ds->y1 && gridy >= 0) {
 			     int orignet = OBSVAL(gridx, gridy, ds->layer);
 
-			     if ((orignet & ROUTED_NET_MASK & ~ROUTED_NET)
-					== (u_int)node->netnum) {
+			     if ((orignet & ROUTED_NET_MASK & ~ROUTED_NET) == (u_int)node->netnum) {
 
 				// Duplicate tap point, or pre-existing
 				// route.   Don't re-process it if it is
 				// a duplicate.
-				if (((lnode = NODEIPTR(gridx, gridy, ds->layer)) != NULL)
-					&& (lnode->nodeloc != NULL)) {
+				if ((lnode = NODEIPTR(gridx, gridy, ds->layer))) if(lnode->nodeloc) {
 				    gridy++;
 				    continue;
 				}

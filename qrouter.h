@@ -9,13 +9,13 @@
 
 #include <X11/Xlibint.h> // needed for type BOOL
 
-#define THREADS 1
+#define THREADS 4
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 extern int numThreadsRunningG;
 
-#define DEBUG_DELAY 300
-#define PIXEL_DRAW_DELAY 200
+#define DEBUG_DELAY 500
+#define PIXEL_DRAW_DELAY 100
 
 #define MAXRT		100000		// "Infinite" route cost
 #define BOX_ROOM_X 4

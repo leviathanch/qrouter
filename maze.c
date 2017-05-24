@@ -1109,10 +1109,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     // Routes that reach nodes are given a cost based on the "quality"
     // of the node location:  higher cost given to stub routes and
     // offset positions.
-
-    if (nodeptr != NULL) {
-       thiscost += (int)(fabsf(nodeptr->stub) * (float)OffsetCost);
-    }
+    if (nodeptr) thiscost += (int)(fabsf(nodeptr->stub) * (float)OffsetCost);
    
     // Replace node information if cost is minimum
 

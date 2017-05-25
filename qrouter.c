@@ -1057,9 +1057,11 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    hide_all_nets();
    postponed=get_net_queue(postponed, debug_netnum);
    route_postponed_nets(postponed,&remaining,graphdebug);
-   //draw_layout();
-   //route_essential_nets(clknets,&remaining,graphdebug);
-   //draw_layout();
+   hide_all_nets();
+   draw_layout();
+   route_essential_nets(clknets,&remaining,graphdebug);
+   hide_all_nets();
+   draw_layout();
    /*route_essential_nets(vddnets,&remaining,graphdebug);
    draw_layout();
    route_essential_nets(gndnets,&remaining,graphdebug);
@@ -2546,7 +2548,6 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   /* Set up Obs2[] matrix for first route */
   result = route_setup(net, &iroute, stage);
   unroutable = result - 1;
-  if(graphdebug) highlight_mask(net);
 
   // Keep going until we are unable to route to a terminal
   while (net && (result > 0)) {
@@ -2698,7 +2699,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM))
 				if(Nodeinfo[vpnt->layer])
 					if((nodeptr = NODEIPTR(vpnt->x, vpnt->y, vpnt->layer)))
-						if((node = nodeptr->nodeloc))
+						if((node = nodeptr->nodeloc)&&(iroute->net))
 							if(node->netnum == iroute->net->netnum)
 								nodeptr->nodeloc = (NODE)NULL;
   free(vpnt);
@@ -3004,11 +3005,6 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
-      if(!check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
-	      Pr->flags &= ~PR_ON_STACK;
-	      freePOINT(gpoint);
-	      continue;
-      }
 	
       Pr = &OBS2VAL(curpt.x, curpt.y, curpt.lay);
 
@@ -3018,9 +3014,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 freePOINT(gpoint);
 	 continue;
       }
-      //if (graphdebug) highlight_mask(net);
-      //if (graphdebug) highlight_source(net);
-      //if (graphdebug) highlight_dest(net);
+      if (graphdebug) highlight_source(net);
+      if (graphdebug) highlight_dest(net);
       //if (graphdebug) highlight(curpt.x, curpt.y);
       if (graphdebug) usleep(DEBUG_DELAY);
 
@@ -3088,7 +3083,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 }
       }
       Pr->flags &= ~PR_ON_STACK;
-      freePOINT(gpoint);
+      free(gpoint);
 
       // check east/west/north/south, and bottom to top
 
@@ -3122,7 +3117,6 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
       // pulled and processed.  Therefore we evaluate and drop positions to check
       // on the stack in reverse order (5 to 0).
 
-      POINT vpnt = create_point(curpt.x,curpt.x,curpt.lay);
       for (i = 5; i >= 0; i--) {
 	 predecessor = 0;
 	 switch (check_order[i]) {
@@ -3130,75 +3124,54 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case EAST:
 	       predecessor |= PR_PRED_W;
-	       vpnt->x = curpt.x + 1;
-	       vpnt->y = curpt.y;
-	       vpnt->layer = curpt.lay;
-               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
-         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
+	       curpt.x++;
+	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
-                  }
-               }
+	       }
 	       break;
 
 	    case WEST | PR_CONFLICT:
 	       predecessor = PR_CONFLICT;
 	    case WEST:
 	       predecessor |= PR_PRED_E;
-	       vpnt->x = curpt.x - 1;
-	       vpnt->y = curpt.y;
-	       vpnt->layer = curpt.lay;
-               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
-         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
+	       curpt.x--;
+	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
-                  }
-               }
+	       }
 	       break;
          
 	    case SOUTH | PR_CONFLICT:
 	       predecessor = PR_CONFLICT;
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
-	       vpnt->x = curpt.x;
-	       vpnt->y = curpt.y - 1;
-	       vpnt->layer = curpt.lay;
-               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
-         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
+	       curpt.y--;
+	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
-                   }
-               }
+	       }
 	       break;
 
 	    case NORTH | PR_CONFLICT:
 	       predecessor = PR_CONFLICT;
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
-	       vpnt->x = curpt.x;
-	       vpnt->y = curpt.y + 1;
-	       vpnt->layer = curpt.lay;
-               if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
-         	  if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
+	       curpt.y++;
+	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
-                  }
-               }
+	       }
 	       break;
       
 	    case DOWN | PR_CONFLICT:
 	       predecessor = PR_CONFLICT;
 	    case DOWN:
 	       predecessor |= PR_PRED_U;
-	       vpnt->x = curpt.x;
-	       vpnt->y = curpt.y;
-	       vpnt->layer = curpt.lay;
-	       if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
-			if (curpt.lay > 0) {
-				if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
-					gpoint->next = iroute->glist;
-					iroute->glist = gpoint;
-				}
+	       if (curpt.lay > 0) {
+			if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
+				gpoint->next = iroute->glist;
+				iroute->glist = gpoint;
 			}
 	       }
 	       break;
@@ -3207,21 +3180,15 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case UP:
 	       predecessor |= PR_PRED_D;
-	       vpnt->x = curpt.x;
-	       vpnt->y = curpt.y;
-	       vpnt->layer = curpt.lay;
-	       if (check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
-			if (curpt.lay < (Num_layers - 1)) {
-				if ((gpoint = eval_pt(net,&curpt, predecessor, stage)) != NULL) {
-					gpoint->next = iroute->glist;
-					iroute->glist = gpoint;
-				}
+	       if (curpt.lay < (Num_layers - 1)) {
+			if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
+				gpoint->next = iroute->glist;
+				iroute->glist = gpoint;
 			}
 	       }
 	       break;
             }
          }
-         free(vpnt);
 
       // Mark this node as processed
       Pr->flags |= PR_PROCESSED;
@@ -3232,7 +3199,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     // If we found a route, save it and return
 
-    if (best.cost <= iroute->maxcost) {
+    if ((best.cost <= iroute->maxcost)) {
 	if (Verbose > 2) {
 	   FprintfT(stdout, "\n%s: Commit to a route of cost %d\n",__FUNCTION__, best.cost);
 	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n", best.x, best.y, curpt.x, curpt.y);

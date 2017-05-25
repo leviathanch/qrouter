@@ -47,6 +47,7 @@ BBOX_LINE get_fresh_line();
 BBOX_LINE clone_line(BBOX_LINE orig);
 POINT clone_point(POINT p);
 BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance);
+BOOL check_grid_point_area(BBOX bbox, GRIDP pnt, BOOL with_edge, int edge_distance);
 BBOX clone_bbox(BBOX orig);
 BOOL check_bbox_consistency(NET net, BBOX vbox);
 BOOL is_vddnet(NET net);

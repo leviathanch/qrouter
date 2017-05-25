@@ -236,25 +236,22 @@ void highlight_mask(NET net) {
     ymax--;
     // Draw destination pins as tan squares
     Tcl_MutexLock(&drawing);
-    XFlush(dpy);
-    XLockDisplay(dpy);
-    FlushGC(dpy, gc);
-    XSetForeground(dpy, gc, greenpix);
     for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
+	XFlush(dpy);
+	XLockDisplay(dpy);
+	FlushGC(dpy, gc);
 	xspc = (vpnt->x + 1) * spacing - hspc;
 	for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
-		if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
+		if(check_point_area(net->bbox,vpnt,TRUE,0)) {
 			yspc = height - (vpnt->y + 1) * spacing - hspc;
-			//XSetForeground(dpy, gc, brownvector[RMASK(vpnt->x, vpnt->y)]);
+			XSetForeground(dpy, gc, brownvector[RMASK(vpnt->x, vpnt->y)]);
 			XFillRectangle(dpy, win, gc, xspc, yspc, spacing, spacing);
-			usleep(PIXEL_DRAW_DELAY);
 		}
 	}
+	XUnlockDisplay(dpy);
+	SyncHandle();
     }
-    XUnlockDisplay(dpy);
-    SyncHandle();
     XFlush(dpy);
-    sleep(1);
     Tcl_MutexUnlock(&drawing);
     free(vpnt);
 }

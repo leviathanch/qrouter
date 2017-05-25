@@ -556,7 +556,6 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
     SEG seg;
     NODE n2;
     PROUTE *Pr;
-    POINT vpnt = create_point(0,0,0);
 
     if (rt) if(rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
@@ -592,27 +591,22 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 					lay++;
 					continue;
 				}
-				// Move to next grid position in segment
-				if (x == seg->x2 && y == seg->y2) break;
-				if (seg->x2 > seg->x1) 	x++;
-				else if (seg->x2 < seg->x1) x--;
-				else if (seg->y2 > seg->y1) y++;
-				else if (seg->y2 < seg->y1) y--;
-				vpnt->x=x;
-				vpnt->y=y;
-				vpnt->layer=lay;
-				//if(!check_point_area(net->bbox,vpnt,FALSE)) break;
 			} else {
 				free(gpoint);
 				break;
 			}
+			// Move to next grid position in segment
+			if (x == seg->x2 && y == seg->y2) break;
+			if (seg->x2 > seg->x1) 	x++;
+			else if (seg->x2 < seg->x1) x--;
+			else if (seg->y2 > seg->y1) y++;
+			else if (seg->y2 < seg->y1) y--;
 		} else {
 			break;
 		}
 	    }
 	}
     }
-    free(vpnt);
     return result;
 }
 
@@ -959,13 +953,13 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     }
 
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
-    nodeptr = (newpt.lay < Pinlayers) ? NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
+    nodeptr = ((newpt.lay < Pinlayers)&&check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM)) ? NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
        netnum = Pr->prdata.net;
        if (stage && (netnum < MAXNETNUM)) {
-	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
+	  if ((newpt.lay < Pinlayers) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM) && nodeptr && (nodeptr->nodesav != NULL))
 	     return NULL;		// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
@@ -985,7 +979,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  thiscost += ConflictCost;
        }
        else if (stage && (netnum == DRC_BLOCKAGE)) {
-	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
+	  if ((newpt.lay < Pinlayers) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM) && nodeptr && (nodeptr->nodesav != NULL))
 	     return NULL;		// But cannot route over terminals!
 
 	  // Position does not contain the net number, so we have to
@@ -1062,13 +1056,13 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     // "BlockCost" is used if the node has only one point to connect to,
     // so that routing over it could block it entirely.
 
-    if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
+    if ((newpt.lay > 0) && (newpt.lay < Pinlayers) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM)) {
 	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL) && ((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay - 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
-		if (node->taps) if(node->taps->next == NULL) {
+		if (node->taps) {if(node->taps->next == NULL) {
 			thiscost += BlockCost;	// Cost to block out a tap
-		} else if (node->taps == NULL) {
+		}} else if (node->taps == NULL) {
 		   if (node->extend != NULL) {
 			if (node->extend->next == NULL)
 			   // Node has only one extended access point:  Try
@@ -1086,13 +1080,13 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	    }
 	}
     }
-    if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
+    if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM)) {
 	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1)) != (NODEINFO)NULL)) if(((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay + 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
-		if (node->taps && (node->taps->next == NULL))
+		if (node->taps) { if(node->taps->next == NULL)
 		   thiscost += BlockCost;	// Cost to block out a tap
-		else
+		} else
 	           thiscost += XverCost;	// Cross-over cost
 	    }
 	}
@@ -1353,6 +1347,11 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
 
    netnum = rt->netnum;
 
+   if (!check_grid_point_area(net->bbox,*ept,FALSE,WIRE_ROOM)) {
+      FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
+      return -1;
+   }
+
    Pr = &OBS2VAL(ept->x, ept->y, ept->lay);
    if (!(Pr->flags & PR_COST)) {
       FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
@@ -1364,11 +1363,6 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
 
    lrtop = create_point(ept->x,ept->y,ept->lay);
    lrend = lrtop;
-   if (!check_point_area(net->bbox,lrtop,FALSE,WIRE_ROOM)) {
-      FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
-      free(lrtop);
-      return -1;
-   }
 
    while (1) {
 

@@ -273,7 +273,7 @@ BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
 #define CHECK_POINT_LEFT_VLINE 3
 #define CHECK_POINT_RIGHT_VLINE 4
 
-BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_ends, int edge_distance)
+BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, int edge_distance)
 {
 	if(!line) return FALSE;
 	if(!pnt) return FALSE;
@@ -281,44 +281,47 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_ends, in
 	if(!line->pt2) return FALSE;
 	int xmin, xmax;
 	int ymin, ymax;
+	int x,y;
 
 	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE)) {
 		if(line->pt1->y!=line->pt2->y) return FALSE; // not a horizontal line!
-		xmin=(line->pt1->x<line->pt2->x)?line->pt1->x:line->pt2->x;
-		xmax=(line->pt1->x>line->pt2->x)?line->pt1->x:line->pt2->x;
 	}
 	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE)) {
 		if(line->pt1->x!=line->pt2->x) return FALSE; // not a vertical line!
-		ymin=(line->pt1->y<line->pt2->y)?line->pt1->y:line->pt2->y;
-		ymax=(line->pt1->y>line->pt2->y)?line->pt1->y:line->pt2->y;
 	}
+
+	xmin=(line->pt1->x<line->pt2->x)?line->pt1->x:line->pt2->x;
+	xmax=(line->pt1->x>line->pt2->x)?line->pt1->x:line->pt2->x;
+	ymin=(line->pt1->y<line->pt2->y)?line->pt1->y:line->pt2->y;
+	ymax=(line->pt1->y>line->pt2->y)?line->pt1->y:line->pt2->y;
 
 	switch(mode) {
 		case CHECK_POINT_ABOVE_HLINE:
-			if(line->pt1->y>pnt->y) return FALSE; // point is under hline y
+			y=(with_edge)?ymin:ymin+edge_distance;
+			if(with_edge) { if(pnt->y<y) return FALSE; } // point is under hline y
+			else if(pnt->y<=y) return FALSE; // point is under hline y or equal
 			break;
 		case CHECK_POINT_UNDER_HLINE:
-			if(line->pt1->y<pnt->y) return FALSE; // point is over hline y
+			y=(with_edge)?ymin:ymin-edge_distance;
+			if(with_edge) { if(pnt->y>y) return FALSE; } // point is over hline y
+			else if(pnt->y>=y) return FALSE; // point is over hline y or equal
 			break;
 		case CHECK_POINT_LEFT_VLINE:
-			if(line->pt1->x>pnt->x) return FALSE; // point is right of line
+			x=(with_edge)?xmin:xmin-edge_distance;
+			if(with_edge) { if(pnt->x>x) return FALSE; } // point is right of line
+			else if(pnt->x>=x) return FALSE; // point is left of line or equal
 			break;
 		case CHECK_POINT_RIGHT_VLINE:
-			if(line->pt1->x<pnt->x) return FALSE; // point is left of line
+			x=(with_edge)?xmin:xmin+edge_distance;
+			if(with_edge) { if(pnt->x<x) return FALSE; } // point is left of line
+			else if(pnt->x<=x) return FALSE; // point is left of line or equal
 			break;
 	}
 
-	if(with_ends) {
-		if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
-			if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
-		if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
-			if((pnt->y>=ymin)&&(pnt->y<=ymax)) return TRUE;
-	} else {
-		if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
-			if((pnt->x-edge_distance>xmin)&&(pnt->x+edge_distance<xmax)) return TRUE;
-		if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
-			if((pnt->y-edge_distance>ymin)&&(pnt->y+edge_distance<ymax)) return TRUE;
-	}
+	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
+		if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
+	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
+		if((pnt->y>=ymin)&&(pnt->y<=ymax)) return TRUE;
 
 	return FALSE;
 }
@@ -345,11 +348,23 @@ BOOL check_line_area(BBOX bbox, BBOX_LINE line, BOOL with_edge)
 	return ret;
 }
 
-// check whether pnt of tap is within borders
+BOOL check_grid_point_area(BBOX bbox, GRIDP gpnt, BOOL with_edge, int edge_distance)
+{
+	if(!bbox) return FALSE;
+	if(bbox->num_edges<4) return FALSE;
+	BOOL ret;
+	POINT pnt = create_point(gpnt.x,gpnt.y,gpnt.lay);
+	ret=check_point_area(bbox, pnt, with_edge, edge_distance);
+	free(pnt);
+	return ret;
+}
+
+// check whether pnt of point is within borders
 BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 {
 	if(!bbox) return FALSE;
 	if(!pnt) return FALSE;
+	if(bbox->num_edges<4) return FALSE;
 	// first check trunk box
 	POINT pt1 = get_left_lower_trunk_point(bbox);
 	POINT pt2 = get_right_upper_trunk_point(bbox);
@@ -364,13 +379,17 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
 	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
 	for(BBOX_LINE hll = hlines;hll;hll=hll->next) { // horizontal lower line hll
-		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,edge_distance)) {
+		//if(bbox->y1_exception) printf("%s lower die area violated, adapting\n",__FUNCTION__);
+		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,bbox->y1_exception?0:edge_distance)) {
 			for(BBOX_LINE vrl = vlines;vrl;vrl=vrl->next) { // vertical right line vrl
-				if(check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge,edge_distance)) {
+				//if(bbox->x2_exception) printf("%s right die area violated, adapting\n",__FUNCTION__);
+				if(check_point_to_line(CHECK_POINT_LEFT_VLINE,vrl,pnt,with_edge,bbox->x2_exception?0:edge_distance)) {
 					for(BBOX_LINE hul = hlines;hul;hul=hul->next) { // horizontal upper line hul
-						if(check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge,edge_distance)) {
+						//if(bbox->y2_exception) printf("%s upper die area violated, adapting\n",__FUNCTION__);
+						if(check_point_to_line(CHECK_POINT_UNDER_HLINE,hul,pnt,with_edge,bbox->y2_exception?0:edge_distance)) {
 							for(BBOX_LINE vll = vlines;vll;vll=vll->next) { // vertical left line vll
-								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,edge_distance)) {
+								//if(bbox->x1_exception) printf("%s left die area violated, adapting\n",__FUNCTION__);
+								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,bbox->x1_exception?0:edge_distance)) {
 									return TRUE;
 								}
 							}
@@ -581,10 +600,7 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 		if (dtap == NULL) continue;
 		vpnt->x=dtap->gridx;
 		vpnt->y=dtap->gridy;
-		if(net->bbox->x1_exception||net->bbox->y1_exception||net->bbox->x2_exception||net->bbox->y2_exception)
-			ok=check_point_area(vbox, vpnt,TRUE,0);
-		else
-			ok=check_point_area(vbox, vpnt,FALSE,TAP_ROOM);
+		ok=check_point_area(vbox, vpnt,FALSE,TAP_ROOM);
 		if(!ok) {
 			free(vpnt);
 			return FALSE;

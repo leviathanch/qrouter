@@ -9,19 +9,19 @@
 
 #include <X11/Xlibint.h> // needed for type BOOL
 
-#define THREADS 4
+#define THREADS 1
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 extern int numThreadsRunningG;
 
 #define DEBUG_DELAY 500
-#define PIXEL_DRAW_DELAY 100
+#define PIXEL_DRAW_DELAY 300
 
 #define MAXRT		100000		// "Infinite" route cost
-#define BOX_ROOM_X 4
-#define BOX_ROOM_Y 4
-#define TAP_ROOM 2
-#define WIRE_ROOM 0
+#define BOX_ROOM_X 5
+#define BOX_ROOM_Y 5
+#define TAP_ROOM 3
+#define WIRE_ROOM 1
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))

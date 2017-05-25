@@ -2551,10 +2551,11 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   // Keep going until we are unable to route to a terminal
   while (net && (result > 0)) {
-     //if(graphdebug) highlight_mask(net);
-     //if(graphdebug) highlight_source(net);
-     //if(graphdebug) highlight_dest(net);
-     //if (graphdebug) highlight_starts(iroute.glist);
+     if(graphdebug) highlight_mask(net);
+     if(graphdebug) highlight_source(net);
+     if(graphdebug) highlight_dest(net);
+     if (graphdebug) highlight_starts(iroute.glist);
+     if (graphdebug) sleep(1);
 
      rt1 = createemptyroute();
      rt1->netnum = net->netnum;
@@ -3014,9 +3015,9 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	 freePOINT(gpoint);
 	 continue;
       }
-      if (graphdebug) highlight_source(net);
-      if (graphdebug) highlight_dest(net);
-      //if (graphdebug) highlight(curpt.x, curpt.y);
+      //if (graphdebug) highlight_source(net);
+      //if (graphdebug) highlight_dest(net);
+      if (graphdebug) highlight(curpt.x, curpt.y);
       if (graphdebug) usleep(DEBUG_DELAY);
 
       if (Pr->flags & PR_COST)

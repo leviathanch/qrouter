@@ -17,6 +17,7 @@
 
 #define  MAZE
 
+#include "graphics.h"
 #include "qrouter.h"
 #include "qconfig.h"
 #include "point.h"
@@ -1328,7 +1329,7 @@ void writeback_segment(SEG seg, int netnum)
 /*  SIDE EFFECTS: Obs update, RT llseg added			*/
 /*--------------------------------------------------------------*/
 
-int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
+int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this!
 {
    SEG  seg, lseg;
    NODEINFO lnode1, lnode2;
@@ -1365,36 +1366,63 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage)
    lrend = lrtop;
 
    while (1) {
-
-      Pr = &OBS2VAL(lrend->x, lrend->y, lrend->layer);
+      if(!check_point_area(net->bbox,lrend,FALSE,WIRE_ROOM)) return -1;
+      newlr = clone_point(lrend);
+      printf("\n\n%s processing lrend x %d y %d layer %d\n\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
+      Pr = &OBS2VAL(newlr->x, newlr->y, newlr->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
       if (dmask == PR_PRED_NONE) break;
 
-      newlr = create_point(lrend->x,lrend->y,lrend->layer);
-      lrend->next = newlr;
-      newlr->next = NULL;
-
       switch (dmask) {
          case PR_PRED_N:
+	    printf("%s: operation PR_PRED_N set\n",__FUNCTION__);
 	    (newlr->y)++;
 	    break;
          case PR_PRED_S:
+	    printf("%s: operation PR_PRED_S set\n",__FUNCTION__);
 	    (newlr->y)--;
 	    break;
          case PR_PRED_E:
+	    printf("%s: operation PR_PRED_E set\n",__FUNCTION__);
 	    (newlr->x)++;
 	    break;
          case PR_PRED_W:
+	    printf("%s: operation PR_PRED_W set\n",__FUNCTION__);
 	    (newlr->x)--;
 	    break;
          case PR_PRED_U:
+	    printf("%s: operation PR_PRED_U set\n",__FUNCTION__);
 	    (newlr->layer)++;
 	    break;
          case PR_PRED_D:
+	    printf("%s: operation PR_PRED_D set\n",__FUNCTION__);
 	    (newlr->layer)--;
 	    break;
+	 default:
+	    printf("%s: No valid operation set %d\n",__FUNCTION__,dmask);
+	    break;
       }
-      lrend = newlr;
+
+      printf("%s num points in list %d\n",__FUNCTION__,count_points_in_list(lrend));
+      if(point_in_list(lrend,newlr)) {
+	      printf("\n%s lrend x %d y %d layer %d \n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
+	      printf("%s newlr x %d y %d layer %d\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
+	      break;
+      }
+      if(points_fully_equal(lrend,newlr)) {
+	      printf("\n%s lrend x %d y %d layer %d \n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
+	      printf("%s newlr x %d y %d layer %d\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
+	      //break;
+      }
+      if(check_point_area(net->bbox,newlr,FALSE,WIRE_ROOM)) {
+	      newlr->next = lrend;
+	      lrend = newlr;
+      } else {
+	      printf("%s lrend x %d y %d layer %d not in box\n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
+	      free(lrend);
+	      free(newlr);
+	      return -1;
+      }
    }
    lrend = lrtop;
 

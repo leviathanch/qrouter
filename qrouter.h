@@ -7,6 +7,12 @@
 
 #ifndef QROUTER_H
 
+#ifndef __USE_MISC
+#define __USE_MISC
+#endif
+
+#include <sys/types.h>
+#include <stdint.h>
 #include <X11/Xlibint.h> // needed for type BOOL
 
 #define THREADS 1
@@ -14,13 +20,13 @@
 #define MAX_NUM_THREADS THREADS
 extern int numThreadsRunningG;
 
-#define DEBUG_DELAY 500
+#define DEBUG_DELAY 100
 #define PIXEL_DRAW_DELAY 300
 
 #define MAXRT		100000		// "Infinite" route cost
-#define BOX_ROOM_X 5
-#define BOX_ROOM_Y 5
-#define TAP_ROOM 3
+#define BOX_ROOM_X 3
+#define BOX_ROOM_Y 3
+#define TAP_ROOM 2
 #define WIRE_ROOM 1
 
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))

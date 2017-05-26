@@ -125,6 +125,9 @@ static int qrouter_clk(
 static int qrouter_borders(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_route(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_verbose(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -166,6 +169,7 @@ static cmdstruct qrouter_commands[] =
    {"verbose", qrouter_verbose},
    {"redraw", redraw},
    {"borders", qrouter_borders},
+   {"route", qrouter_route},
    {"print", qrouter_print},
    {"quit", qrouter_quit},
    {"", NULL}  /* sentinel */
@@ -2234,6 +2238,39 @@ qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
 	return TCL_ERROR;
     }
     return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "route"					*/
+/* With no argument, nothing */
+/*							*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	route [<name>]					*/
+/*------------------------------------------------------*/
+static int
+qrouter_route(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
+{
+	char *netname;
+	NET net;
+	if (objc == 2) {
+		netname=Tcl_Strdup(Tcl_GetString(objv[1]));
+		net = getnetbyname(netname);
+		if(net) {
+			Fprintf(stdout,"Trying to route net %s\n", net->netname);
+			net->active=TRUE;
+			draw_layout();
+			if(doroute(net, (u_char)0, TRUE)==0)  {
+				Fprintf(stdout,"Finished routing net %s\n", net->netname);
+			} else {
+				Fprintf(stdout,"Failed to route net %s\n", net->netname);
+			}
+		} else {
+			Fprintf(stdout,"Net %s doesn't exist\n", netname);
+		}
+	}
 }
 
 /*------------------------------------------------------*/

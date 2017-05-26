@@ -46,6 +46,7 @@ int get_bbox_area(NET net);
 int net_absolute_distance(NET net);
 void free_line_list(BBOX_LINE t);
 void fit_all_bboxes(NETLIST l);
+BBOX shrink_bbox(BBOX orig, int num_pixels);
 BBOX_LINE get_fresh_line();
 BBOX_LINE clone_line(BBOX_LINE orig);
 POINT clone_point(POINT p);

@@ -194,6 +194,33 @@ BBOX_LINE clone_line_list(BBOX_LINE orig)
 	return ret;
 }
 
+BBOX shrink_bbox(BBOX orig, int num_pixels)
+{
+	int x, y;
+	POINT pt;
+	BBOX ret = clone_bbox(orig);
+	pt = get_left_lower_trunk_point(orig);
+	int xmin0 = pt->x;
+	int ymin0 = pt->y;
+	free(pt);
+	for(BBOX_LINE l=ret->edges;l;l=l->next) {
+		x=l->pt1->x-xmin0; // setting p0 as 0 point
+		x=(x-num_pixels*2>0)?x-num_pixels*2:0; // if not zero point shorten on both edges
+		l->pt1->x=x+num_pixels+xmin0;
+		x=l->pt2->x-xmin0;  // setting p0 as 0 point
+		x=(x-num_pixels*2>0)?x-num_pixels*2:0; // if not zero point shorten on both edges
+		l->pt2->x=x+num_pixels+xmin0;
+		y=l->pt1->y-ymin0;  // setting p0 as 0 point
+		y=(y-num_pixels*2>0)?y-num_pixels*2:0; // if not zero point shorten on both edges
+		l->pt1->y=y+num_pixels+ymin0;
+		y=l->pt2->y-ymin0;  // setting p0 as 0 point
+		y=(y-num_pixels*2>0)?y-num_pixels*2:0; // if not zero point shorten on both edges
+		l->pt2->y=y+num_pixels+ymin0;
+	}
+
+	return ret;
+}
+
 BBOX clone_bbox(BBOX orig)
 {
 	if(!orig) return NULL;
@@ -383,22 +410,68 @@ BOOL check_grid_point_area(BBOX bbox, GRIDP gpnt, BOOL with_edge, int edge_dista
 	return ret;
 }
 
+int count_line_list(BBOX_LINE list)
+{
+	int ret=0;
+	if(!list) return ret;
+	for(BBOX_LINE l=list;l;l=l->next) if(l) ret++;
+	return ret;
+}
+
+BOOL is_closed_shape(BBOX_LINE obj)
+{
+	BOOL ret = FALSE;
+	BBOX_LINE edge = NULL;
+	POINT pt = clone_point(obj->pt1);
+	for(BBOX_LINE l2=obj;l2;l2=l2->next) {
+		for(BBOX_LINE l=obj;l;l=l->next) {
+			if(edge_contains_line(edge,l)) continue;
+			if(points_equal(pt,l->pt1)) {
+				free(pt);
+				pt=clone_point(l->pt2);
+				edge=add_line_to_edge(edge,l);
+				break;
+			}
+			if(points_equal(pt,l->pt2)) {
+				free(pt);
+				pt=clone_point(l->pt1);
+				edge=add_line_to_edge(edge,l);
+				break;
+			}
+		}
+	}
+	free(pt);
+	if(count_line_list(edge)==count_line_list(obj)) ret = TRUE;
+	free_line_list(edge);
+	return ret;
+}
+
 // check whether pnt of point is within borders
 BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 {
+	int xmin, xmax, ymin, ymax;
 	if(!bbox) return FALSE;
 	if(!pnt) return FALSE;
-	if(bbox->num_edges<4) return FALSE;
-	// first check trunk box
+
+	// is not a closed shape then false
+	if(!is_closed_shape(bbox->edges)) return FALSE;
+
+	// first check die area
+	if((pnt->x<0)||(pnt->x>NumChannelsX[0])||(pnt->y<0)||(pnt->y>NumChannelsY[0])) return FALSE; // outside die
+
+	// then  check trunk box
 	POINT pt1 = get_left_lower_trunk_point(bbox);
 	POINT pt2 = get_right_upper_trunk_point(bbox);
 	if(!pt1) return FALSE;
 	if(!pt2) return FALSE;
-	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) { // outside trunk
-		free(pt1);
-		free(pt2);
-		return FALSE;
-	}
+	xmin=pt1->x;
+	xmax=pt2->x;
+	ymin=pt1->y;
+	ymax=pt2->y;
+	free(pt1);
+	free(pt2);
+	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) return FALSE; // outside trunk
+
 	// now check structure
 	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
 	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
@@ -414,6 +487,8 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 							for(BBOX_LINE vll = vlines;vll;vll=vll->next) { // vertical left line vll
 								//if(bbox->x1_exception) printf("%s left die area violated, adapting\n",__FUNCTION__);
 								if(check_point_to_line(CHECK_POINT_RIGHT_VLINE,vll,pnt,with_edge,bbox->x1_exception?0:edge_distance)) {
+									free_line_list(hlines);
+									free_line_list(vlines);
 									return TRUE;
 								}
 							}
@@ -540,14 +615,6 @@ void free_bbox(BBOX t)
 	free(t);
 }
 
-int count_line_list(BBOX_LINE list)
-{
-	int ret=0;
-	if(!list) return ret;
-	for(BBOX_LINE l=list;l;l=l->next) if(l) ret++;
-	return ret;
-}
-
 void free_line(BBOX_LINE t)
 {
 	if(!t) return;
@@ -574,34 +641,6 @@ BBOX_LINE delete_line_from_edge(BBOX_LINE vbox, BBOX_LINE l)
 		free(i);
 	}
 	return vbox;
-}
-
-BOOL is_closed_shape(BBOX_LINE obj)
-{
-	BOOL ret = FALSE;
-	BBOX_LINE edge = NULL;
-	POINT pt = clone_point(obj->pt1);
-	for(BBOX_LINE l2=obj;l2;l2=l2->next) {
-		for(BBOX_LINE l=obj;l;l=l->next) {
-			if(edge_contains_line(edge,l)) continue;
-			if(points_equal(pt,l->pt1)) {
-				free(pt);
-				pt=clone_point(l->pt2);
-				edge=add_line_to_edge(edge,l);
-				break;
-			}
-			if(points_equal(pt,l->pt2)) {
-				free(pt);
-				pt=clone_point(l->pt1);
-				edge=add_line_to_edge(edge,l);
-				break;
-			}
-		}
-	}
-	free(pt);
-	if(count_line_list(edge)==count_line_list(obj)) ret = TRUE;
-	free_line_list(edge);
-	return ret;
 }
 
 // checks whether all taps are inside vbox
@@ -726,26 +765,39 @@ BOOL lines_are_intersecting(BBOX_LINE a, BBOX_LINE b)
 	return ret;
 }
 
+BOOL point_on_hline(BBOX_LINE l, POINT pnt)
+{
+	if(!l) return FALSE;
+	if(!pnt) return FALSE;
+	BOOL ret = FALSE;
+	int xmin, xmax, y;
+	xmin=(l->pt1->x<l->pt2->x)?l->pt1->x:l->pt2->x;
+	xmax=(l->pt1->x>l->pt2->x)?l->pt1->x:l->pt2->x;
+	y=l->pt2->y;
+	if((pnt->y==y)&&(pnt->x>=xmin)&&(pnt->x<=xmax)) ret = TRUE;
+	return ret;
+}
+
+BOOL point_on_vline(BBOX_LINE l, POINT pnt)
+{
+	if(!l) return FALSE;
+	if(!pnt) return FALSE;
+	BOOL ret = FALSE;
+	int ymin, ymax, x;
+	ymin=(l->pt1->y<l->pt2->y)?l->pt1->y:l->pt2->y;
+	ymax=(l->pt1->y>l->pt2->y)?l->pt1->y:l->pt2->y;
+	x=l->pt2->x;
+	if((pnt->x==x)&&(pnt->y>=ymin)&&(pnt->y<=ymax)) ret = TRUE;
+	return ret;
+}
+
 BOOL point_on_edge(BBOX box, POINT pnt)
 {
+	BOOL ret = FALSE;
 	BBOX_LINE hlines = get_horizontal_lines(box->edges);
 	BBOX_LINE vlines = get_vertical_lines(box->edges);
-	int xmin, xmax;
-	int ymin, ymax;
-	int x,y;
-	BOOL ret = FALSE;
-	for(BBOX_LINE l=hlines;l;l=l->next) {
-		xmin=(l->pt1->x<l->pt2->x)?l->pt1->x:l->pt2->x;
-		xmax=(l->pt1->x>l->pt2->x)?l->pt1->x:l->pt2->x;
-		y=l->pt2->y;
-		if((pnt->y==y)&&(pnt->x>=xmin)&&(pnt->x<=xmax)) ret = TRUE;
-	}
-	for(BBOX_LINE l=vlines;l;l=l->next) {
-		ymin=(l->pt1->y<l->pt2->y)?l->pt1->y:l->pt2->y;
-		ymax=(l->pt1->y>l->pt2->y)?l->pt1->y:l->pt2->y;
-		x=l->pt2->x;
-		if((pnt->x==x)&&(pnt->y>=ymin)&&(pnt->y<=ymax)) ret = TRUE;
-	}
+	for(BBOX_LINE l=hlines;l;l=l->next) if(point_on_hline(l, pnt)) ret = TRUE;
+	for(BBOX_LINE l=vlines;l;l=l->next) if(point_on_vline(l, pnt)) ret = TRUE;
 	free_line_list(hlines);
 	free_line_list(vlines);
 	return ret;

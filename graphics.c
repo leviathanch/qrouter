@@ -232,16 +232,14 @@ void highlight_mask(NET net) {
 
     hspc = spacing >> 1;
 
-    xmax--;
-    ymax--;
     // Draw destination pins as tan squares
     Tcl_MutexLock(&drawing);
-    for (vpnt->x = xmin; vpnt->x < xmax; vpnt->x++) {
+    for (vpnt->x = xmin; vpnt->x <= xmax; vpnt->x++) {
 	XFlush(dpy);
 	XLockDisplay(dpy);
 	FlushGC(dpy, gc);
 	xspc = (vpnt->x + 1) * spacing - hspc;
-	for (vpnt->y = ymin; vpnt->y < ymax; vpnt->y++) {
+	for (vpnt->y = ymin; vpnt->y <= ymax; vpnt->y++) {
 		if(check_point_area(net->bbox,vpnt,TRUE,0)) {
 			yspc = height - (vpnt->y + 1) * spacing - hspc;
 			XSetForeground(dpy, gc, brownvector[RMASK(vpnt->x, vpnt->y)]);
@@ -469,10 +467,12 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
 /*--------------------------------------*/
+#define SHRINK_NUMS 2
 static void
 draw_net_bbox(NET net) {
 	int x1, x2, y1, y2;
-	POINT p1, p2;
+	int tx, ty;
+	BBOX tb;
 
 	if (dpy == NULL) return;
 	if (net == NULL) return;
@@ -491,18 +491,33 @@ draw_net_bbox(NET net) {
 	} else {
 		XSetForeground(dpy, gc, blackpix); // set box colour to black
 	}
-	for(BBOX_LINE line=net->bbox->edges;line;line=line->next) {
-		if(!line) continue;
-		x1=line->pt1->x;
-		y1=line->pt1->y;
-		x2=line->pt2->x;
-		y2=line->pt2->y;
-		XDrawLine(dpy,buffer,gc,spacing*x1,height-spacing*y1,spacing*x2,height-spacing*y2);
+	if(net->bbox->edges) {
+		tx = net->bbox->edges->pt1->x;
+		ty = net->bbox->edges->pt1->y;
+	}
+	for(int shr=0;shr<SHRINK_NUMS;shr++) {
+		tb=shrink_bbox(net->bbox,shr);
+		for(BBOX_LINE line=tb->edges;line;line=line->next) {
+			if(!line) continue;
+			x1=line->pt1->x;
+			y1=line->pt1->y;
+			x2=line->pt2->x;
+			y2=line->pt2->y;
+			if(shr==0) {
+				if(x1<tx) tx=x1;
+				if(x2<tx) tx=x2;
+				if(y1<ty) ty=y1;
+				if(y2<ty) ty=y2;
+			}
+			XDrawLine(dpy,buffer,gc,spacing*x1,height-spacing*y1,spacing*x2,height-spacing*y2);
+		}
+		free(tb);
 	}
 	if(net) if(net->netname)
-		XDrawString(dpy, buffer, gc, spacing*x1,height-spacing*y1,net->netname,strlen(net->netname));
+		XDrawString(dpy, buffer, gc, spacing*tx,height-spacing*ty,net->netname,strlen(net->netname));
 
 	// trunk box
+	POINT p1, p2;
 	int x0, y0, dx, dy;
 	if(drawTrunk) {
 	p1 = get_left_lower_trunk_point(net->bbox);

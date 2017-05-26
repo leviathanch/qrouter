@@ -952,15 +952,16 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  newpt.lay++;
 	  break;
     }
+    if(!check_grid_point_area(net->bbox, newpt, FALSE, WIRE_ROOM)) return NULL;
 
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
-    nodeptr = ((newpt.lay < Pinlayers)&&check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM)) ? NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
+    nodeptr = (newpt.lay < Pinlayers) ? NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
        netnum = Pr->prdata.net;
        if (stage && (netnum < MAXNETNUM)) {
-	  if ((newpt.lay < Pinlayers) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM) && nodeptr && (nodeptr->nodesav != NULL))
+	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
 	     return NULL;		// But cannot route over terminals!
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
@@ -980,7 +981,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  thiscost += ConflictCost;
        }
        else if (stage && (netnum == DRC_BLOCKAGE)) {
-	  if ((newpt.lay < Pinlayers) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM) && nodeptr && (nodeptr->nodesav != NULL))
+	  if ((newpt.lay < Pinlayers) && nodeptr && (nodeptr->nodesav != NULL))
 	     return NULL;		// But cannot route over terminals!
 
 	  // Position does not contain the net number, so we have to
@@ -1057,7 +1058,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
     // "BlockCost" is used if the node has only one point to connect to,
     // so that routing over it could block it entirely.
 
-    if ((newpt.lay > 0) && (newpt.lay < Pinlayers) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM)) {
+    if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
 	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL) && ((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay - 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
@@ -1081,8 +1082,8 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	    }
 	}
     }
-    if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1) && check_grid_point_area(net->bbox,newpt,FALSE,WIRE_ROOM)) {
-	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1)) != (NODEINFO)NULL)) if(((node = lnode->nodeloc) != NULL)) {
+    if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
+	if((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1))) if((node = lnode->nodeloc)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay + 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
 		if (node->taps) { if(node->taps->next == NULL)
@@ -1125,12 +1126,7 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 	  ptret = create_point(newpt.x,newpt.y,newpt.lay);
 	  ptret->next = NULL;
 	  Pr->flags |= PR_ON_STACK;
-	  if(check_point_area(net->bbox,ptret,FALSE,WIRE_ROOM)) {
-		  return ptret;
-	  } else {
-		  free(ptret);
-		  return NULL;
-	  }
+	  return ptret;
        }
     }
     return NULL;	// New position did not get a lower cost
@@ -1366,13 +1362,10 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
    lrend = lrtop;
 
    while (1) {
-      if(!check_point_area(net->bbox,lrend,FALSE,WIRE_ROOM)) return -1;
       newlr = clone_point(lrend);
       printf("\n\n%s processing lrend x %d y %d layer %d\n\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
       Pr = &OBS2VAL(newlr->x, newlr->y, newlr->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
-      if (dmask == PR_PRED_NONE) break;
-
       switch (dmask) {
          case PR_PRED_N:
 	    printf("%s: operation PR_PRED_N set\n",__FUNCTION__);
@@ -1398,31 +1391,28 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
 	    printf("%s: operation PR_PRED_D set\n",__FUNCTION__);
 	    (newlr->layer)--;
 	    break;
+	 case PR_PRED_NONE:
+	    printf("%s: No operation operation set\n",__FUNCTION__);
+	    break;
 	 default:
 	    printf("%s: No valid operation set %d\n",__FUNCTION__,dmask);
 	    break;
       }
 
-      printf("%s num points in list %d\n",__FUNCTION__,count_points_in_list(lrend));
-      if(point_in_list(lrend,newlr)) {
-	      printf("\n%s lrend x %d y %d layer %d \n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
-	      printf("%s newlr x %d y %d layer %d\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
-	      break;
-      }
-      if(points_fully_equal(lrend,newlr)) {
-	      printf("\n%s lrend x %d y %d layer %d \n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
-	      printf("%s newlr x %d y %d layer %d\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
-	      //break;
-      }
-      if(check_point_area(net->bbox,newlr,FALSE,WIRE_ROOM)) {
-	      newlr->next = lrend;
-	      lrend = newlr;
-      } else {
-	      printf("%s lrend x %d y %d layer %d not in box\n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
-	      free(lrend);
-	      free(newlr);
-	      return -1;
-      }
+      if(check_point_area(net->bbox,newlr,TRUE,0)) {
+		if(point_in_list(lrend,newlr)) {
+			printf("\n%s lrend x %d y %d layer %d \n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
+			printf("%s newlr x %d y %d layer %d\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
+			return -1;
+		}
+		printf("%s num points in list %d\n",__FUNCTION__,count_points_in_list(lrend));
+		newlr->next = lrend;
+		lrend = newlr;
+	} else {
+		printf("%s lrend x %d y %d layer %d not in box\n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
+		free(newlr);
+		return -1;
+	}
    }
    lrend = lrtop;
 

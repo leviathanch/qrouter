@@ -203,19 +203,35 @@ BBOX shrink_bbox(BBOX orig, int num_pixels)
 	int xmin0 = pt->x;
 	int ymin0 = pt->y;
 	free(pt);
+
 	for(BBOX_LINE l=ret->edges;l;l=l->next) {
-		x=l->pt1->x-xmin0; // setting p0 as 0 point
-		x=(x-num_pixels*2>0)?x-num_pixels*2:0; // if not zero point shorten on both edges
-		l->pt1->x=x+num_pixels+xmin0;
-		x=l->pt2->x-xmin0;  // setting p0 as 0 point
-		x=(x-num_pixels*2>0)?x-num_pixels*2:0; // if not zero point shorten on both edges
-		l->pt2->x=x+num_pixels+xmin0;
-		y=l->pt1->y-ymin0;  // setting p0 as 0 point
-		y=(y-num_pixels*2>0)?y-num_pixels*2:0; // if not zero point shorten on both edges
-		l->pt1->y=y+num_pixels+ymin0;
-		y=l->pt2->y-ymin0;  // setting p0 as 0 point
-		y=(y-num_pixels*2>0)?y-num_pixels*2:0; // if not zero point shorten on both edges
-		l->pt2->y=y+num_pixels+ymin0;
+		x=(l->pt1->x>xmin0)?l->pt1->x-xmin0:0;  // setting p0 as 0 point
+		x=(x>(num_pixels*2))?(x-(num_pixels*2)):0; // if not zero point, shorten
+		l->pt1->x=x;
+
+		y=(l->pt1->y>ymin0)?l->pt1->y-ymin0:0;  // setting p0 as 0 point
+		y=(y>(num_pixels*2))?(y-(num_pixels*2)):0; // if not zero point, shorten
+		l->pt1->y=y;
+
+		x=(l->pt2->x>xmin0)?l->pt2->x-xmin0:0;  // setting p0 as 0 point
+		x=(x>(num_pixels*2))?(x-(num_pixels*2)):0; // if not zero point, shorten
+		l->pt2->x=x;
+
+		y=(l->pt2->y>ymin0)?l->pt2->y-ymin0:0;  // setting p0 as 0 point
+		y=(y>(num_pixels*2))?(y-(num_pixels*2)):0; // if not zero point, shorten
+		l->pt2->y=y;
+
+		if(points_equal(l->pt1,l->pt2)) {
+			free(ret);
+			return NULL;
+		} else {
+			// shift right
+			l->pt1->x+=num_pixels+xmin0;
+			l->pt2->x+=num_pixels+xmin0;
+			// shift up
+			l->pt1->y+=num_pixels+ymin0;
+			l->pt2->y+=num_pixels+ymin0;
+		}
 	}
 
 	return ret;

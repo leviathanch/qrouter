@@ -467,7 +467,7 @@ void draw_net(NET net, u_char single, int *lastlayer) {
 /*--------------------------------------*/
 /* Draw the boundary box of the net on the display	*/
 /*--------------------------------------*/
-#define SHRINK_NUMS 2
+#define SHRINK_NUMS 1
 static void
 draw_net_bbox(NET net) {
 	int x1, x2, y1, y2;
@@ -497,6 +497,7 @@ draw_net_bbox(NET net) {
 	}
 	for(int shr=0;shr<SHRINK_NUMS;shr++) {
 		tb=shrink_bbox(net->bbox,shr);
+		if(!tb) continue;
 		for(BBOX_LINE line=tb->edges;line;line=line->next) {
 			if(!line) continue;
 			x1=line->pt1->x;

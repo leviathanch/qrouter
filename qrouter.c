@@ -2008,6 +2008,7 @@ create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char halo)
    int xmin, xmax, ymin, ymax;
    u_char m;
    POINT pt;
+   BBOX tb;
    pt = get_left_lower_trunk_point(net->bbox);
    xmin = pt->x;
    ymin = pt->y;
@@ -2033,14 +2034,16 @@ create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char halo)
    if (gy1 < 0) gy1 = 0;
    if (gy2 >= ymax) gy2 = ymax - 1;
 
-   for (i = gx1; i <= gx2; i++)
+   /*for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++) {
 	 pt->x = i;
 	 pt->y = j;
 	 if(check_point_area(net->bbox,pt,TRUE,0)) RMASK(i, j) = (u_char)0;
-      }
+      }*/
 
    for (v = 1; v < halo; v++) {
+      tb = shrink_bbox(net->bbox, i);
+      if(!tb) continue;
       if (gx1 > 0) gx1--;
       if (gx2 < xmax - 1) gx2++;
       if (y1 > y2) {
@@ -2055,11 +2058,12 @@ create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char halo)
          for (j = gy1; j <= gy2; j++) {
 	    pt->x = i;
 	    pt->y = j;
-	    if(check_point_area(net->bbox,pt,FALSE,WIRE_ROOM)) {
+	    if(point_on_edge(tb, pt)) {
 		m = RMASK(i, j);
 		if (m > v) RMASK(i, j) = (u_char)v;
 	    }
 	 }
+      free_bbox(tb);
    }
 }
 
@@ -2099,12 +2103,12 @@ create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char halo)
    if (gy1 < 0) gy1 = 0;
    if (gy2 >= ymax) gy2 = ymax - 1;
 
-   for (i = gx1; i <= gx2; i++)
+   /*for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++) {
 	 pt->x = i;
 	 pt->y = j;
 	 if(check_point_area(net->bbox,pt,TRUE,0)) RMASK(i, j) = (u_char)0;
-      }
+      }*/
 
    for (v = 1; v < halo; v++) {
       if (gy1 > 0) gy1--;
@@ -2143,7 +2147,8 @@ create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char halo)
 static void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
-    BBOX tempbox;
+    int i, j;
+    BBOX tb;
     POINT pt1, pt2, vpnt;
     pt1 = get_left_lower_trunk_point(net->bbox);
     pt2 = get_right_upper_trunk_point(net->bbox);
@@ -2161,16 +2166,22 @@ static void createBboxMask(NET net, u_char halo)
 
     for (vpnt->x = xmin; vpnt->x <= xmax; vpnt->x++)
 	for (vpnt->y = ymin; vpnt->y <= ymax; vpnt->y++)
-	    if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(vpnt->x, vpnt->y) = 0; // block everything around the inside
+	    if(check_point_area(net->bbox, vpnt, TRUE, 0)) RMASK(vpnt->x, vpnt->y) = 0; // block everything around the inside
 
-     for (int i = 1; i <= halo; i++) {
-		tempbox = shrink_bbox(net->bbox, i);
+     for (i = 1; i <= halo; i++) {
+		tb = shrink_bbox(net->bbox, i);
+		if(!tb) continue;
 		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
 			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
-				if(check_point_area(tempbox,vpnt,TRUE,0)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
-		free_bbox(tempbox);
+				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
+		free_bbox(tb);
+		tb = shrink_bbox(net->bbox, 2*halo-i);
+		if(!tb) continue;
+		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
+			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
+				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
+		free_bbox(tb);
      }
-
      free(vpnt);
 }
 
@@ -2207,7 +2218,7 @@ static int analyzeCongestion(BBOX box)
 		sidx = y - ymin;
 		score[sidx] = Num_layers;
 		for (x = xmin; x <= xmax; x++) {
-			if(check_point_area(box,vpnt,FALSE,WIRE_ROOM)) {
+			if(check_point_area(box, vpnt, TRUE, 0)) {
 				for (i = 0; i < Num_layers; i++) {
 					n = OBSVAL(x, y, i);
 					if (n & ROUTED_NET) score[sidx]++;
@@ -2261,7 +2272,7 @@ static void createMask(NET net, u_char slack, u_char halo)
 {
   NODE n1, n2;
   DPOINT dtap;
-  BBOX tempbox;
+  BBOX tb;
   int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
@@ -2300,84 +2311,49 @@ static void createMask(NET net, u_char slack, u_char halo)
 	   if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(vpnt->x, vpnt->y) = (u_char)0;
 
      for (i = 1; i < halo; i++) {
-		tempbox = shrink_bbox(net->bbox,i);
-		gy1 = ycent - slack - i;
-		gy2 = ycent + slack + i;
-		for (j = xmin - slack - i; j <= xmax + slack + i; j++) {
-			if (gy1 >= 0) {
-				vpnt->x=j;
-				vpnt->y=gy1;
-				if(check_point_area(tempbox,vpnt,TRUE,0)) RMASK(j, gy1) = (u_char)i;
-			}
-			if (gy2 < ymax) {
-				vpnt->x=j;
-				vpnt->y=gy2;
-				if(check_point_area(tempbox,vpnt,TRUE,0)) RMASK(j, gy2) = (u_char)i;
-			}
-		}
-		gx1 = xmin - slack - i;
-		gx2 = xmax + slack + i;
-		for (j = ycent - slack - i; j <= ycent + slack + i; j++) {
-			if (gx1 >= 0) {
-				vpnt->x=gx1;
-				vpnt->y=j;
-				if(check_point_area(tempbox,vpnt,TRUE,0)) RMASK(gx1, j) = (u_char)i;
-			}
-			if (gx2 < ymax) {
-				vpnt->x=gx2;
-				vpnt->y=j;
-				if(check_point_area(tempbox,vpnt,TRUE,0)) RMASK(gx2, j) = (u_char)i;
-			}
-		}
-		free(tempbox);
+		tb = shrink_bbox(net->bbox, i);
+		if(!tb) continue;
+		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
+			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
+				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
+		free_bbox(tb);
+		tb = shrink_bbox(net->bbox, 2*halo-i);
+		if(!tb) continue;
+		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
+			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
+				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
+		free_bbox(tb);
 	}
   }
+
   if ((net->flags & NET_VERTICAL_TRUNK)) {
 	// Vertical trunk
 	orient |= 2;
 	//xmin = xmax = xcent;
+	xcent = analyzeCongestion(net->bbox);
 
 	for (vpnt->x = xmin; vpnt->x <= xmax; vpnt->x++)
 		for (vpnt->y = ymin; vpnt->y <= ymax; vpnt->y++)
 			if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(vpnt->x, vpnt->y) = (u_char)0;
 
 	for (i = 1; i < halo; i++) {
-		tempbox = shrink_bbox(net->bbox,i);
-		gx1 = xcent - slack - i;
-		gx2 = xcent + slack + i;
-		for (j = ymin - slack - i; j <= ymax + slack + i; j++) {
-			if (gx1 >= 0) {
-				vpnt->x=gx1;
-				vpnt->y=j;
-				if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(gx1, j) = (u_char)i;
-			}
-			if (gx2 < xmax) {
-				vpnt->x=gx2;
-				vpnt->y=j;
-				if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(gx2, j) = (u_char)i;
-			}
-		}
-		gy1 = ymin - slack - i;
-		gy2 = ymax + slack + i;
-		for (j = xcent - slack - i; j <= xcent + slack + i; j++) {
-			if (gy1 >= 0) {
-				vpnt->x=j;
-				vpnt->y=gy1;
-				if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(j, gy1) = (u_char)i;
-			}
-			if (gy2 < ymax) {
-				vpnt->x=j;
-				vpnt->y=gy2;
-				if(check_point_area(net->bbox,vpnt,TRUE,0)) RMASK(j, gy2) = (u_char)i;
-			}
-		}
-		free(tempbox);
+		tb = shrink_bbox(net->bbox, i);
+		if(!tb) continue;
+		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
+			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
+				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
+		free_bbox(tb);
+		tb = shrink_bbox(net->bbox, 2*halo-i);
+		if(!tb) continue;
+		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
+			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
+				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
+		free_bbox(tb);
 	}
   }
   free(vpnt);
 
   // Construct the branch line masks
-
   for (n1 = net->netnodes; n1; n1 = n1->next) {
      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
      if (!dtap) continue;
@@ -2887,7 +2863,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   }
 
   // Generate a search area mask representing the "likely best route".
-  if ((iroute->do_pwrbus == FALSE) && (maskMode == MASK_AUTO)) {
+  /*if ((iroute->do_pwrbus == FALSE) && (maskMode == MASK_AUTO)) {
      if (stage == 0)
 	createMask(iroute->net, MASK_SMALL, (u_char)Numpasses);
      else
@@ -2898,7 +2874,8 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   else if (maskMode == MASK_BBOX)
      createBboxMask(iroute->net, (u_char)Numpasses);
   else
-     createMask(iroute->net, maskMode, (u_char)Numpasses);
+     createMask(iroute->net, maskMode, (u_char)Numpasses);*/
+  createBboxMask(iroute->net, (u_char)Numpasses);
 
   // Heuristic:  Set the initial cost beyond which we stop searching.
   // This value is twice the cost of a direct route across the
@@ -2929,13 +2906,11 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      return -1;
   }
 
-  int num_taps;
   if (Verbose > 2) {
      FprintfT(stdout, "Source node @ %gum %gum layer=%d grid=(%d %d)\n",
 	  iroute->nsrctap->x, iroute->nsrctap->y, iroute->nsrctap->layer,
 	  iroute->nsrctap->gridx, iroute->nsrctap->gridy);
-     num_taps=count_targets(net);
-     FprintfT(stdout, "Amount of taps: %d\n", num_taps);
+     FprintfT(stdout, "Amount of taps: %d\n", count_targets(net));
   }
 
   if (Verbose > 1) {

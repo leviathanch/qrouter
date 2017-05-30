@@ -469,11 +469,11 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	if(!bbox) return FALSE;
 	if(!pnt) return FALSE;
 
-	// is not a closed shape then false
-	if(!is_closed_shape(bbox->edges)) return FALSE;
-
 	// first check die area
 	if((pnt->x<0)||(pnt->x>NumChannelsX[0])||(pnt->y<0)||(pnt->y>NumChannelsY[0])) return FALSE; // outside die
+
+	// is not a closed shape then false
+	if(!is_closed_shape(bbox->edges)) return FALSE;
 
 	// then  check trunk box
 	POINT pt1 = get_left_lower_trunk_point(bbox);
@@ -486,7 +486,7 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	ymax=pt2->y;
 	free(pt1);
 	free(pt2);
-	if((pnt->x<pt1->x)||(pnt->x>pt2->x)||(pnt->y<pt1->y)||(pnt->y>pt2->y)) return FALSE; // outside trunk
+	if((pnt->x<xmin)||(pnt->x>xmax)||(pnt->y<ymin)||(pnt->y>ymax)) return FALSE; // outside trunk
 
 	// now check structure
 	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);

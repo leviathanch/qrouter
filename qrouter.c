@@ -826,7 +826,7 @@ NETLIST get_net_queue(NETLIST q, int debug_netnum)
 void read_def(char *filename)
 {
    double oscale, precis;
-   NETLIST nl;
+   NETLIST nl = NULL;
 
    if ((filename == NULL) && (DEFfilename == NULL)) {
       Fprintf(stderr, "No DEF file specified, nothing to read.\n");

@@ -3098,7 +3098,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case EAST:
 	       predecessor |= PR_PRED_W;
-	       curpt.x++;
+	       // curpt.x++;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3109,7 +3109,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case WEST:
 	       predecessor |= PR_PRED_E;
-	       curpt.x--;
+	       // curpt.x--;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3120,7 +3120,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
-	       curpt.y--;
+	       // curpt.y--;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3131,7 +3131,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
-	       curpt.y++;
+	       // curpt.y++;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3221,7 +3221,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
 done:
 
-  FprintfT(stdout, "%s: Exiting\n",__FUNCTION__);
+  FprintfT(stdout, "%s: Exiting with code %d\n", __FUNCTION__, rval);
   // Regenerate the stack of unprocessed nodes
   if (gunproc != NULL) iroute->glist = gunproc;
   return rval;

@@ -1366,6 +1366,7 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
       printf("\n\n%s processing lrend x %d y %d layer %d\n\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
       Pr = &OBS2VAL(newlr->x, newlr->y, newlr->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
+      if (dmask == PR_PRED_NONE) break;
       switch (dmask) {
          case PR_PRED_N:
 	    printf("%s: operation PR_PRED_N set\n",__FUNCTION__);
@@ -1399,21 +1400,32 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
 	    break;
       }
 
+#if 1
+
+      lrend->next = newlr;
+      lrend = newlr;
+
+#else
+
       if(check_point_area(net->bbox,newlr,TRUE,0)) {
 		if(point_in_list(lrend,newlr)) {
 			printf("\n%s lrend x %d y %d layer %d \n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
 			printf("%s newlr x %d y %d layer %d\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
-			return -1;
+			// return -1;
 		}
 		printf("%s num points in list %d\n",__FUNCTION__,count_points_in_list(lrend));
 		newlr->next = lrend;
 		lrend = newlr;
-	} else {
+      } else {
 		printf("%s lrend x %d y %d layer %d not in box\n",__FUNCTION__,lrend->x,lrend->y,lrend->layer);
 		free(newlr);
 		return -1;
-	}
+      }
+
+#endif
+
    }
+
    lrend = lrtop;
 
    // TEST:  Walk through the solution, and look for stacked vias.  When
@@ -1820,8 +1832,8 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
    lseg = (SEG)NULL;
 
    while (1) {
-      if((!lrcur)||(!lrprev))
-	      break;
+      // if((!lrcur)||(!lrprev))
+      // 	      break;
       seg = (SEG)malloc(sizeof(struct seg_));
       if(!seg)
 	      exit(0);

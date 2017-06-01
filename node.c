@@ -467,6 +467,7 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 {
 	int xmin, xmax, ymin, ymax;
 	if(!bbox) return FALSE;
+	if(!bbox->edges) return FALSE;
 	if(!pnt) return FALSE;
 
 	// first check die area
@@ -704,11 +705,9 @@ BBOX_LINE get_vertical_lines(BBOX_LINE box)
 {
 	if(!box) return NULL;
 	BBOX_LINE ret = NULL;
-	for(BBOX_LINE l=box;l;l=l->next) {
-		if((l->pt1->x==l->pt2->x)&&(l->pt1->y!=l->pt2->y)) {
+	for(BBOX_LINE l=box;l;l=l->next)
+		if((l->pt1->x==l->pt2->x)&&(l->pt1->y!=l->pt2->y))
 			ret=add_line_to_edge(ret,l);
-		}
-	}
 	return ret;
 }
 
@@ -716,11 +715,9 @@ BBOX_LINE get_horizontal_lines(BBOX_LINE box)
 {
 	if(!box) return NULL;
 	BBOX_LINE ret = NULL;
-	for(BBOX_LINE l=box;l;l=l->next) {
-		if((l->pt1->x!=l->pt2->x)&&(l->pt1->y==l->pt2->y)) {
+	for(BBOX_LINE l=box;l;l=l->next)
+		if((l->pt1->x!=l->pt2->x)&&(l->pt1->y==l->pt2->y))
 			ret=add_line_to_edge(ret,l);
-		}
-	}
 	return ret;
 }
 

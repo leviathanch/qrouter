@@ -359,8 +359,6 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    {
 		locarea.x2 = refp.x1;
 		locarea.y2 = refp.y1;
-		lx = x;
-		ly = y;
 
 		if (special == (char)1) {
 		   if (valid == TRUE) {
@@ -370,16 +368,16 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		         drect->x2 = lx + w;
 		      }
 		      else {
-		         drect->x1 = x + w;
-		         drect->x2 = lx - w;
+		         drect->x1 = lx - w;
+		         drect->x2 = x + w;
 		      }
 		      if (ly > y) {
 		         drect->y1 = y - w;
 		         drect->y2 = ly + w;
 		      }
 		      else {
-		         drect->y1 = y + w;
-		         drect->y2 = ly - w;
+		         drect->y1 = ly - w;
+		         drect->y2 = y + w;
 		      }
 		      drect->layer = routeLayer;
 		      drect->next = UserObs;

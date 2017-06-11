@@ -13,9 +13,8 @@
  * layer information is already known.  The DEF file should have information
  * primarily on die are, track placement, pins, components, and nets.
  *
- * To-do: Routed nets should have their routes dropped into track obstructions,
- * and the nets should be ignored.  Currently, routed nets are parsed and the
- * routes are ignored.
+ * Routed nets have their routes dropped into track obstructions, and the
+ * nets are ignored.
  */
 
 #include <stdio.h>
@@ -146,7 +145,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     char valid = FALSE;		/* is there a valid reference point? */
     char initial = TRUE;
     struct dseg_ locarea;
-    double x, y, lx, ly, w;
+    double x, y, lx, ly, w, s;
     int routeLayer = -1, paintLayer;
     LefList lefl;
     ROUTE routednet = NULL;
@@ -234,21 +233,25 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			   if (routeLayer < paintLayer) paintLayer = routeLayer;
 			   if ((routeLayer >= 0) && (special == (char)1) &&
 					(valid == TRUE)) {
-			      drect = (DSEG)malloc(sizeof(struct dseg_));
-			      drect->x1 = x + lr->x1;
-			      drect->x2 = x + lr->x2;
-			      drect->y1 = y + lr->y1;
-			      drect->y2 = y + lr->y2;
-			      drect->layer = lr->layer;
-			      drect->next = UserObs;
-			      UserObs = drect;
+				s = LefGetRouteSpacing(routeLayer); 
+				drect = (DSEG)malloc(sizeof(struct dseg_));
+				drect->x1 = x + lr->x1 - s;
+				drect->x2 = x + lr->x2 + s;
+				drect->y1 = y + lr->y1 - s;
+				drect->y2 = y + lr->y2 + s;
+				drect->layer = routeLayer;
+				drect->next = UserObs;
+				UserObs = drect;
 			   }
 			   lr = lr->next;
 			}
 			if (routeLayer == -1) paintLayer = lefl->type;
 		    }
-		    else
+		    else {
 		    	paintLayer = lefl->type;
+			if (special == (char)1)
+			    s = LefGetRouteSpacing(paintLayer); 
+		    }
 		}
 		else
 		{
@@ -362,22 +365,23 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 
 		if (special == (char)1) {
 		   if (valid == TRUE) {
+		      s = LefGetRouteSpacing(routeLayer); 
 		      drect = (DSEG)malloc(sizeof(struct dseg_));
 		      if (lx > x) {
-		         drect->x1 = x - w;
-		         drect->x2 = lx + w;
+		         drect->x1 = x - s;
+		         drect->x2 = lx + s;
 		      }
 		      else {
-		         drect->x1 = lx - w;
-		         drect->x2 = x + w;
+		         drect->x1 = lx - s;
+		         drect->x2 = x + s;
 		      }
 		      if (ly > y) {
-		         drect->y1 = y - w;
-		         drect->y2 = ly + w;
+		         drect->y1 = y - s;
+		         drect->y2 = ly + s;
 		      }
 		      else {
-		         drect->y1 = ly - w;
-		         drect->y2 = y + w;
+		         drect->y1 = ly - s;
+		         drect->y2 = y + s;
 		      }
 		      drect->layer = routeLayer;
 		      drect->next = UserObs;

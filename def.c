@@ -145,7 +145,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     char valid = FALSE;		/* is there a valid reference point? */
     char initial = TRUE;
     struct dseg_ locarea;
-    double x, y, lx, ly, w, s;
+    double x, y, lx, ly, w, hw, s;
     int routeLayer = -1, paintLayer;
     LefList lefl;
     ROUTE routednet = NULL;
@@ -366,22 +366,31 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 		if (special == (char)1) {
 		   if (valid == TRUE) {
 		      s = LefGetRouteSpacing(routeLayer); 
+		      hw = w / 2;
 		      drect = (DSEG)malloc(sizeof(struct dseg_));
 		      if (lx > x) {
 		         drect->x1 = x - s;
 		         drect->x2 = lx + s;
 		      }
-		      else {
+		      else if (lx < x) {
 		         drect->x1 = lx - s;
 		         drect->x2 = x + s;
+		      }
+		      else {
+		         drect->x1 = x - hw - s;
+		         drect->x2 = x + hw + s;
 		      }
 		      if (ly > y) {
 		         drect->y1 = y - s;
 		         drect->y2 = ly + s;
 		      }
-		      else {
+		      else if (ly < y) {
 		         drect->y1 = ly - s;
 		         drect->y2 = y + s;
+		      }
+		      else {
+		         drect->y1 = y - hw - s;
+		         drect->y2 = y + hw + s;
 		      }
 		      drect->layer = routeLayer;
 		      drect->next = UserObs;

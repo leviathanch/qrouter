@@ -32,6 +32,8 @@
 #include "lef.h"
 #include "def.h"
 
+int numSpecial = 0;		/* Tracks number of specialnets */
+
 #ifndef TCL_QROUTER
 
 /* Find an instance in the instance list.  If qrouter	*/
@@ -1995,6 +1997,7 @@ DefRead(char *inName)
 		if (sscanf(token, "%d", &total) != 1) total = 0;
 		LefEndStatement(f);
 		DefReadNets(f, sections[DEF_SPECIALNETS], oscale, TRUE, total);
+		numSpecial = total;
 		break;
 	    case DEF_NETS:
 		token = LefNextToken(f, TRUE);

@@ -422,7 +422,6 @@ extern int    Numnets;
 extern int    Pinlayers;		// Number of layers containing pin info.
 
 extern u_char Verbose;
-extern u_char keepTrying;
 extern u_char forceRoutable;
 extern u_char highOverhead;
 extern u_char maskMode;
@@ -446,33 +445,31 @@ extern char *gndnet;
 
 /* Function prototypes */
 
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+static ROUTE createemptyroute(void);
+static void helpmessage(void);
+
 int    set_num_channels(void);
 int    allocate_obs_array(void);
 int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 
 void   read_def(char *filename);
-int    write_def(char *filename);
 
 #ifdef TCL_QROUTER
 int    write_delays(char *filename);
 #endif
 
-char  *print_node_name(NODE node);
-void   print_nets(char *filename);
-void   print_routes(char *filename);
-void   print_nlgates(char *filename);
-void   print_net(NET net);
-void   print_gate(GATE gate);
-
 int    dofirststage(u_char graphdebug, int debug_netnum);
-int    dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak);
-int    dothirdstage(u_char graphdebug, int debug_netnum);
+int    dosecondstage(u_char graphdebug, u_char singlestep,
+		u_char onlybreak, u_int effort);
+int    dothirdstage(u_char graphdebug, int debug_netnum, u_int effort);
 
 int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
 int    route_net_ripup(NET net, u_char graphdebug, u_char onlybreak);
-void   setBboxCurrent(NET net);
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

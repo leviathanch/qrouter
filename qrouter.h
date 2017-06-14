@@ -277,6 +277,7 @@ struct net_ {
    int  xmax, ymax;	// Bounding box upper right corner
    int  trunkx;		// X position of the net's trunk line (see flags)
    int  trunky;		// Y position of the net's trunk line (see flags)
+   int  ripped;		// Number of segments to be ripped (if applicable)
    NETLIST noripup;	// list of nets that have been ripped up to
 			// route this net.  This will not be allowed
 			// a second time, to avoid looping.
@@ -465,12 +466,13 @@ void   print_net(NET net);
 void   print_gate(GATE gate);
 
 int    dofirststage(u_char graphdebug, int debug_netnum);
-int    dosecondstage(u_char graphdebug, u_char singlestep);
+int    dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak);
 int    dothirdstage(u_char graphdebug, int debug_netnum);
 
 int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
-int    route_net_ripup(NET net, u_char graphdebug);
+int    route_net_ripup(NET net, u_char graphdebug, u_char onlybreak);
+void   setBboxCurrent(NET net);
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

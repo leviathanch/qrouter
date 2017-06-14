@@ -980,6 +980,7 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage2 force	Force a terminal to be routable	*/
+/*  stage2 break	Only rip up colliding segment	*/
 /*  stage2 tries <n>	Keep trying n additional times	*/
 /*  stage2 overhead	Use more better routing method	*/
 /*			with high memory overhead.	*/
@@ -991,17 +992,18 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 {
     u_char dodebug;
     u_char dostep;
+    u_char onlybreak;
     u_char saveForce, saveOverhead;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
     static char *subCmds[] = {
 	"debug", "mask", "limit", "route", "force", "tries", "step",
-	"overhead", NULL
+	"overhead", "break", NULL
     };
     enum SubIdx {
 	DebugIdx, MaskIdx, LimitIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx,
-	OverHeadIdx
+	OverHeadIdx, BreakIdx
     };
    
     static char *maskSubCmds[] = {
@@ -1015,6 +1017,7 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
     dodebug = FALSE;
     dostep = FALSE;
+    onlybreak = FALSE;
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
@@ -1036,6 +1039,10 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
 		case StepIdx:
 		    dostep = TRUE;
+		    break;
+
+		case BreakIdx:
+		    onlybreak = TRUE;
 		    break;
 	
 		case ForceIdx:
@@ -1118,9 +1125,9 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     }
 
     if (net == NULL)
-	failcount = dosecondstage(dodebug, dostep);
+	failcount = dosecondstage(dodebug, dostep, onlybreak);
     else
-	failcount = route_net_ripup(net, dodebug);
+	failcount = route_net_ripup(net, dodebug, onlybreak);
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
     draw_layout();
@@ -1350,7 +1357,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 	    case AllIdx:
 		for (i = 0; i < Numnets; i++) {
 		   net = Nlnets[i];
-		   ripup_net(net, (u_char)1);
+		   ripup_net(net, (u_char)1, (u_char)1);
 		}
 		draw_layout();
 		break;
@@ -1358,7 +1365,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 		for (i = 2; i < objc; i++) {
 		    net = LookupNet(Tcl_GetString(objv[i]));
 		    if (net != NULL)
-			ripup_net(net, (u_char)1);
+			ripup_net(net, (u_char)1, (u_char)1);
 		}
 		draw_layout();
 		break;

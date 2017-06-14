@@ -254,7 +254,7 @@ void clear_target_node(NODE node)
        x = ntap->gridx;
        y = ntap->gridy;
        if ((lay < Pinlayers) && (((lnode = NODEIPTR(x, y, lay)) == NULL)
-		|| (lnode->nodeloc == NULL)))
+		|| (lnode->nodesav == NULL)))
 	  continue;
        Pr = &OBS2VAL(x, y, lay);
        Pr->flags = 0;
@@ -617,7 +617,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		// then process it, too.
 
 		lnode = (lay >= Pinlayers) ? NULL : NODEIPTR(x, y, lay);
-		n2 = (lnode) ? lnode->nodeloc : NULL;
+		n2 = (lnode) ? lnode->nodesav : NULL;
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
 		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
@@ -664,14 +664,22 @@ int set_routes_to_net(NET net, int newflags, POINT *pushlist, SEG bbox,
 /* Used by find_colliding() (see below).  Save net "netnum"	*/
 /* to the list of colliding nets if it is not already in the	*/
 /* list.  Return 1 if the list got longer, 0 otherwise.		*/
+/* Find the route of the net that includes the point of		*/
+/* collision, and promote it to the top of the route list.	*/
 /*--------------------------------------------------------------*/
 
 static int
-addcollidingnet(NETLIST *nlptr, int netnum)
+addcollidingnet(NETLIST *nlptr, int netnum, int x, int y, int lay)
 {
+    ROUTE rt, lrt, nrt;
     NETLIST cnl;
     NET fnet;
+    SEG seg;
     int i;
+    int sx, sy;
+    u_char found;
+
+    // Note:  May need to track how many segments need to be ripped up.
 
     for (cnl = *nlptr; cnl; cnl = cnl->next)
 	if (cnl->net->netnum == netnum)
@@ -684,6 +692,54 @@ addcollidingnet(NETLIST *nlptr, int netnum)
 	    cnl->net = fnet;
 	    cnl->next = *nlptr;
 	    *nlptr = cnl;
+
+	    /* If there is only one route then there is no need */
+	    /* to search or shuffle.				*/
+
+	    if (fnet->routes->next == NULL) {
+		fnet->ripped = 1;
+		return 1;
+	    }
+
+	    lrt = fnet->routes;
+	    for (rt = fnet->routes; rt; ) {
+		nrt = rt->next;
+		found = 0;
+		for (seg = rt->segments; seg; seg = seg->next) {
+		    if (seg->layer == lay) {
+			sx = seg->x1;
+			sy = seg->y1;
+			while (1) {
+			    if (seg->x1 == x && seg->y1 == y) {
+				found = 1;
+				break;
+			    }
+			    if ((sx == seg->x2) && (sy == seg->y2)) break;
+			    if (sx < seg->x2) sx++;
+			    else if (sx > seg->x2) sx--;
+			    if (sy < seg->y2) sy++;
+			    else if (sy > seg->y2) sy--;
+			}
+			if (found) break;
+		    }
+		}
+		if (found) {
+		    fnet->ripped++;
+		    if (lrt != NULL)
+			lrt->next = rt->next;
+		    else
+			lrt = rt;
+
+		    /* Shuffle rt to top so it can be removed */
+		    if (rt != fnet->routes) {
+			rt->next = fnet->routes;
+			fnet->routes = rt;
+		    }
+		}
+		else
+		    lrt = rt;
+		rt = nrt;
+	    }
 	    return 1;
 	}
     }
@@ -731,7 +787,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 		        }
 		     }
 		     if (x > 0) {
@@ -739,7 +795,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 		        }
 		     }
 		  }
@@ -749,7 +805,7 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 			}
 		     }
 		     if (y > 0) {
@@ -757,13 +813,13 @@ NETLIST find_colliding(NET net, int *ripnum)
 		        if (!(orignet & NO_NET)) {
 			   orignet &= NETNUM_MASK;
 			   if ((orignet != 0) && (orignet != net->netnum))
-		 	       rnum += addcollidingnet(&nl, orignet);
+		 	       rnum += addcollidingnet(&nl, orignet, x, y, lay);
 			}
 		     }
 		  }
 	       }
 	       else if ((orignet & NETNUM_MASK) != net->netnum)
-		  rnum += addcollidingnet(&nl, (orignet & NETNUM_MASK));
+		  rnum += addcollidingnet(&nl, (orignet & NETNUM_MASK), x, y, lay);
 
 	       if ((x == seg->x2) && (y == seg->y2)) break;
 
@@ -799,9 +855,12 @@ NETLIST find_colliding(NET net, int *ripnum)
 /* If argument "restore" is TRUE, then at each node, restore	*/
 /* the crossover cost by attaching the node back to the		*/
 /* Nodeinfo array.						*/
+/*								*/
+/* If argument "topmost" is TRUE, then only remove the topmost	*/
+/* route of the net.						*/
 /*--------------------------------------------------------------*/
 
-u_char ripup_net(NET net, u_char restore)
+u_char ripup_net(NET net, u_char restore, u_char topmost)
 {
    int thisnet, oldnet, x, y, lay, dir;
    NODEINFO lnode;
@@ -809,8 +868,10 @@ u_char ripup_net(NET net, u_char restore)
    ROUTE rt;
    SEG seg;
    DPOINT ntap;
+   int ripped;
 
    thisnet = net->netnum;
+   ripped = net->ripped;
 
    for (rt = net->routes; rt; rt = rt->next) {
       if (rt->segments) {
@@ -880,6 +941,10 @@ u_char ripup_net(NET net, u_char restore)
 	       else if (y > seg->y2) y--;
 	    }
 	 }
+	 if (topmost) {
+	    ripped--;
+	    if (ripped == 0) break;
+	 }
       }
    }
 
@@ -888,14 +953,32 @@ u_char ripup_net(NET net, u_char restore)
    // tap.
 
    if (restore != 0) {
-      for (node = net->netnodes; node; node = node->next) {
-	 for (ntap = node->taps; ntap; ntap = ntap->next) {
-	    lay = ntap->layer;
-	    x = ntap->gridx;
-	    y = ntap->gridy;
-	    if (lay < Pinlayers) {
-		lnode = NODEIPTR(x, y, lay);
-		if (lnode) lnode->nodeloc = lnode->nodesav;
+      if (topmost && net->routes) {
+	 ripped = net->ripped;
+	 for (rt = net->routes; rt; rt = rt->next) {
+	    for (seg = rt->segments; seg; seg = seg->next) {
+	       lay = seg->layer;
+	       if (lay >= Pinlayers) continue;
+	       x = seg->x1;
+	       y = seg->y1;
+	       lnode = NODEIPTR(x, y, lay);
+	       if (lnode && lnode->nodesav)
+		   lnode->nodeloc = lnode->nodesav;
+	    }
+	    ripped--;
+	    if (ripped = 0) break;
+	 }
+      }
+      else {
+         for (node = net->netnodes; node; node = node->next) {
+	    for (ntap = node->taps; ntap; ntap = ntap->next) {
+	       lay = ntap->layer;
+	       x = ntap->gridx;
+	       y = ntap->gridy;
+	       if (lay < Pinlayers) {
+		   lnode = NODEIPTR(x, y, lay);
+		   if (lnode) lnode->nodeloc = lnode->nodesav;
+	       }
 	    }
 	 }
       }
@@ -912,7 +995,15 @@ u_char ripup_net(NET net, u_char restore)
 	 rt->segments = seg;
       }
       free(rt);
+      if (topmost) {
+	 net->ripped--;
+	 if (net->ripped == 0) break;
+      }
    }
+
+   // If we just ripped out a few of the routes, make sure all the
+   // other net routes have not been overwritten.
+   if (topmost) writeback_all_routes(net);
 
    // If this was a specialnet (numnodes set to 0), then routes are
    // considered fixed obstructions and cannot be removed.

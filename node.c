@@ -2204,13 +2204,13 @@ void create_obstructions_outside_nodes(void)
                                 }
 
 				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode->nodeloc = node;
+				lnode->nodesav = node;
 
 				if ((k < Numnets) && (dir != NI_STUB_MASK)) {
 				   OBSVAL(gridx, gridy, ds->layer)
 				   	= (OBSVAL(gridx, gridy, ds->layer)
 					  & BLOCKED_MASK) | (u_int)g->netnum[i] | mask; 
-				   lnode->nodeloc = node;
-				   lnode->nodesav = node;
 				   lnode->flags |= dir;
 				}
 				else if ((OBSVAL(gridx, gridy, ds->layer)

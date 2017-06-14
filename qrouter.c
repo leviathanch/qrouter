@@ -1291,7 +1291,7 @@ NET getnettoroute(int order)
 /* Return the number of nets ripped up				*/
 /*--------------------------------------------------------------*/
 
-static int ripup_colliding(NET net)
+static int ripup_colliding(NET net, u_char onlybreak)
 {
     NETLIST nl, nl2, fn;
     int ripped;
@@ -1322,7 +1322,7 @@ static int ripup_colliding(NET net)
 	nl2 = nl->next;
 	if (Verbose > 0)
             Fprintf(stdout, "Ripping up blocking net %s\n", nl->net->netname);
-	if (ripup_net(nl->net, (u_char)1) == TRUE) { 
+	if (ripup_net(nl->net, (u_char)1, onlybreak) == TRUE) { 
 	    for (fn = FailedNets; fn && fn->next != NULL; fn = fn->next);
 	    if (fn)
 		fn->next = nl;
@@ -1350,7 +1350,7 @@ static int ripup_colliding(NET net)
 /* net "net".							*/
 /*--------------------------------------------------------------*/
 
-int route_net_ripup(NET net, u_char graphdebug)
+int route_net_ripup(NET net, u_char graphdebug, u_char onlybreak)
 {
     int result;
     NETLIST nl, nl2;
@@ -1390,7 +1390,7 @@ int route_net_ripup(NET net, u_char graphdebug)
 	}
     }
     if (result != 0)
-	result = ripup_colliding(net);
+	result = ripup_colliding(net, onlybreak);
 
     return result;
 }
@@ -1414,7 +1414,7 @@ int route_net_ripup(NET net, u_char graphdebug)
 /*--------------------------------------------------------------*/
 
 int
-dosecondstage(u_char graphdebug, u_char singlestep)
+dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak)
 {
    int failcount, origcount, result, maxtries;
    NET net;
@@ -1494,7 +1494,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 // then treat this as a route failure, and don't rip up any of
 	 // the colliding nets.
 
-	 result = ripup_colliding(net);
+	 result = ripup_colliding(net, onlybreak);
 	 if (result > 0) result = 0;
       }
 
@@ -1548,7 +1548,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 // Remove both routing information and remove the route from
 	 // Obs[] for all parts of the net that were previously routed
 
-	 ripup_net(net, (u_char)1);	// Remove routing information from net
+	 ripup_net(net, (u_char)1, (u_char)0);	// Remove routing information from net
 	 continue;
       }
 
@@ -1631,8 +1631,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
    NET net;
    NETLIST nl;
 
-   // Clear the lists of failed routes, in case first
-   // stage is being called more than once.
+   // Clear the lists of failed routes
 
    if (debug_netnum <= 0) {
       while (FailedNets) {
@@ -1650,7 +1649,8 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
 
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
-	 ripup_net(net, (u_char)0);
+	 setBboxCurrent(net);
+	 ripup_net(net, (u_char)0, (u_char)0);
 	 result = doroute(net, (u_char)0, graphdebug);
 	 if (result == 0) {
 	    remaining--;
@@ -1805,6 +1805,40 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
 }
 
 /*--------------------------------------------------------------*/
+/* setBboxCurrent() ---						*/
+/*								*/
+/* Alter the net's bounding box information to include the	*/
+/* existing bounding box around all net route segments.  This	*/
+/* allows stage 3 routing to minimize the search area.		*/
+/*								*/
+/*--------------------------------------------------------------*/
+
+void setBboxCurrent(NET net)
+{
+    ROUTE rt;
+    SEG seg;
+
+    // If net is routed, increase the bounding box to
+    // include the current route solution.
+
+    for (rt = net->routes; rt; rt = rt->next)
+	for (seg = rt->segments; seg; seg = seg->next)
+	{
+	    if (seg->x1 < net->xmin) net->xmin = seg->x1;
+	    else if (seg->x1 > net->xmax) net->xmax = seg->x1;
+
+	    if (seg->x2 < net->xmin) net->xmin = seg->x2;
+	    else if (seg->x2 > net->xmax) net->xmax = seg->x2;
+
+	    if (seg->y1 < net->ymin) net->ymin = seg->y1;
+	    else if (seg->y1 > net->ymax) net->ymax = seg->y1;
+
+	    if (seg->y2 < net->ymin) net->ymin = seg->y2;
+	    else if (seg->y2 > net->ymax) net->ymax = seg->y2;
+	}
+}
+
+/*--------------------------------------------------------------*/
 /* createBboxMask() ---						*/
 /*								*/
 /* Create mask limiting the area to search for routing		*/
@@ -1826,7 +1860,7 @@ static void createBboxMask(NET net, u_char halo)
     xmax = net->xmax;
     ymin = net->ymin;
     ymax = net->ymax;
-  
+
     for (gx1 = xmin; gx1 <= xmax; gx1++)
 	for (gy1 = ymin; gy1 <= ymax; gy1++)
 	    RMASK(gx1, gy1) = (u_char)0;

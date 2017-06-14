@@ -12,7 +12,7 @@ int     set_node_to_net(NODE node, int newnet, POINT *pushlist, SEG bbox, u_char
 int	disable_node_nets(NODE node);
 int     set_routes_to_net(NET net, int newnet, POINT *pushlist, SEG bbox, u_char stage);
 NODE    find_unrouted_node(NET net);
-u_char  ripup_net(NET net, u_char restore);
+u_char  ripup_net(NET net, u_char restore, u_char topmost);
 POINT   eval_pt(GRIDP *ept, u_char flags, u_char stage);
 int     commit_proute(ROUTE rt, GRIDP *ept, u_char stage);
 void	writeback_segment(SEG seg, int netnum);

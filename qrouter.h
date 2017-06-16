@@ -192,16 +192,28 @@ typedef struct route_ *ROUTE;
 typedef struct node_ *NODE;
 
 struct route_ {
-  ROUTE  next;
-  int    netnum;
-  SEG    segments;
-  u_char flags;         // See below for flags
+   ROUTE  next;
+   int    netnum;
+   SEG    segments;
+   union {
+      ROUTE route;
+      NODE  node;     
+   } start;
+   union {
+      ROUTE route;
+      NODE  node;     
+   } end;
+   u_char flags;         // See below for flags
 };
 
 /* Definitions for flags in struct route_ */
 
-#define RT_OUTPUT	0x1	// Route has been output
-#define RT_STUB		0x2	// Route has at least one stub route
+#define RT_OUTPUT	0x01	// Route has been output
+#define RT_STUB		0x02	// Route has at least one stub route
+#define RT_START_NODE	0x04	// Route starts on a node
+#define RT_END_NODE	0x08	// Route ends on a node
+#define RT_VISITED	0x10	// Flag for recursive search
+#define RT_RIP		0x20	// Flag for route rip-up
 
 /* Structure used to hold nodes, saved nodes, and stub/offset info */
 
@@ -277,7 +289,6 @@ struct net_ {
    int  xmax, ymax;	// Bounding box upper right corner
    int  trunkx;		// X position of the net's trunk line (see flags)
    int  trunky;		// Y position of the net's trunk line (see flags)
-   int  ripped;		// Number of segments to be ripped (if applicable)
    NETLIST noripup;	// list of nets that have been ripped up to
 			// route this net.  This will not be allowed
 			// a second time, to avoid looping.

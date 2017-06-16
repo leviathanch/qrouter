@@ -668,7 +668,7 @@ static int post_def_setup()
    // a third category which is route-to-route spacing violation.
 
    for (i = 0; i < Num_layers; i++) {
-      needblock[i] = (u_char)0;
+      needblock[i] = FALSE;
       sreq1 = LefGetRouteSpacing(i);
 
       sreq2 = LefGetViaWidth(i, i, 0) + sreq1;
@@ -779,7 +779,7 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
-	 result = doroute(net, (u_char)0, graphdebug);
+	 result = doroute(net, FALSE, graphdebug);
 	 if (result == 0) {
 	    remaining--;
 	    if (Verbose > 0)
@@ -895,7 +895,7 @@ static int ripup_colliding(NET net, u_char onlybreak)
 	nl2 = nl->next;
 	if (Verbose > 0)
             Fprintf(stdout, "Ripping up blocking net %s\n", nl->net->netname);
-	if (ripup_net(nl->net, (u_char)1, onlybreak) == TRUE) { 
+	if (ripup_net(nl->net, TRUE, onlybreak) == TRUE) { 
 	    for (fn = FailedNets; fn && fn->next != NULL; fn = fn->next);
 	    if (fn)
 		fn->next = nl;
@@ -946,7 +946,7 @@ int route_net_ripup(NET net, u_char graphdebug, u_char onlybreak)
 	}
     }
 
-    result = doroute(net, (u_char)1, graphdebug);
+    result = doroute(net, TRUE, graphdebug);
     if (result != 0) {
 	if (net->noripup != NULL) {
 	    if ((net->flags & NET_PENDING) == 0) {
@@ -957,7 +957,7 @@ int route_net_ripup(NET net, u_char graphdebug, u_char onlybreak)
 		    free(net->noripup);
 		    net->noripup = nl;
 		}
-		result = doroute(net, (u_char)1, graphdebug);
+		result = doroute(net, TRUE, graphdebug);
 		net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	}
@@ -1036,7 +1036,7 @@ dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effo
 	 Fprintf(stdout, "Routing net %s with collisions\n", net->netname);
       Flush(stdout);
 
-      result = doroute(net, (u_char)1, graphdebug);
+      result = doroute(net, TRUE, graphdebug);
 
       if (result != 0) {
 	 if (net->noripup != NULL) {
@@ -1048,7 +1048,7 @@ dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effo
 	          free(net->noripup);
 	          net->noripup = nl;
 	       }
-	       result = doroute(net, (u_char)1, graphdebug);
+	       result = doroute(net, TRUE, graphdebug);
 	       net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	 }
@@ -1072,13 +1072,9 @@ dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effo
 	 // Complete failure to route, even allowing collisions.
 	 // Abandon routing this net.
 
-	 if (Verbose > 0) {
-	    Flush(stdout);
-	    Fprintf(stderr, "----------------------------------------------\n");
-	    Fprintf(stderr, "Complete failure on net %s:  Abandoning.\n",
+	 if (Verbose > 0)
+	    Fprintf(stdout, "Failure on net %s:  Abandoning for now.\n",
 			net->netname);
-	    Fprintf(stderr, "----------------------------------------------\n");
-	 }
 
 	 // Add the net to the "abandoned" list
 	 nl = (NETLIST)malloc(sizeof(struct netlist_));
@@ -1117,7 +1113,7 @@ dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effo
 	 // Remove both routing information and remove the route from
 	 // Obs[] for all parts of the net that were previously routed
 
-	 ripup_net(net, (u_char)1, (u_char)0);	// Remove routing information from net
+	 ripup_net(net, TRUE, FALSE);	// Remove routing information from net
 	 continue;
       }
 
@@ -1215,11 +1211,11 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
 	 setBboxCurrent(net);
-	 ripup_net(net, (u_char)0, (u_char)0);
+	 ripup_net(net, FALSE, FALSE);
 	 // set mask mode to BBOX, if auto
 	 maskSave = maskMode;
 	 if (maskMode == MASK_AUTO) maskMode = MASK_BBOX;
-	 result = doroute(net, (u_char)0, graphdebug);
+	 result = doroute(net, FALSE, graphdebug);
 	 maskMode = maskSave;
 	 if (result == 0) {
 	    remaining--;
@@ -1331,7 +1327,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   iroute.nsrc = NULL;
   iroute.nsrctap = NULL;
   iroute.maxcost = MAXRT;
-  iroute.do_pwrbus = (u_char)0;
+  iroute.do_pwrbus = FALSE;
   iroute.pwrbus_src = 0;
 
   lastlayer = -1;
@@ -1606,31 +1602,20 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
      iroute->bbox.x1 = NumChannelsX[0];
      iroute->bbox.y1 = NumChannelsY[0];
 
-     while(1) {
-        rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist,
-			&iroute->bbox, stage);
-	if (rval == -2) {
-	   iroute->nsrc = iroute->nsrc->next;
-	   if (iroute->nsrc == NULL) break;
-	}
-	else break;
-     }
-     if (rval == -2) {
-        if (forceRoutable) make_routable(iroute->net->netnodes);
-	unable_to_route(iroute->net->netname, iroute->nsrc, forceRoutable);
-        return -1;
-     }
-
      if (iroute->do_pwrbus == FALSE) {
 
-        // Set associated routes to PR_SOURCE
-        rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist,
+	// Set node to PR_SOURCE
+	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist,
 		&iroute->bbox, stage);
 
         if (rval == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
            return -1;
         }
+
+        // Set associated routes to PR_SOURCE (okay to fail)
+        rval = set_routes_to_net(iroute->nsrc, iroute->net, PR_SOURCE,
+		&iroute->glist, &iroute->bbox, stage);
 
         // Now search for all other nodes on the same net that have not
         // yet been routed, and flag all of their taps as PR_TARGET
@@ -1649,12 +1634,32 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 	      if (result == 0) result = -1;
 	      unroutable++;
            }
+
+	   // And add associated routes
+	   rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL,
+			&iroute->bbox, stage);
+           if (rval == 0) result = 1;	/* (okay to fail) */
         }
 
         /* If there's only one node and it's not routable, then fail. */
         if (result == -1) return -1;
      }
      else {	/* Do this for power bus connections */
+
+        while(1) {
+           rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist,
+			&iroute->bbox, stage);
+	   if (rval == -2) {
+	      iroute->nsrc = iroute->nsrc->next;
+	      if (iroute->nsrc == NULL) break;
+	   }
+	   else break;
+        }
+        if (rval == -2) {
+           if (forceRoutable) make_routable(iroute->net->netnodes);
+	   unable_to_route(iroute->net->netname, iroute->nsrc, forceRoutable);
+           return -1;
+        }
 
         /* Set all nodes that are NOT nsrc to an unused net number */
         for (node = iroute->net->netnodes; node; node = node->next) {
@@ -1665,8 +1670,6 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
         set_powerbus_to_net(iroute->nsrc->netnum);
      }
   }
-
-  // Check for the possibility that there is already a route to the target
 
   if (!result) {
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
@@ -1765,7 +1768,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
   u_int forbid;
   GRIDP best, curpt;
   int rval;
-  u_char first = (u_char)1;
+  u_char first = TRUE;
   u_char check_order[6];
   u_char max_reached;
   u_char conflict;
@@ -1781,10 +1784,10 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
   
   for (pass = 0; pass < Numpasses; pass++) {
 
-    max_reached = (u_char)0;
+    max_reached = FALSE;
     if (!first && (Verbose > 2)) {
        Fprintf(stdout, "\n");
-       first = (u_char)1;
+       first = TRUE;
     }
     if (Verbose > 2) {
        Fprintf(stdout, "Pass %d", pass + 1);
@@ -1824,7 +1827,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    if (first) {
 	       if (Verbose > 2)
 		  Fprintf(stdout, "Found a route of cost ");
-	       first = (u_char)0;
+	       first = FALSE;
 	    }
 	    else if (Verbose > 2) {
 	       Fprintf(stdout, "|");
@@ -1868,7 +1871,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
          // from this point on the next pass, if needed.
 
          if (curpt.cost > iroute->maxcost) {
-	    max_reached = (u_char)1;
+	    max_reached = TRUE;
 	    gpoint->next = gunproc;
 	    gunproc = gpoint;
 	    continue;
@@ -2005,6 +2008,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	   Fprintf(stdout, "Between positions (%d %d) and (%d %d)\n",
 			best.x, best.y, curpt.x, curpt.y);
 	}
+	route_set_connections(iroute->net, iroute->rt);
 	goto done;	/* route success */
     }
 
@@ -2014,7 +2018,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
     // If the cost of the route exceeded maxcost at one or more locations,
     // then increase maximum cost for next pass.
 
-    if (max_reached == (u_char)1) {
+    if (max_reached == TRUE) {
        iroute->maxcost <<= 1;
        // Cost overflow;  we're probably completely hosed long before this.
        if (iroute->maxcost > MAXRT) break;
@@ -2070,6 +2074,8 @@ static ROUTE createemptyroute(void)
    rt->segments = (SEG)NULL;
    rt->flags = (u_char)0;
    rt->next = (ROUTE)NULL;
+   rt->start.route = (ROUTE)NULL;
+   rt->end.route = (ROUTE)NULL;
    return rt;
 
 } /* createemptyroute(void) */

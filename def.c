@@ -206,6 +206,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	       routednet->netnum = net->netnum;
 	       routednet->segments = NULL;
 	       routednet->flags = (u_char)0;
+	       routednet->start.route = NULL;
+	       routednet->end.route = NULL;
 	    }
 	}
 	else if (*token != '(')	/* via name */
@@ -278,6 +280,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			routednet->netnum = net->netnum;
 			routednet->segments = NULL;
 			routednet->flags = (u_char)0;
+			routednet->start.route = NULL;
+			routednet->end.route = NULL;
 		    }
 		    newRoute->next = routednet->segments;
 		    routednet->segments = newRoute;
@@ -416,6 +420,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 			routednet->netnum = net->netnum;
 			routednet->segments = NULL;
 			routednet->flags = (u_char)0;
+			routednet->start.route = NULL;
+			routednet->end.route = NULL;
 		   }
 		   newRoute->next = routednet->segments;
 		   routednet->segments = newRoute;
@@ -654,7 +660,6 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->routes = (ROUTE)NULL;
 		net->xmin = net->ymin = 0;
 		net->xmax = net->ymax = 0;
-		net->ripped = 0;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,
 		// use VDD_NET and GND_NET for power and ground, and 0

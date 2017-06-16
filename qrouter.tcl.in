@@ -106,7 +106,7 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 		if {!$result} {break}
 		if {$result < 5} {
 		    puts -nonewline stdout "*** Running stage2 routing"
-		    puts stdout "with options break, mask none, effort 50"
+		    puts stdout " with options break, mask none, effort 50"
 		    set result [stage2 break mask none effort 50]
 		}
 		if {!$result} {break}
@@ -118,11 +118,16 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
     set result [stage3]
     if {$result > 0} {
         puts -nonewline stdout "*** Running stage2 routing"
-        puts stdout "with options break, mask none"
+        puts stdout " with options break, mask none"
 	set result [stage2 break mask none]
     }
     puts stdout "*** Running stage3 routing with defaults, 2nd round"
     set result [stage3]
+    if {$result > 0} {
+        puts -nonewline stdout "*** Running stage2 routing"
+        puts stdout " with options break, mask none"
+	set result [stage2 break mask none]
+    }
     if {$filename != ""} {
         puts stdout "*** Writing DEF file $filename"
 	write_def $filename

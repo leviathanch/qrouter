@@ -58,7 +58,6 @@ int    Pinlayers = 0;
 u_int  minEffort = 0;	// Minimum effort applied from command line.
 u_char Verbose = 3;	// Default verbose level
 u_char forceRoutable = FALSE;
-u_char highOverhead = FALSE;
 u_char maskMode = MASK_AUTO;
 u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
 u_char ripLimit = 10;	// Fail net rather than rip up more than
@@ -297,9 +296,6 @@ runqrouter(int argc, char *argv[])
 	       break;
 	    case 'f':
 	       forceRoutable = TRUE;
-	       break;
-	    case 'm':
-	       highOverhead = TRUE;
 	       break;
 	    case 'k':
 	       Fprintf(stdout, "Option \"k\" deprecated.  Use \"effort\""
@@ -1284,14 +1280,17 @@ free_glist(struct routeinfo_ *iroute)
 {
    POINT gpoint;
    PROUTE *Pr;
-
-   while (iroute->glist) {
-      gpoint = iroute->glist;
-      iroute->glist = iroute->glist->next;
-      Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
-      Pr->flags &= ~PR_ON_STACK;
-      freePOINT(gpoint);
-  }
+   int i;
+   
+   for (i = 0; i < 6; i++) {
+      while (iroute->glist[i]) {
+         gpoint = iroute->glist[i];
+         iroute->glist[i] = iroute->glist[i]->next;
+         Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
+         Pr->flags &= ~PR_ON_STACK;
+         freePOINT(gpoint);
+      }
+   }
 }
 
 /*--------------------------------------------------------------*/
@@ -1310,7 +1309,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 {
   ROUTE rt1, lrt;
   NETLIST nlist;
-  int result, lastlayer, unroutable;
+  int result, lastlayer, unroutable, i;
   struct routeinfo_ iroute;
 
   if (!net) {
@@ -1323,7 +1322,8 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   // Fill out route information record
   iroute.net = net;
   iroute.rt = NULL;
-  iroute.glist = NULL;
+  for (i = 0; i < 6; i++)
+     iroute.glist[i] = NULL;
   iroute.nsrc = NULL;
   iroute.nsrctap = NULL;
   iroute.maxcost = MAXRT;
@@ -1344,7 +1344,9 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
      if (graphdebug) highlight_source();
      if (graphdebug) highlight_dest();
-     if (graphdebug) highlight_starts(iroute.glist);
+     if (graphdebug)
+	for (i = 0; i < 6; i++)
+	    highlight_starts(iroute.glist[i]);
 
      rt1 = createemptyroute();
      rt1->netnum = net->netnum;
@@ -1455,7 +1457,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 	else {
 	    result = set_powerbus_to_net(iroute->nsrc->netnum);
 	    clear_target_node(iroute->nsrc);
-	    rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist,
+	    rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
 			&iroute->bbox, stage);
 	    if (rval == -2) {
 		if (forceRoutable) {
@@ -1477,7 +1479,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
 
      // Set positions on last route to PR_SOURCE
      if (rt) {
-	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist,
+	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist[0],
 			&iroute->bbox, stage);
 
         if (result == -2) {
@@ -1521,7 +1523,7 @@ static int next_route_setup(struct routeinfo_ *iroute, u_char stage)
      // flag from all such target nodes, and placing the positions
      // on the stack for processing again.
 
-     clear_non_source_targets(iroute->net, &iroute->glist);
+     clear_non_source_targets(iroute->net, &iroute->glist[0]);
   }
 
   if (Verbose > 1) {
@@ -1605,7 +1607,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
      if (iroute->do_pwrbus == FALSE) {
 
 	// Set node to PR_SOURCE
-	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist,
+	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
 		&iroute->bbox, stage);
 
         if (rval == -2) {
@@ -1615,7 +1617,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 
         // Set associated routes to PR_SOURCE (okay to fail)
         rval = set_routes_to_net(iroute->nsrc, iroute->net, PR_SOURCE,
-		&iroute->glist, &iroute->bbox, stage);
+		&iroute->glist[0], &iroute->bbox, stage);
 
         // Now search for all other nodes on the same net that have not
         // yet been routed, and flag all of their taps as PR_TARGET
@@ -1647,7 +1649,7 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
      else {	/* Do this for power bus connections */
 
         while(1) {
-           rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist,
+           rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
 			&iroute->bbox, stage);
 	   if (rval == -2) {
 	      iroute->nsrc = iroute->nsrc->next;
@@ -1794,9 +1796,22 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
        Fprintf(stdout, " (maxcost is %d)\n", iroute->maxcost);
     }
 
-    while ((gpoint = iroute->glist) != NULL) {
+    while (TRUE) {
 
-      iroute->glist = gpoint->next;
+      // Check priority stack and move down if 1st priorty is empty
+      while (iroute->glist[0] == NULL) {
+	 for (i = 0; i < 5; i++)
+	    iroute->glist[i] = iroute->glist[i + 1];
+	 iroute->glist[5] = NULL;
+	 if ((iroute->glist[0] == NULL) && (iroute->glist[1] == NULL) &&
+		(iroute->glist[2] == NULL) && (iroute->glist[3] == NULL) &&
+		(iroute->glist[4] == NULL))
+	    break;
+      }
+      gpoint = iroute->glist[0];
+      if (gpoint == NULL) break;
+
+      iroute->glist[0] = gpoint->next;
 
       curpt.x = gpoint->x1;
       curpt.y = gpoint->y1;
@@ -1921,8 +1936,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_W;
                if ((curpt.x + 1) < NumChannelsX[curpt.lay]) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
                   }
                }
 	       break;
@@ -1933,8 +1948,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_E;
                if ((curpt.x - 1) >= 0) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
                   }
                }
 	       break;
@@ -1945,8 +1960,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_N;
                if ((curpt.y - 1) >= 0) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
                    }
                }
 	       break;
@@ -1957,8 +1972,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_S;
                if ((curpt.y + 1) < NumChannelsY[curpt.lay]) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
                   }
                }
 	       break;
@@ -1969,8 +1984,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_U;
                if (curpt.lay > 0) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
          	  }
                }
 	       break;
@@ -1981,8 +1996,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_D;
                if (curpt.lay < (Num_layers - 1)) {
          	  if ((gpoint = eval_pt(&curpt, predecessor, stage)) != NULL) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
          	  }
                }
 	       break;
@@ -2030,7 +2045,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 					// search to maxcost or to masking
 
     // Regenerate the stack of unprocessed nodes
-    iroute->glist = gunproc;
+    iroute->glist[0] = gunproc;
     gunproc = NULL;
     
   } // pass
@@ -2051,7 +2066,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 done:
 
   // Regenerate the stack of unprocessed nodes
-  if (gunproc != NULL) iroute->glist = gunproc;
+  if (gunproc != NULL) iroute->glist[0] = gunproc;
   return rval;
   
 } /* route_segs() */

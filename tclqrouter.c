@@ -800,8 +800,6 @@ GATE LookupGate(char *gatename)
 /*  stage1 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage1 force	Force a terminal to be routable	*/
-/*  stage1 overhead	Use more better routing method	*/
-/*			with high memory overhead.	*/
 /*------------------------------------------------------*/
 
 static int
@@ -815,10 +813,10 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "step", "overhead", NULL
+	"debug", "mask", "route", "force", "step", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, OverHeadIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx
     };
    
     static char *maskSubCmds[] = {
@@ -836,7 +834,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
-    saveOverhead = highOverhead;
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -859,10 +856,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 		    forceRoutable = TRUE;
 		    break;
 
-		case OverHeadIdx:
-		    highOverhead = TRUE;
-		    break;
-	
 		case RouteIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "route ?net?");
@@ -947,7 +940,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
-    highOverhead = saveOverhead;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -982,8 +974,6 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 force	Force a terminal to be routable	*/
 /*  stage2 break	Only rip up colliding segment	*/
 /*  stage2 effort <n>	Level of effort (default 100)	*/
-/*  stage2 overhead	Use more better routing method	*/
-/*			with high memory overhead.	*/
 /*------------------------------------------------------*/
 
 static int
@@ -1000,11 +990,11 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
     static char *subCmds[] = {
 	"debug", "mask", "limit", "route", "force", "tries", "step",
-	"overhead", "break", "effort", NULL
+	"break", "effort", NULL
     };
     enum SubIdx {
 	DebugIdx, MaskIdx, LimitIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx,
-	OverHeadIdx, BreakIdx, EffortIdx
+	BreakIdx, EffortIdx
     };
    
     static char *maskSubCmds[] = {
@@ -1022,7 +1012,6 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
-    saveOverhead = highOverhead;
     ripLimit = 10;		// Rip limit is 10 unless specified
     effort = 100;		// Moderate to high effort
 
@@ -1049,10 +1038,6 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	
 		case ForceIdx:
 		    forceRoutable = TRUE;
-		    break;
-
-		case OverHeadIdx:
-		    highOverhead = TRUE;
 		    break;
 
 		case EffortIdx:
@@ -1149,7 +1134,6 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
-    highOverhead = saveOverhead;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -1179,8 +1163,6 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 /*  stage3 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage3 force	Force a terminal to be routable	*/
-/*  stage3 overhead	Use more better routing method	*/
-/*			with high memory overhead.	*/
 /*  stage3 effort	Level of effort (default 100)	*/
 /*------------------------------------------------------*/
 
@@ -1196,10 +1178,10 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "step", "overhead", "effort", NULL
+	"debug", "mask", "route", "force", "step", "effort", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, OverHeadIdx, EffortIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, EffortIdx
     };
    
     static char *maskSubCmds[] = {
@@ -1218,7 +1200,6 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 
     // Save these global defaults in case they are locally changed
     saveForce = forceRoutable;
-    saveOverhead = highOverhead;
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -1241,10 +1222,6 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 		    forceRoutable = TRUE;
 		    break;
 
-		case OverHeadIdx:
-		    highOverhead = TRUE;
-		    break;
-	
 		case EffortIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "effort ?num?");
@@ -1340,7 +1317,6 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 
     // Restore global defaults in case they were locally changed
     forceRoutable = saveForce;
-    highOverhead = saveOverhead;
 
     return QrouterTagCallback(interp, objc, objv);
 }

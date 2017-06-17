@@ -197,7 +197,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_PROCESSED) {
 	       Pr->flags &= ~PR_PROCESSED;
 	       if (~(Pr->flags & PR_ON_STACK)) {
-		  if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		  Pr->flags |= PR_ON_STACK;
 		  gpoint = allocPOINT();
 		  gpoint->x1 = x;
 		  gpoint->y1 = y;
@@ -219,7 +219,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 		if (Pr->flags & PR_PROCESSED) {
 		   Pr->flags &= ~PR_PROCESSED;
 		   if (~(Pr->flags & PR_ON_STACK)) {
-		      if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		      Pr->flags |= PR_ON_STACK;
 		      gpoint = allocPOINT();
 		      gpoint->x1 = x;
 		      gpoint->y1 = y;
@@ -414,7 +414,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     if (~(Pr->flags & PR_ON_STACK)) {
-		if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		Pr->flags |= PR_ON_STACK;
 	        gpoint = allocPOINT();
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
@@ -470,7 +470,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     if (~(Pr->flags & PR_ON_STACK)) {
-		if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		Pr->flags |= PR_ON_STACK;
 	        gpoint = allocPOINT();
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
@@ -593,7 +593,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 
 		if (pushlist != NULL) {
 		   if (~(Pr->flags & PR_ON_STACK)) {
-		      if (!highOverhead) Pr->flags |= PR_ON_STACK;
+		      Pr->flags |= PR_ON_STACK;
 	  	      gpoint = allocPOINT();
 	  	      gpoint->x1 = x;
 	  	      gpoint->y1 = y;
@@ -1365,7 +1365,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 		newpt.x, newpt.y, newpt.lay);
        }
        if (~(Pr->flags & PR_ON_STACK)) {
-	  if (!highOverhead) Pr->flags |= PR_ON_STACK;
+	  Pr->flags |= PR_ON_STACK;
 	  ptret = allocPOINT();
 	  ptret->x1 = newpt.x;
 	  ptret->y1 = newpt.y;

@@ -316,7 +316,7 @@ struct netlist_ {
 struct routeinfo_ {
    NET net;
    ROUTE rt;
-   POINT glist;
+   POINT glist[6];	/* Lists of points by priority 0 to 5 */
    NODE nsrc;
    DPOINT nsrctap;
    int maxcost;
@@ -434,7 +434,6 @@ extern int    Pinlayers;		// Number of layers containing pin info.
 
 extern u_char Verbose;
 extern u_char forceRoutable;
-extern u_char highOverhead;
 extern u_char maskMode;
 extern u_char mapType;
 extern u_char ripLimit;

@@ -760,6 +760,10 @@ addcollidingnet(NETLIST *nlptr, int netnum, int x, int y, int lay)
 	    cnl->next = *nlptr;
 	    *nlptr = cnl;
 
+	    /* If there are no routes then we're done. */
+
+	    if (fnet->routes == NULL) return 0;
+
 	    /* If there is only one route then there is no need */
 	    /* to search or shuffle.				*/
 

@@ -1635,7 +1635,9 @@ static int route_setup(struct routeinfo_ *iroute, u_char stage)
 	      unable_to_route(iroute->net->netname, node, forceRoutable);
 	      if (result == 0) result = -1;
 	      unroutable++;
+	      break;
            }
+	   else if (rval == 1) continue;	/* This node was part of source */
 
 	   // And add associated routes
 	   rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL,

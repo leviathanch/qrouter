@@ -387,9 +387,10 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  return -1;	// This should not happen.
        }
 
-       if (Pr->flags & PR_SOURCE) {
-	  result = 1;				// Node is already connected!
-       }
+       if (Pr->flags & PR_SOURCE)
+	  return 1;				// Node is already connected!
+       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET))
+	  return 1;
        else if (((Pr->prdata.net == node->netnum) || (stage == (u_char)2))
 			&& !(Pr->flags & newflags)) {
 
@@ -454,9 +455,10 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        }
 
        Pr = &OBS2VAL(x, y, lay);
-       if (Pr->flags & PR_SOURCE) {
-	  result = 1;				// Node is already connected!
-       }
+       if (Pr->flags & PR_SOURCE)
+	  return 1;				// Node is already connected!
+       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET))
+	  return 1;
        else if ( !(Pr->flags & newflags) &&
 		((Pr->prdata.net == node->netnum) ||
 		(stage == (u_char)2 && Pr->prdata.net < MAXNETNUM) ||
@@ -925,14 +927,16 @@ void ripup_dependent(NET net)
 	    if (rt->flags & RT_RIP) continue;
 	    if (!(rt->flags & RT_START_NODE)) {
 		route = rt->start.route;
-		if (route->flags & RT_RIP) {
+		// route should not be NULL here. . .
+		if (route && (route->flags & RT_RIP)) {
 		    rt->flags |= RT_RIP;
 		    rerun = TRUE;
 		}
 	    }
 	    if (!(rt->flags & RT_END_NODE)) {
 		route = rt->end.route;
-		if (route->flags & RT_RIP) {
+		// route should not be NULL here. . .
+		if (route && (route->flags & RT_RIP)) {
 		    rt->flags |= RT_RIP;
 		    rerun = TRUE;
 		}
@@ -959,7 +963,7 @@ u_char ripup_net(NET net, u_char restore, u_char flagged)
    int thisnet, oldnet, x, y, lay, dir;
    NODEINFO lnode;
    NODE node;
-   ROUTE rt, rsave;
+   ROUTE rt, rsave, rlast;
    SEG seg;
    DPOINT ntap;
 
@@ -1077,12 +1081,17 @@ u_char ripup_net(NET net, u_char restore, u_char flagged)
    /* if "flagged" is true, otherwise remove all routing	*/
    /* information.						*/
 
-   if (flagged) {
+   if (flagged && (net->routes != NULL)) {
+      rlast = NULL;
       rsave = net->routes;
-      while (rsave->next) {
-	 if (rsave->next->flags & RT_RIP) {
-	    rt = rsave->next;
-	    rsave->next = rt->next;
+      while (rsave) {
+	 if (rsave->flags & RT_RIP) {
+	    rt = rsave;
+	    if (rlast == NULL)
+		net->routes = rsave->next;
+	    else
+		rlast->next = rsave->next;
+	    rsave = rsave->next;
 	    while (rt->segments) {
 	       seg = rt->segments->next;
 	       free(rt->segments);
@@ -1090,20 +1099,11 @@ u_char ripup_net(NET net, u_char restore, u_char flagged)
 	    }
 	    free(rt);
 	 }
-	 else
+	 else {
+	    rlast = rsave;
 	    rsave = rsave->next;
-      }
-      if (rsave->flags & RT_RIP) {
-	 net->routes = rsave->next;
-         while (rsave->segments) {
-	    seg = rsave->segments->next;
-	    free(rsave->segments);
-	    rsave->segments = seg;
 	 }
-	 free(rsave);
       }
-      else
-	 net->routes = rsave;
    }
    else {
       while (net->routes) {
@@ -1626,6 +1626,10 @@ route_set_connections(net, route)
       }
    }
 
+   if (!found) {
+      Fprintf(stderr, "Error:  Failure to find route start node/route!\n");
+   }
+
    /* Does last route segment connect to a node? */
 
    for (; seg->next; seg = seg->next);
@@ -1673,6 +1677,10 @@ route_set_connections(net, route)
 	 }
 	 if (found) break;
       }
+   }
+
+   if (!found) {
+      Fprintf(stderr, "Error:  Failure to find route end node/route!\n");
    }
 }
 

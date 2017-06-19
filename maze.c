@@ -359,7 +359,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 {
     int x, y, lay, obsnet = 0;
     int result = 0;
-    u_char found_one = (u_char)0;
+    u_char found_one = FALSE;
     NODEINFO lnode;
     POINT gpoint;
     DPOINT ntap;
@@ -387,10 +387,18 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	  return -1;	// This should not happen.
        }
 
-       if (Pr->flags & PR_SOURCE)
-	  return 1;				// Node is already connected!
-       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET))
-	  return 1;
+       if (Pr->flags & PR_SOURCE) {
+	  if (!found_one)
+	     return 1;			// Node is already connected!
+	  else
+	     continue;			// May be duplicate tap position
+       }
+       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET)) {
+	  if (!found_one)
+	     return 1;
+	  else
+	     continue;
+       }
        else if (((Pr->prdata.net == node->netnum) || (stage == (u_char)2))
 			&& !(Pr->flags & newflags)) {
 
@@ -424,7 +432,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	        *pushlist = gpoint;
 	     }
 	  }
-	  found_one = (u_char)1;
+	  found_one = TRUE;
 
 	  // record extents
 	  if (bbox) {
@@ -455,10 +463,18 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
        }
 
        Pr = &OBS2VAL(x, y, lay);
-       if (Pr->flags & PR_SOURCE)
-	  return 1;				// Node is already connected!
-       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET))
-	  return 1;
+       if (Pr->flags & PR_SOURCE) {
+	  if (!found_one)
+	     return 1;			// Node is already connected!
+	  else
+	     continue;			// May be duplicate tap record
+       }
+       else if ((Pr->flags & PR_TARGET) && (newflags & PR_TARGET)) {
+	  if (!found_one)
+	     return 1;
+	  else
+	     continue;
+       }
        else if ( !(Pr->flags & newflags) &&
 		((Pr->prdata.net == node->netnum) ||
 		(stage == (u_char)2 && Pr->prdata.net < MAXNETNUM) ||
@@ -481,7 +497,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	        *pushlist = gpoint;
 	     }
 	  }
-	  found_one = (u_char)1;
+	  found_one = TRUE;
 
 	  // record extents
 	  if (bbox) {
@@ -504,7 +520,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
     // reachable from any grid point, in the first stage, so we don't
     // wait until the rip-up and reroute stage to route them.
 
-    if ((result == 0) && (found_one == (u_char)0)) {
+    if ((result == 0) && (!found_one)) {
        if (stage == (u_char)1)
           return set_node_to_net(node, newflags, pushlist, bbox, (u_char)2);
        else if (stage == (u_char)2)

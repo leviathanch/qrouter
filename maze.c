@@ -428,8 +428,14 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
 	        gpoint->layer = lay;
-	        gpoint->next = *pushlist;
-	        *pushlist = gpoint;
+		if (found_one) {
+	            gpoint->next = pushlist[1];
+		    pushlist[1] = gpoint;
+		}
+		else {
+	            gpoint->next = pushlist[0];
+		    pushlist[0] = gpoint;
+		}
 	     }
 	  }
 	  found_one = TRUE;
@@ -493,8 +499,14 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
 	        gpoint->layer = lay;
-	        gpoint->next = *pushlist;
-	        *pushlist = gpoint;
+		if (found_one) {
+	            gpoint->next = pushlist[2];
+		    pushlist[2] = gpoint;
+		}
+		else {
+	            gpoint->next = pushlist[0];
+		    pushlist[0] = gpoint;
+		}
 	     }
 	  }
 	  found_one = TRUE;

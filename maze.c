@@ -428,14 +428,8 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	        gpoint->x1 = x;
 	        gpoint->y1 = y;
 	        gpoint->layer = lay;
-		if (found_one) {
-	            gpoint->next = pushlist[1];
-		    pushlist[1] = gpoint;
-		}
-		else {
-	            gpoint->next = pushlist[0];
-		    pushlist[0] = gpoint;
-		}
+	        gpoint->next = *pushlist;
+		*pushlist = gpoint;
 	     }
 	  }
 	  found_one = TRUE;
@@ -500,12 +494,12 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 	        gpoint->y1 = y;
 	        gpoint->layer = lay;
 		if (found_one) {
-	            gpoint->next = pushlist[2];
-		    pushlist[2] = gpoint;
+	            gpoint->next = pushlist[1];
+		    pushlist[1] = gpoint;
 		}
 		else {
-	            gpoint->next = pushlist[0];
-		    pushlist[0] = gpoint;
+	            gpoint->next = *pushlist;
+		    *pushlist = gpoint;
 		}
 	     }
 	  }
@@ -805,7 +799,7 @@ addcollidingnet(NETLIST *nlptr, int netnum, int x, int y, int lay)
 	    for (rt = fnet->routes; rt; rt = rt->next) {
 		found = 0;
 		for (seg = rt->segments; seg; seg = seg->next) {
-		    if ((seg->layer == lay) || ((seg->segtype == ST_VIA) &&
+		    if ((seg->layer == lay) || ((seg->segtype & ST_VIA) &&
 				((seg->layer + 1) == lay))) {
 			sx = seg->x1;
 			sy = seg->y1;
@@ -974,6 +968,84 @@ void ripup_dependent(NET net)
 }
 
 /*--------------------------------------------------------------*/
+/* Failure analysis (debug procedure)				*/
+/* Occasionally when ripping up a net or net route, the Obs	*/
+/* array shows a different net in the position that is being	*/
+/* ripped, which should not happen.  This routine does a quick	*/
+/* analysis to determine if the position is orphaned.  If so,	*/
+/* it just returns and ripup_net will overwrite the position.	*/
+/* If it appears to be connected to a valid route, it will find	*/
+/* the net and route segment and run rip-up on it.		*/
+/*--------------------------------------------------------------*/
+
+void analyze_route_overwrite(int x, int y, int lay, int netnum)
+{
+    u_char is_valid = FALSE;
+    int i, sx, sy, l;
+    NET fnet;
+    ROUTE rt;
+    SEG seg;
+
+    /* Check on all sides to see if position is orphaned */
+
+    if ((x < NumChannelsX[0] - 1) && (OBSVAL(x + 1, y, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((x > 0) && (OBSVAL(x - 1, y, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((y < NumChannelsY[0] - 1) && (OBSVAL(x, y + 1, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((y > 0) && (OBSVAL(x, y - 1, lay) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((lay < Num_layers - 1) && (OBSVAL(x, y, lay + 1) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+    else if ((lay > 0) && (OBSVAL(x, y, lay - 1) & NETNUM_MASK) == netnum)
+	is_valid = TRUE;
+
+    if (is_valid == FALSE) {
+	Fprintf(stderr, "Net position %d %d %d appears to be orphaned.\n",
+			x, y, lay);
+	return; 	/* No action, just overwrite */
+    }
+
+    for (i = 0; i < Numnets; i++) {
+	fnet = Nlnets[i];
+	if (fnet->netnum == netnum) {
+	    for (rt = fnet->routes; rt; rt = rt->next) {
+		for (seg = rt->segments; seg; seg = seg->next) {
+		    sx = seg->x1;
+		    sy = seg->y1;
+		    l = seg->layer;
+		    while (1) {
+			if ((sx == x) && (sy == y) && (l == lay)) {
+			    Fprintf(stderr, "Net position %d %d %d appears to "
+					"belong to a valid network route.\n",
+					x, y, lay);
+			    /* Found the route containing this position, */
+			    /* so rip up the net now.			 */
+			    Fprintf(stderr, "Taking evasive action against net "
+					"%d\n", netnum);
+			    ripup_net(fnet, TRUE, FALSE);
+			    return;
+			}
+			if ((sx == seg->x2) && (sy == seg->y2)) {
+			    if ((seg->segtype == ST_WIRE) || (l == (lay + 1))) break;
+			    else l++;
+			}
+			else {
+			    if (seg->x2 > seg->x1) sx++;
+			    else if (seg->x2 < seg->x1) sx--;
+			    if (seg->y2 > seg->y1) sy++;
+			    else if (seg->y2 < seg->y1) sy--;
+			}
+		    }
+		}
+	    }
+	    break;
+	}
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* ripup_net ---						*/
 /*								*/
 /* Rip up the entire network located at position x, y, lay.	*/
@@ -1012,7 +1084,12 @@ u_char ripup_net(NET net, u_char restore, u_char flagged)
 	          if (oldnet != thisnet) {
 		     Fprintf(stderr, "Error: position %d %d layer %d has net "
 				"%d not %d!\n", x, y, lay, oldnet, thisnet);
-		     return FALSE;	// Something went wrong
+		     // Stop-gap:  Need to analyze the root of this problem.
+		     // However, a reasonable action is to try to find the
+		     // net and route associated with the incorrect net.
+		     analyze_route_overwrite(x, y, lay, oldnet);
+
+		     // return FALSE;	// Something went wrong
 	          }
 
 	          // Reset the net number to zero along this route for
@@ -1057,10 +1134,18 @@ u_char ripup_net(NET net, u_char restore, u_char flagged)
 		  }
 	       }
 
-	       // This break condition misses via ends, but those are
-	       // terminals and don't get ripped out.
+	       // Check for and handle via end on last route segment.
 
-	       if ((x == seg->x2) && (y == seg->y2)) break;
+	       if ((x == seg->x2) && (y == seg->y2)) {
+		  if (seg->segtype & ST_VIA) {
+		      if (lay == seg->layer)
+			 lay++;
+		      else
+		         break;
+		  }
+		  else
+		     break;
+	       }
 
 	       if (x < seg->x2) x++;
 	       else if (x > seg->x2) x--;
@@ -1443,7 +1528,7 @@ void writeback_segment(SEG seg, int netnum)
    u_int sobs;
    NODEINFO lnode;
 
-   if (seg->segtype == ST_VIA) {
+   if (seg->segtype & ST_VIA) {
       /* Preserve blocking information */
       dir = OBSVAL(seg->x1, seg->y1, seg->layer + 1) & BLOCKED_MASK;
       OBSVAL(seg->x1, seg->y1, seg->layer + 1) = netnum | dir;
@@ -1626,9 +1711,9 @@ route_set_connections(net, route)
          for (s = nr->segments; s; s = s->next) {
 	    match = FALSE;
 	    if (seg->layer == s->layer) match = TRUE;
-	    else if ((seg->segtype == ST_VIA) && ((seg->layer + 1) == s->layer))
+	    else if ((seg->segtype & ST_VIA) && ((seg->layer + 1) == s->layer))
 	       match = TRUE;
-	    else if ((s->segtype == ST_VIA) && ((s->layer + 1) == seg->layer))
+	    else if ((s->segtype & ST_VIA) && ((s->layer + 1) == seg->layer))
 	       match = TRUE;
 	    if (!match) continue;
 	    x = s->x1;
@@ -1679,9 +1764,9 @@ route_set_connections(net, route)
          for (s = nr->segments; s; s = s->next) {
 	    match = FALSE;
 	    if (seg->layer == s->layer) match = TRUE;
-	    else if ((seg->segtype == ST_VIA) && ((seg->layer + 1) == s->layer))
+	    else if ((seg->segtype & ST_VIA) && ((seg->layer + 1) == s->layer))
 	       match = TRUE;
-	    else if ((s->segtype == ST_VIA) && ((s->layer + 1) == seg->layer))
+	    else if ((s->segtype & ST_VIA) && ((s->layer + 1) == seg->layer))
 	       match = TRUE;
 	    if (!match) continue;
 	    x = s->x1;
@@ -2247,7 +2332,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       // segments produced.  Vias have to be handled one at a time, as we make
       // no assumptions about stacked vias.
 
-      if (seg->segtype == ST_WIRE) {
+      if (seg->segtype & ST_WIRE) {
 	 while ((lrnext = lrprev->next) != NULL) {
 	    lrnext = lrprev->next;
 	    if (((lrnext->x1 - lrprev->x1) == dx) &&
@@ -2267,7 +2352,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
          Fprintf(stdout, "commit: index = %d, net = %d\n",
 		Pr->prdata.net, netnum);
 
-	 if (seg->segtype == ST_WIRE) {
+	 if (seg->segtype & ST_WIRE) {
             Fprintf(stdout, "commit: wire layer %d, (%d,%d) to (%d,%d)\n",
 		seg->layer, seg->x1, seg->y1, seg->x2, seg->y2);
 	 }

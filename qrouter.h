@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <X11/Xlibint.h> // needed for type BOOL
 
-#define THREADS 1
+#define THREADS 4
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 extern int numThreadsRunningG;

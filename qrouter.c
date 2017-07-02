@@ -2863,7 +2863,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   }
 
   // Generate a search area mask representing the "likely best route".
-  /*if ((iroute->do_pwrbus == FALSE) && (maskMode == MASK_AUTO)) {
+  if ((iroute->do_pwrbus == FALSE) && (maskMode == MASK_AUTO)) {
      if (stage == 0)
 	createMask(iroute->net, MASK_SMALL, (u_char)Numpasses);
      else
@@ -2874,8 +2874,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   else if (maskMode == MASK_BBOX)
      createBboxMask(iroute->net, (u_char)Numpasses);
   else
-     createMask(iroute->net, maskMode, (u_char)Numpasses);*/
-  createBboxMask(iroute->net, (u_char)Numpasses);
+     createMask(iroute->net, maskMode, (u_char)Numpasses);
 
   // Heuristic:  Set the initial cost beyond which we stop searching.
   // This value is twice the cost of a direct route across the
@@ -3098,7 +3097,6 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case EAST:
 	       predecessor |= PR_PRED_W;
-	       // curpt.x++;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3109,7 +3107,6 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case WEST:
 	       predecessor |= PR_PRED_E;
-	       // curpt.x--;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3120,7 +3117,6 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
-	       // curpt.y--;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;
@@ -3131,7 +3127,6 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor = PR_CONFLICT;
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
-	       // curpt.y++;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
          	     gpoint->next = iroute->glist;
          	     iroute->glist = gpoint;

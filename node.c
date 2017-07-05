@@ -434,9 +434,12 @@ int count_line_list(BBOX_LINE list)
 	return ret;
 }
 
-BOOL is_closed_shape(BBOX_LINE obj)
+BOOL is_closed_shape(BBOX box)
 {
+	if(!box) return FALSE;
+	if(box->num_edges<4) return FALSE;
 	BOOL ret = FALSE;
+	BBOX_LINE obj = box->edges;
 	BBOX_LINE edge = NULL;
 	POINT pt = clone_point(obj->pt1);
 	for(BBOX_LINE l2=obj;l2;l2=l2->next) {
@@ -465,16 +468,16 @@ BOOL is_closed_shape(BBOX_LINE obj)
 // check whether pnt of point is within borders
 BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 {
-	int xmin, xmax, ymin, ymax;
 	if(!bbox) return FALSE;
 	if(!bbox->edges) return FALSE;
 	if(!pnt) return FALSE;
+	int xmin, xmax, ymin, ymax;
 
 	// first check die area
 	if((pnt->x<0)||(pnt->x>NumChannelsX[0])||(pnt->y<0)||(pnt->y>NumChannelsY[0])) return FALSE; // outside die
 
 	// is not a closed shape then false
-	if(!is_closed_shape(bbox->edges)) return FALSE;
+	if(!is_closed_shape(bbox)) return FALSE;
 
 	// then  check trunk box
 	POINT pt1 = get_left_lower_trunk_point(bbox);
@@ -667,8 +670,7 @@ BOOL check_bbox_consistency(NET net, BBOX vbox)
 	if(!net) return FALSE;
 	if(!vbox) return FALSE;
 	if(!vbox->edges) return FALSE;
-	if(vbox->num_edges<4) return FALSE;
-	if(!is_closed_shape(vbox->edges)) return FALSE;
+	if(!is_closed_shape(vbox)) return FALSE;
 
 	POINT vpnt;
 	DPOINT dtap;

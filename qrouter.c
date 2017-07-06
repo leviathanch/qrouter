@@ -2278,19 +2278,21 @@ static void createMask(NET net, u_char slack, u_char halo)
   int xcent, ycent, xmin, ymin, xmax, ymax;
   POINT pt1, pt2;
   POINT vpnt;
+
   pt1 = get_left_lower_trunk_point(net->bbox);
   pt2 = get_right_upper_trunk_point(net->bbox);
-  vpnt = create_point(0,0,0);
-
-  fillMask(net, (u_char)halo);
 
   xmin = pt1->x;
   xmax = pt2->x;
   ymin = pt1->y;
   ymax = pt2->y;
-  
+
   free(pt1);
   free(pt2);
+
+  vpnt = create_point(0,0,0);
+
+  fillMask(net, (u_char)halo);
 
   xcent = xmin;
   ycent = ymax;
@@ -2742,8 +2744,6 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 					Pr->flags = PR_COST;		// This location is routable
 					Pr->prdata.cost = MAXRT;
 				}
-			} else if(check_point_area(net->bbox,vpnt,TRUE,0)) {
-				OBSVAL(vpnt->x, vpnt->y, vpnt->layer) |= BLOCKED_MASK;
 			}
 		}
 	}

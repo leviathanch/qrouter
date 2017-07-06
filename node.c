@@ -158,6 +158,10 @@ BBOX create_fresh_bbox()
 	}
 	pt->edges = NULL;
 	pt->num_edges = 0;
+	pt->x1_exception = FALSE;
+	pt->x2_exception = FALSE;
+	pt->y1_exception = FALSE;
+	pt->y2_exception = FALSE;
 	return pt;
 }
 
@@ -437,6 +441,7 @@ int count_line_list(BBOX_LINE list)
 BOOL is_closed_shape(BBOX box)
 {
 	if(!box) return FALSE;
+	if(!box->edges) return FALSE;
 	if(box->num_edges<4) return FALSE;
 	BOOL ret = FALSE;
 	BBOX_LINE obj = box->edges;
@@ -470,6 +475,7 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 {
 	if(!bbox) return FALSE;
 	if(!bbox->edges) return FALSE;
+	if(bbox->num_edges<4) return FALSE;
 	if(!pnt) return FALSE;
 	int xmin, xmax, ymin, ymax;
 

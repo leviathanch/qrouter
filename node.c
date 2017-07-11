@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <tcl.h>
+
 #include "qrouter.h"
 #include "node.h"
 #include "qconfig.h"
@@ -179,6 +181,7 @@ BBOX_LINE clone_line(BBOX_LINE orig)
 
 BBOX_LINE get_fresh_line()
 {
+	Tcl_MutexLock(bbox_line_mutex);
 	BBOX_LINE r = malloc(sizeof(struct bbox_line_));
 	if(!r) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
@@ -187,6 +190,7 @@ BBOX_LINE get_fresh_line()
 	r->next = NULL;
 	r->pt1 = NULL;
 	r->pt2 = NULL;
+	Tcl_MutexUnlock(bbox_line_mutex);
 }
 
 BBOX_LINE clone_line_list(BBOX_LINE orig)
@@ -339,11 +343,6 @@ BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
 	return b;
 }
 
-#define CHECK_POINT_ABOVE_HLINE 1
-#define CHECK_POINT_UNDER_HLINE 2
-#define CHECK_POINT_LEFT_VLINE 3
-#define CHECK_POINT_RIGHT_VLINE 4
-
 BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, int edge_distance)
 {
 	if(!line) return FALSE;
@@ -354,10 +353,10 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, in
 	int ymin, ymax;
 	int x,y;
 
-	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE)) {
+	if(mode&(CHECK_POINT_ABOVE_HLINE|CHECK_POINT_UNDER_HLINE)) {
 		if(line->pt1->y!=line->pt2->y) return FALSE; // not a horizontal line!
 	}
-	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE)) {
+	if(mode&(CHECK_POINT_LEFT_VLINE|CHECK_POINT_RIGHT_VLINE)) {
 		if(line->pt1->x!=line->pt2->x) return FALSE; // not a vertical line!
 	}
 
@@ -389,9 +388,9 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, in
 			break;
 	}
 
-	if((mode==CHECK_POINT_ABOVE_HLINE)||(mode==CHECK_POINT_UNDER_HLINE))
+	if(mode&(CHECK_POINT_ABOVE_HLINE|CHECK_POINT_UNDER_HLINE))
 		if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
-	if((mode==CHECK_POINT_LEFT_VLINE)||(mode==CHECK_POINT_RIGHT_VLINE))
+	if(mode&(CHECK_POINT_LEFT_VLINE|CHECK_POINT_RIGHT_VLINE))
 		if((pnt->y>=ymin)&&(pnt->y<=ymax)) return TRUE;
 
 	return FALSE;

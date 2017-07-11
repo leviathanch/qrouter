@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <X11/Xlibint.h> // needed for type BOOL
 
-#define THREADS 4
+#define THREADS 2
 #define TCL_THREADS THREADS
 #define MAX_NUM_THREADS THREADS
 extern int numThreadsRunningG;
@@ -24,8 +24,8 @@ extern int numThreadsRunningG;
 #define PIXEL_DRAW_DELAY 300
 
 #define MAXRT		100000		// "Infinite" route cost
-#define BOX_ROOM_X 5
-#define BOX_ROOM_Y 5
+#define BOX_ROOM_X 3
+#define BOX_ROOM_Y 3
 #define TAP_ROOM 2
 #define WIRE_ROOM 1
 

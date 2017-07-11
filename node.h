@@ -6,12 +6,19 @@
 
 #ifndef NODE_H
 
+#define CHECK_POINT_ABOVE_HLINE 0x10000001
+#define CHECK_POINT_UNDER_HLINE 0x10000010
+#define CHECK_POINT_LEFT_VLINE 0x10000100
+#define CHECK_POINT_RIGHT_VLINE 0x10001000
+
 #define UNDEF_NET	 0
 #define GND_NET		 1
 #define VDD_NET		 2
 #define CLK_NET		 3
 #define MIN_NET_NUMBER   4
+
 #define COORDS(l) l->pt1->x,l->pt1->y,l->pt2->x,l->pt2->y
+
 void create_netorder(u_char method);
 void find_bounding_box(NET net);
 void define_route_tree(NET);

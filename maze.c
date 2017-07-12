@@ -1364,7 +1364,6 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
 
    while (1) {
       newlr = clone_point(lrend);
-      printf("\n\n%s processing lrend x %d y %d layer %d\n\n",__FUNCTION__,newlr->x,newlr->y,newlr->layer);
       Pr = &OBS2VAL(newlr->x, newlr->y, newlr->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
 
@@ -1372,31 +1371,24 @@ int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this
 
       switch (dmask) {
          case PR_PRED_N:
-	    printf("%s: operation PR_PRED_N set\n",__FUNCTION__);
 	    (newlr->y)++;
 	    break;
          case PR_PRED_S:
-	    printf("%s: operation PR_PRED_S set\n",__FUNCTION__);
 	    (newlr->y)--;
 	    break;
          case PR_PRED_E:
-	    printf("%s: operation PR_PRED_E set\n",__FUNCTION__);
 	    (newlr->x)++;
 	    break;
          case PR_PRED_W:
-	    printf("%s: operation PR_PRED_W set\n",__FUNCTION__);
 	    (newlr->x)--;
 	    break;
          case PR_PRED_U:
-	    printf("%s: operation PR_PRED_U set\n",__FUNCTION__);
 	    (newlr->layer)++;
 	    break;
          case PR_PRED_D:
-	    printf("%s: operation PR_PRED_D set\n",__FUNCTION__);
 	    (newlr->layer)--;
 	    break;
 	 default:
-	    printf("%s: No valid operation set %d\n",__FUNCTION__,dmask);
 	    break;
       }
 

@@ -132,13 +132,12 @@ int net_absolute_distance(NET net)
 POINT clone_point(POINT p)
 {
 	if(!p) return NULL;
-	POINT pt = create_point(p->x,p->y,p->layer);
-	pt->next = NULL;
-	return pt;
+	return create_point(p->x,p->y,p->layer);
 }
 
 POINT create_point(int x, int y, int layer)
 {
+	Tcl_MutexLock(bbox_point_mutex);
 	POINT pt = malloc(sizeof(struct point_)); // creating requested point
 	if(!pt) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
@@ -148,11 +147,13 @@ POINT create_point(int x, int y, int layer)
 	pt->y=y;
 	pt->layer=layer;
 	pt->next = NULL;
+	Tcl_MutexUnlock(bbox_point_mutex);
 	return pt;
 }
 
 BBOX create_fresh_bbox()
 {
+	Tcl_MutexLock(bbox_mutex);
 	BBOX pt = malloc(sizeof(struct bbox_)); // creating requested box
 	if(!pt) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
@@ -164,6 +165,7 @@ BBOX create_fresh_bbox()
 	pt->x2_exception = FALSE;
 	pt->y1_exception = FALSE;
 	pt->y2_exception = FALSE;
+	Tcl_MutexUnlock(bbox_mutex);
 	return pt;
 }
 
@@ -172,10 +174,12 @@ BBOX_LINE clone_line(BBOX_LINE orig)
 	if(!orig) return NULL;
 	if(!orig->pt1) return NULL;
 	if(!orig->pt2) return NULL;
+	Tcl_MutexLock(clone_line_mutex);
 	BBOX_LINE r = get_fresh_line();
 	r->pt1=clone_point(orig->pt1);
 	r->pt2=clone_point(orig->pt2);
 	r->next = NULL;
+	Tcl_MutexUnlock(clone_line_mutex);
 	return r;
 }
 
@@ -191,15 +195,23 @@ BBOX_LINE get_fresh_line()
 	r->pt1 = NULL;
 	r->pt2 = NULL;
 	Tcl_MutexUnlock(bbox_line_mutex);
+	return r;
 }
 
 BBOX_LINE clone_line_list(BBOX_LINE orig)
 {
 	if(!orig) return NULL;
-	BBOX_LINE ret;
-	ret = clone_line(orig);
-	ret->next = clone_line_list(orig->next);
-	return ret;
+	BBOX_LINE head = clone_line(orig);
+	BBOX_LINE current = head;
+
+	for(BBOX_LINE t = orig->next; t; t=t->next) {
+		current->next = clone_line(t);
+		current = current->next;
+	}
+
+	current->next = NULL;
+
+	return head;
 }
 
 BBOX shrink_bbox(BBOX orig, int num_pixels)
@@ -248,8 +260,7 @@ BBOX shrink_bbox(BBOX orig, int num_pixels)
 BBOX clone_bbox(BBOX orig)
 {
 	if(!orig) return NULL;
-	BBOX r = NULL;
-	r = create_fresh_bbox();
+	BBOX r = create_fresh_bbox();
 	r->edges =  clone_line_list(orig->edges);
 	r->num_edges = orig->num_edges;
 	return r;

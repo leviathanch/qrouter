@@ -353,10 +353,10 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, in
 	int ymin, ymax;
 	int x,y;
 
-	if(mode&(CHECK_POINT_ABOVE_HLINE|CHECK_POINT_UNDER_HLINE)) {
+	if(mode&CHECK_POINT_HORIZONTAL) {
 		if(line->pt1->y!=line->pt2->y) return FALSE; // not a horizontal line!
 	}
-	if(mode&(CHECK_POINT_LEFT_VLINE|CHECK_POINT_RIGHT_VLINE)) {
+	if(mode&CHECK_POINT_VERTICAL) {
 		if(line->pt1->x!=line->pt2->x) return FALSE; // not a vertical line!
 	}
 
@@ -388,9 +388,9 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, in
 			break;
 	}
 
-	if(mode&(CHECK_POINT_ABOVE_HLINE|CHECK_POINT_UNDER_HLINE))
+	if(mode&CHECK_POINT_HORIZONTAL)
 		if((pnt->x>=xmin)&&(pnt->x<=xmax)) return TRUE;
-	if(mode&(CHECK_POINT_LEFT_VLINE|CHECK_POINT_RIGHT_VLINE))
+	if(mode&CHECK_POINT_VERTICAL)
 		if((pnt->y>=ymin)&&(pnt->y<=ymax)) return TRUE;
 
 	return FALSE;

@@ -96,18 +96,18 @@ proc qrouter::standard_route {{filename ""} {doquit true}} {
 	while {true} {
 	    set lastresult $result
 	    puts -nonewline stdout "*** Running stage2 routing"
-	    puts stdout " with options break, mask $msize, effort 10"
-            set result [stage2 break mask $msize effort 10]
+	    puts stdout " with options mask $msize, effort 10"
+            set result [stage2 mask $msize effort 10]
 	    if {!$result} {break}
 	    if {$result > $lastresult} {
 		puts -nonewline stdout "*** Running stage2 routing"
-		puts stdout " with options break, mask none, effort 20"
-		set result [stage2 break mask none effort 20]
+		puts stdout " with options mask none, effort 20"
+		set result [stage2 mask none effort 20]
 		if {!$result} {break}
 		if {$result < 5} {
 		    puts -nonewline stdout "*** Running stage2 routing"
-		    puts stdout " with options break, mask none, effort 50"
-		    set result [stage2 break mask none effort 50]
+		    puts stdout " with options mask none, effort 50"
+		    set result [stage2 mask none effort 50]
 		}
 		if {!$result} {break}
 	    }

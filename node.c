@@ -282,22 +282,6 @@ BOOL points_fully_equal(POINT p1, POINT p2)
 	return FALSE;
 }
 
-BOOL point_in_list(POINT list, POINT needle)
-{
-	BOOL ret = FALSE;
-	for(POINT p=list;p;p=p->next) {
-		if(points_fully_equal(p,needle)) ret=TRUE;
-	}
-	return ret;
-}
-
-int count_points_in_list(POINT list)
-{
-	int ret=0;
-	for(POINT p=list;p;p=p->next) ret++;
-	return ret;
-}
-
 BOOL gpoints_equal(GRIDP p1, GRIDP p2)
 {
 	if((p1.x==p2.x)&&(p1.y==p2.y)) return TRUE;

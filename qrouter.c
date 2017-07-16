@@ -1062,10 +1062,6 @@ int dofirststage(u_char graphdebug, int debug_netnum)
    route_essential_nets(clknets,&remaining,graphdebug);
    hide_all_nets();
    draw_layout();
-   /*route_essential_nets(vddnets,&remaining,graphdebug);
-   draw_layout();
-   route_essential_nets(gndnets,&remaining,graphdebug);
-   draw_layout();*/
 
    failcount = countlist(FailedNets);
    if (debug_netnum >= 0) return failcount;

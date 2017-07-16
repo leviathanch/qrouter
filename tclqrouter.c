@@ -808,6 +808,7 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 {
     u_char dodebug;
     u_char dostep;
+    u_char saveForce, saveOverhead;
     int i, idx, idx2, val, result, failcount = 0;
     NET net = NULL;
 
@@ -830,7 +831,9 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
     dodebug = FALSE;
     dostep = FALSE;
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
-    forceRoutable = FALSE;	// Don't force unless specified
+
+    // Save these global defaults in case they are locally changed
+    saveForce = forceRoutable;
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -852,7 +855,7 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 		case ForceIdx:
 		    forceRoutable = TRUE;
 		    break;
-	
+
 		case RouteIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "route ?net?");
@@ -935,6 +938,9 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 
     if (stepnet >= (Numnets - 1)) stepnet = -1;
 
+    // Restore global defaults in case they were locally changed
+    forceRoutable = saveForce;
+
     return QrouterTagCallback(interp, objc, objv);
 }
 
@@ -966,23 +972,29 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 /*  stage2 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage2 force	Force a terminal to be routable	*/
-/*  stage2 tries <n>	Keep trying n additional times	*/
+/*  stage2 break	Only rip up colliding segment	*/
+/*  stage2 effort <n>	Level of effort (default 100)	*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
                int objc, Tcl_Obj *CONST objv[])
 {
+    u_int  effort;
     u_char dodebug;
     u_char dostep;
+    u_char onlybreak;
+    u_char saveForce, saveOverhead;
     int i, idx, idx2, val, result, failcount;
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "limit", "route", "force", "tries", "step", NULL
+	"debug", "mask", "limit", "route", "force", "tries", "step",
+	"break", "effort", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, LimitIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx
+	DebugIdx, MaskIdx, LimitIdx, RouteIdx, ForceIdx, TriesIdx, StepIdx,
+	BreakIdx, EffortIdx
     };
    
     static char *maskSubCmds[] = {
@@ -996,9 +1008,12 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 
     dodebug = FALSE;
     dostep = FALSE;
+    onlybreak = FALSE;
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
-    forceRoutable = FALSE;	// Don't force unless specified
+    // Save these global defaults in case they are locally changed
+    saveForce = forceRoutable;
     ripLimit = 10;		// Rip limit is 10 unless specified
+    effort = 100;		// Moderate to high effort
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -1016,9 +1031,24 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 		case StepIdx:
 		    dostep = TRUE;
 		    break;
+
+		case BreakIdx:
+		    onlybreak = TRUE;
+		    break;
 	
 		case ForceIdx:
 		    forceRoutable = TRUE;
+		    break;
+
+		case EffortIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "effort ?num?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
+		    if (result != TCL_OK) return result;
+		    effort = (u_int)val;
 		    break;
 
 		case TriesIdx:
@@ -1029,7 +1059,9 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 		    i++;
 		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
 		    if (result != TCL_OK) return result;
-		    keepTrying = (u_char)val;
+		    Tcl_SetResult(interp, "\"tries\" deprecated, "
+				"use \"effort\" instead.", NULL);
+		    effort = (u_char)val * 100;
 		    break;
 	
 		case RouteIdx:
@@ -1093,12 +1125,16 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
     }
 
     if (net == NULL)
-	failcount = dosecondstage(dodebug, dostep);
+	failcount = dosecondstage(dodebug, dostep, onlybreak, effort);
     else
-	failcount = route_net_ripup(net, dodebug);
+	failcount = route_net_ripup(net, dodebug, onlybreak);
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
     draw_layout();
+
+    // Restore global defaults in case they were locally changed
+    forceRoutable = saveForce;
+
     return QrouterTagCallback(interp, objc, objv);
 }
 
@@ -1127,22 +1163,25 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 /*  stage3 route <net>	Route net named <net> only.	*/
 /*							*/
 /*  stage3 force	Force a terminal to be routable	*/
+/*  stage3 effort	Level of effort (default 100)	*/
 /*------------------------------------------------------*/
 
 static int
 qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
                int objc, Tcl_Obj *CONST objv[])
 {
+    u_int effort;
     u_char dodebug;
     u_char dostep;
+    u_char saveForce, saveOverhead;
     int i, idx, idx2, val, result, failcount = 0;
     NET net = NULL;
 
     static char *subCmds[] = {
-	"debug", "mask", "route", "force", "step", NULL
+	"debug", "mask", "route", "force", "step", "effort", NULL
     };
     enum SubIdx {
-	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx
+	DebugIdx, MaskIdx, RouteIdx, ForceIdx, StepIdx, EffortIdx
     };
    
     static char *maskSubCmds[] = {
@@ -1157,7 +1196,10 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     dodebug = FALSE;
     dostep = FALSE;
     maskMode = MASK_AUTO;	// Mask mode is auto unless specified
-    forceRoutable = FALSE;	// Don't force unless specified
+    effort = 100;		// Moderate to high effort
+
+    // Save these global defaults in case they are locally changed
+    saveForce = forceRoutable;
 
     if (objc >= 2) {
 	for (i = 1; i < objc; i++) {
@@ -1179,7 +1221,18 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 		case ForceIdx:
 		    forceRoutable = TRUE;
 		    break;
-	
+
+		case EffortIdx:
+		    if (i >= objc - 1) {
+			Tcl_WrongNumArgs(interp, 0, objv, "effort ?num?");
+			return TCL_ERROR;
+		    }
+		    i++;
+		    result = Tcl_GetIntFromObj(interp, objv[i], &val);
+		    if (result != TCL_OK) return result;
+		    effort = (u_int)val;
+		    break;
+
 		case RouteIdx:
 		    if (i >= objc - 1) {
 			Tcl_WrongNumArgs(interp, 0, objv, "route ?net?");
@@ -1233,7 +1286,7 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     else stepnet++;
 
     if (net == NULL)
-	failcount = dothirdstage(dodebug, stepnet);
+	failcount = dothirdstage(dodebug, stepnet, effort);
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
 	    result = doroute(net, (u_char)0, dodebug);
@@ -1261,6 +1314,9 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
     if (stepnet >= (Numnets - 1)) stepnet = -1;
+
+    // Restore global defaults in case they were locally changed
+    forceRoutable = saveForce;
 
     return QrouterTagCallback(interp, objc, objv);
 }
@@ -1307,7 +1363,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 	    case AllIdx:
 		for (i = 0; i < Numnets; i++) {
 		   net = Nlnets[i];
-		   ripup_net(net, (u_char)1);
+		   ripup_net(net, (u_char)1, (u_char)1);
 		}
 		draw_layout();
 		break;
@@ -1315,7 +1371,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 		for (i = 2; i < objc; i++) {
 		    net = LookupNet(Tcl_GetString(objv[i]));
 		    if (net != NULL)
-			ripup_net(net, (u_char)1);
+			ripup_net(net, (u_char)1, (u_char)1);
 		}
 		draw_layout();
 		break;
@@ -1335,6 +1391,7 @@ qrouter_remove(ClientData clientData, Tcl_Interp *interp,
 /*			ordered by the standard metric	*/
 /*   failing unordered	Move all nets to FailedNets,	*/
 /*			as originally ordered		*/
+/*   failing summary	List of failed and total nets	*/
 /*------------------------------------------------------*/
 
 static int

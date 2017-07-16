@@ -1405,94 +1405,6 @@ FreeNodeinfo(int gridx, int gridy, int layer)
 }
 
 /*--------------------------------------------------------------*/
-/* print_nodes - show the nodes list				*/
-/*         ARGS: filename to print to
-        RETURNS: nothing
-   SIDE EFFECTS: none
-AUTHOR and DATE: steve beccue      Tue Aug 04  2003
-\*--------------------------------------------------------------*/
-
-void print_nodes(char *filename)
-{
-  FILE *o;
-  int i;
-  NET net;
-  NODE node;
-  DPOINT dp;
-
-    if (!strcmp(filename, "stdout")) {
-	o = stdout;
-    } else {
-	o = fopen(filename, "w");
-    }
-    if (!o) {
-	Fprintf( stderr, "node.c:print_nodes.  Couldn't open output file\n" );
-	return;
-    }
-
-    for (i = 0; i < Numnets; i++) {
-       net = Nlnets[i];
-       for (node = net->netnodes; node; node = node->next) {
-	  dp = (DPOINT)node->taps;
-	  fprintf(o, "%d\t%s\t(%g,%g)(%d,%d) :%d:num=%d netnum=%d\n",
-		node->nodenum, 
-		node->netname,
-		// legacy:  print only the first point
-		dp->x, dp->y, dp->gridx, dp->gridy,
-		node->netnum, node->numnodes, node->netnum );
-		 
-	  /* need to print the routes to this node (deprecated)
-	  for (j = 0 ; j < g->nodes; j++) {
-	      fprintf(o, "%s(%g,%g) ", g->node[j], *(g->x[j]), *(g->y[j]));
-	  }
-	  */
-       }
-    }
-    fclose(o);
-
-} /* void print_nodes() */
-
-/*--------------------------------------------------------------*/
-/*C print_nlnets - show the nets				*/
-/*         ARGS: filename to print to
-        RETURNS: nothing
-   SIDE EFFECTS: none
-AUTHOR and DATE: steve beccue      Tue Aug 04  2003
-\*--------------------------------------------------------------*/
-
-void print_nlnets( char *filename )
-{
-  FILE *o;
-  int i;
-  NODE nd;
-  NET net;
-
-    if (!strcmp(filename, "stdout")) {
-	o = stdout;
-    } else {
-	o = fopen(filename, "w");
-    }
-    if (!o) {
-	Fprintf(stderr, "node.c:print_nlnets.  Couldn't open output file\n");
-	return;
-    }
-
-    for (i = 0; i < Numnets; i++) {
-        net = Nlnets[i];
-	fprintf(o, "%d\t#=%d\t%s   \t\n", net->netnum, 
-		 net->numnodes, net->netname);
-
-	for (nd = net->netnodes; nd; nd = nd->next) {
-	   fprintf(o, "%d ", nd->nodenum);
-	}
-    }
-
-    fprintf(o, "%d nets\n", Numnets);
-    fflush(o);
-
-} /* void print_nlnets() */
-
-/*--------------------------------------------------------------*/
 /* count_reachable_taps()					*/
 /*								*/
 /*  For each grid point in the layout, find if it corresponds	*/
@@ -3242,13 +3154,13 @@ void create_obstructions_outside_nodes(void)
                                 }
 
 				lnode = SetNodeinfo(gridx, gridy, ds->layer);
+				lnode->nodeloc = node;
+				lnode->nodesav = node;
 
 				if ((k < Numnets) && (dir != NI_STUB_MASK)) {
 				   OBSVAL(gridx, gridy, ds->layer)
 				   	= (OBSVAL(gridx, gridy, ds->layer)
 					  & BLOCKED_MASK) | (u_int)g->netnum[i] | mask; 
-				   lnode->nodeloc = node;
-				   lnode->nodesav = node;
 				   lnode->flags |= dir;
 				}
 				else if ((OBSVAL(gridx, gridy, ds->layer)

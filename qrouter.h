@@ -215,16 +215,28 @@ typedef struct route_ *ROUTE;
 typedef struct node_ *NODE;
 
 struct route_ {
-  ROUTE  next;
-  int    netnum;
-  SEG    segments;
-  u_char flags;         // See below for flags
+   ROUTE  next;
+   int    netnum;
+   SEG    segments;
+   union {
+      ROUTE route;
+      NODE  node;     
+   } start;
+   union {
+      ROUTE route;
+      NODE  node;     
+   } end;
+   u_char flags;         // See below for flags
 };
 
 /* Definitions for flags in struct route_ */
 
-#define RT_OUTPUT	0x1	// Route has been output
-#define RT_STUB		0x2	// Route has at least one stub route
+#define RT_OUTPUT	0x01	// Route has been output
+#define RT_STUB		0x02	// Route has at least one stub route
+#define RT_START_NODE	0x04	// Route starts on a node
+#define RT_END_NODE	0x08	// Route ends on a node
+#define RT_VISITED	0x10	// Flag for recursive search
+#define RT_RIP		0x20	// Flag for route rip-up
 
 /* Structure used to hold nodes, saved nodes, and stub/offset info */
 
@@ -353,7 +365,7 @@ struct netlist_ {
 struct routeinfo_ {
    NET net;
    ROUTE rt;
-   POINT glist;
+   POINT glist[6];	/* Lists of points by priority 0 to 5 */
    NODE nsrc;
    DPOINT nsrctap;
    int maxcost;
@@ -468,7 +480,6 @@ extern int    Numnets;
 extern int    Pinlayers;		// Number of layers containing pin info.
 
 extern u_char Verbose;
-extern u_char keepTrying;
 extern u_char forceRoutable;
 extern u_char maskMode;
 extern u_char mapType;
@@ -501,33 +512,32 @@ extern NETLIST clknets;
 
 /* Function prototypes */
 
+static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+static ROUTE createemptyroute(void);
+static void helpmessage(void);
+
 int    set_num_channels(void);
 int    allocate_obs_array();
 int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 
 void   read_def(char *filename);
-int    write_def(char *filename);
 
 #ifdef TCL_QROUTER
 int    write_delays(char *filename);
 #endif
 
-char  *print_node_name(NODE node);
-void   print_nets(char *filename);
-void   print_routes(char *filename);
-void   print_nlgates(char *filename);
-void   print_net(NET net);
-void   print_gate(GATE gate);
-
 int    dofirststage(u_char graphdebug, int debug_netnum);
-int    dosecondstage(u_char graphdebug, u_char singlestep);
-int    dothirdstage(u_char graphdebug, int debug_netnum);
+int    dosecondstage(u_char graphdebug, u_char singlestep,
+		u_char onlybreak, u_int effort);
+int    dothirdstage(u_char graphdebug, int debug_netnum, u_int effort);
 
 int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
 NET getnetbyname(char *name);
-int    route_net_ripup(NET net, u_char graphdebug);
+int    route_net_ripup(NET net, u_char graphdebug, u_char onlybreak);
 
 NETLIST postpone_net(NETLIST postponed, NET net);
 void free_postponed(NETLIST postponed);

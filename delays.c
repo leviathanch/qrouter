@@ -793,6 +793,9 @@ int write_delays(char *filename)
 		    newroute->next = rt->next;
 		    rt->next = newroute;
 
+		    newroute->start.route = NULL;
+		    newroute->end.route = NULL;
+
 		    /* Update eptinfo[i].route to point to new split */
 		    for (i = 0; i < numroutes; i++) {
 			if (eptinfo[i].route == rt) {

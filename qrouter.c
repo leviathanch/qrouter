@@ -24,11 +24,12 @@
 #include "point.h"
 #include "node.h"
 #include "maze.h"
+#include "mask.h"
+#include "output.h"
 #include "lef.h"
 #include "def.h"
 #include "graphics.h"
 
-int  Pathon = -1;
 int  TotalRoutes = 0;
 TCL_DECLARE_MUTEX(TotalRoutesMutex)
 
@@ -41,12 +42,13 @@ GATE	PinMacro;	// macro definition for a pin
 GATE    Nlgates;	// gate instance information
 NETLIST FailedNets;	// list of nets that failed to route
 
-u_char   *RMask;    	        // mask out best area to route
 u_int    *Obs[MAX_LAYERS];      // net obstructions in layer
 PROUTE   *Obs2[MAX_LAYERS];     // used for pt->pt routes on layer
 float    *Obsinfo[MAX_LAYERS];  // temporary array used for detailed obstruction info
 NODEINFO *Nodeinfo[MAX_LAYERS]; // nodes and stub information is here. . .
 DSEG      UserObs;		// user-defined obstruction layers
+
+u_int     progress[3];		// analysis of behavior
 
 u_char needblock[MAX_LAYERS];
 
@@ -56,8 +58,8 @@ char *clknet = NULL;
 
 int    Numnets = 0;
 int    Pinlayers = 0;
+u_int  minEffort = 0;	// Minimum effort applied from command line.
 u_char Verbose = 3;	// Default verbose level
-u_char keepTrying = (u_char)0;
 u_char forceRoutable = FALSE;
 u_char maskMode = MASK_AUTO;
 u_char mapType = MAP_OBSTRUCT | DRAW_ROUTES;
@@ -321,6 +323,7 @@ runqrouter(int argc, char *argv[])
 	 switch (optc) {
 	    case 'c':
 	    case 'i':
+	    case 'e':
 	    case 'k':
 	    case 'v':
 	    case 'd':
@@ -386,10 +389,15 @@ runqrouter(int argc, char *argv[])
 	       return 1;
 	       break;
 	    case 'f':
-	       forceRoutable = 1;
+	       forceRoutable = TRUE;
 	       break;
 	    case 'k':
-	       keepTrying = (u_char)atoi(optarg);
+	       Fprintf(stdout, "Option \"k\" deprecated.  Use \"effort\""
+			" in stage2 or stage3 command or -e option\n");
+	       minEffort = 100 * atoi(optarg);
+	       break;
+	    case 'e':
+	       minEffort = atoi(optarg);
 	       break;
 	    case '\0':
 	       /* Ignore '-' */
@@ -750,7 +758,7 @@ static int post_def_setup()
    // a third category which is route-to-route spacing violation.
 
    for (i = 0; i < Num_layers; i++) {
-      needblock[i] = (u_char)0;
+      needblock[i] = FALSE;
       sreq1 = LefGetRouteSpacing(i);
 
       sreq2 = LefGetViaWidth(i, i, 0) + sreq1;
@@ -1572,7 +1580,7 @@ NET getnetbyname(char *name)
 /* Return the number of nets ripped up				*/
 /*--------------------------------------------------------------*/
 
-static int ripup_colliding(NET net)
+static int ripup_colliding(NET net, u_char onlybreak)
 {
     NETLIST nl, nl2, fn;
     int ripped;
@@ -1603,7 +1611,7 @@ static int ripup_colliding(NET net)
 	nl2 = nl->next;
 	if (Verbose > 0)
             Fprintf(stdout, "Ripping up blocking net %s\n", nl->net->netname);
-	if (ripup_net(nl->net, (u_char)1) == TRUE) { 
+	if (ripup_net(nl->net, TRUE, onlybreak) == TRUE) { 
 	    for (fn = FailedNets; fn && fn->next != NULL; fn = fn->next);
 	    if (fn)
 		fn->next = nl;
@@ -1631,7 +1639,7 @@ static int ripup_colliding(NET net)
 /* net "net".							*/
 /*--------------------------------------------------------------*/
 
-int route_net_ripup(NET net, u_char graphdebug)
+int route_net_ripup(NET net, u_char graphdebug, u_char onlybreak)
 {
     int result;
     NETLIST nl, nl2;
@@ -1654,7 +1662,7 @@ int route_net_ripup(NET net, u_char graphdebug)
 	}
     }
 
-    result = doroute(net, (u_char)1, graphdebug);
+    result = doroute(net, TRUE, graphdebug);
     if (result != 0) {
 	if (net->noripup != NULL) {
 	    if ((net->flags & NET_PENDING) == 0) {
@@ -1665,13 +1673,13 @@ int route_net_ripup(NET net, u_char graphdebug)
 		    free(net->noripup);
 		    net->noripup = nl;
 		}
-		result = doroute(net, (u_char)1, graphdebug);
+		result = doroute(net, TRUE, graphdebug);
 		net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	}
     }
     if (result != 0)
-	result = ripup_colliding(net);
+	result = ripup_colliding(net, onlybreak);
 
     return result;
 }
@@ -1695,26 +1703,21 @@ int route_net_ripup(NET net, u_char graphdebug)
 /*--------------------------------------------------------------*/
 
 int
-dosecondstage(u_char graphdebug, u_char singlestep)
+dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effort)
 {
-   int failcount, origcount, result, maxtries;
-   NET net = CurNet[0];
+   int failcount, result, i;
+   NET net;
    NETLIST nl, nl2;
    NETLIST Abandoned;	// Abandoned routes---not even trying any more.
    ROUTE rt, rt2;
    SEG seg;
 
-   origcount = countlist(FailedNets);
-   if (FailedNets) {
-      Tcl_MutexLock(&TotalRoutesMutex);
-      maxtries = TotalRoutes + ((origcount < 20) ? 20 : origcount) * 8;
-      Tcl_MutexUnlock(&TotalRoutesMutex);
-   } else
-      maxtries = 0;
+   u_int loceffort = (effort > minEffort) ? effort : minEffort;
 
    fillMask(net, (u_char)0);
    Abandoned = NULL;
-
+   for (i = 0; i < 3; i++) progress[i] = 0;
+   
    // Clear the "noripup" field from all of the failed nets, in case
    // the second stage route is being repeated.
 
@@ -1750,7 +1753,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 Fprintf(stdout, "Routing net %s with collisions\n", net->netname);
       Flush(stdout);
 
-      result = doroute(net, (u_char)1, graphdebug);
+      result = doroute(net, TRUE, graphdebug);
 
       if (result != 0) {
 	 if (net->noripup != NULL) {
@@ -1762,7 +1765,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	          free(net->noripup);
 	          net->noripup = nl;
 	       }
-	       result = doroute(net, (u_char)1, graphdebug);
+	       result = doroute(net, TRUE, graphdebug);
 	       net->flags |= NET_PENDING;	// Next time we abandon it.
 	    }
 	 }
@@ -1777,8 +1780,7 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 // then treat this as a route failure, and don't rip up any of
 	 // the colliding nets.
 
-	 result = ripup_colliding(net);
-	 if (Verbose > 1) Fprintf(stdout, "%s: ripped up net %s with collisions\n", __FUNCTION__, net->netname);
+	 result = ripup_colliding(net, onlybreak);
 	 if (result > 0) result = 0;
       }
 
@@ -1787,13 +1789,9 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 // Complete failure to route, even allowing collisions.
 	 // Abandon routing this net.
 
-	 if (Verbose > 0) {
-	    Flush(stdout);
-	    Fprintf(stderr, "----------------------------------------------\n");
-	    Fprintf(stderr, "Complete failure on net %s:  Abandoning.\n",
+	 if (Verbose > 0)
+	    Fprintf(stdout, "Failure on net %s:  Abandoning for now.\n",
 			net->netname);
-	    Fprintf(stderr, "----------------------------------------------\n");
-	 }
 
 	 // Add the net to the "abandoned" list
 	 Abandoned = postpone_net(Abandoned,net);
@@ -1829,39 +1827,29 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 	 // Remove both routing information and remove the route from
 	 // Obs[] for all parts of the net that were previously routed
 
-	 ripup_net(net, (u_char)1);	// Remove routing information from net
+	 ripup_net(net, TRUE, FALSE);	// Remove routing information from net
 	 continue;
       }
 
       // Write back the original route to the grid array
       writeback_all_routes(net);
 
-      // Failsafe---if we have been looping enough times to exceed
-      // maxtries (which is set to 8 route attempts per original failed
-      // net), then we check progress.  If we have reduced the number
-      // of failed nets by half or more, then we have an indication of
-      // real progress, and will continue.  If not, we give up.  Qrouter
-      // is almost certainly hopelessly stuck at this point.
+      // Evaluate progress by counting the total number of remaining
+      // routes in the last (effort) cycles.  progress[2]->progress[1]
+      // is a progression from oldest to newest number of remaining
+      // routes.  Calculate the slope of this line and declare an end
+      // to this 2nd stage route if the slope falls to zero.
 
-      if (TotalRoutes >= maxtries) {
-	 if (failcount <= (origcount / 2)) {
-	    Tcl_MutexLock(&TotalRoutesMutex);
-	    maxtries = TotalRoutes + failcount * 8;
-	    Tcl_MutexUnlock(&TotalRoutesMutex);
-	    origcount = failcount;
-	 }
-	 else if (keepTrying == 0) {
-	    Fprintf(stderr, "\nQrouter is stuck, abandoning remaining routes.\n");
+      progress[1] += failcount;
+      progress[0]++;
+      if (progress[0] > loceffort) {
+	 if ((progress[2] > 0) && (progress[2] < progress[1])) {
+	    Fprintf(stderr, "\nNo progress at level of effort %d;"
+			" ending 2nd stage.\n", loceffort);
 	    break;
 	 }
-	 else {
-	    keepTrying--;
-	    Fprintf(stderr, "\nQrouter is stuck, but I was told to keep trying.\n");
-	    Tcl_MutexLock(&TotalRoutesMutex);
-	    maxtries = TotalRoutes + failcount * 8;
-	    Tcl_MutexUnlock(&TotalRoutesMutex);
-	    origcount = failcount;
-	 }
+	 progress[2] = progress[1];
+	 progress[1] = progress[0] = 0;
       }
       if (singlestep && (FailedNets != NULL)) return countlist(FailedNets);
    }
@@ -1910,15 +1898,14 @@ dosecondstage(u_char graphdebug, u_char singlestep)
 /* routable.							*/
 /*--------------------------------------------------------------*/
 
-int dothirdstage(u_char graphdebug, int debug_netnum)
+int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 {
-   int i, failcount, remaining, result;
+   int i, failcount, remaining, result, maskSave;
    NET net;
    NETLIST nl;
-   int thnum = 0;
+   u_int loceffort = (effort > minEffort) ? effort : minEffort;
 
-   // Clear the lists of failed routes, in case first
-   // stage is being called more than once.
+   // Clear the lists of failed routes
 
    if (debug_netnum <= 0) {
       while (FailedNets) {
@@ -1930,14 +1917,20 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
 
    // Now find and route all the nets
 
+   for (i = 0; i < 3; i++) progress[i] = 0;
    remaining = Numnets;
  
    for (i = (debug_netnum >= 0) ? debug_netnum : 0; i < Numnets; i++) {
 
       net = getnettoroute(i);
       if ((net != NULL) && (net->netnodes != NULL)) {
-	 ripup_net(net, (u_char)0);
-	 result = doroute(net, (u_char)0, graphdebug);
+	 setBboxCurrent(net);
+	 ripup_net(net, FALSE, FALSE);
+	 // set mask mode to BBOX, if auto
+	 maskSave = maskMode;
+	 if (maskMode == MASK_AUTO) maskMode = MASK_BBOX;
+	 result = doroute(net, FALSE, graphdebug);
+	 maskMode = maskSave;
 	 if (result == 0) {
 	    remaining--;
 	    if (Verbose > 0)
@@ -1956,6 +1949,23 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
 	 remaining--;
       }
       if (debug_netnum >= 0) break;
+
+      /* Progress analysis (see 2nd stage).  Normally, the 3rd	 */
+      /* stage is run only after all nets have been successfully */	
+      /* routed.  However, there is no guarantee of this, so it	 */
+      /* is necessary to anticipate convergence issues.		 */
+
+      progress[1] += failcount;
+      progress[0]++;
+      if (progress[0] > loceffort) {
+	 if ((progress[2] > 0) && (progress[2] < progress[1])) {
+	    Fprintf(stderr, "\nNo progress at level of effort %d;"
+			" ending 3rd stage.\n", loceffort);
+	    break;
+	 }
+	 progress[2] = progress[1];
+	 progress[1] = progress[0] = 0;
+      }
    }
    failcount = countlist(FailedNets);
    if (debug_netnum >= 0) return failcount;
@@ -1979,6 +1989,7 @@ int dothirdstage(u_char graphdebug, int debug_netnum)
 }
 
 /*--------------------------------------------------------------*/
+
 /* initMask() ---						*/
 /*--------------------------------------------------------------*/
 
@@ -2454,6 +2465,7 @@ static void fillMask(NET net, u_char value) {
 }
 
 /*--------------------------------------------------------------*/
+
 /* Free memory of an iroute glist and clear the Obs2		*/
 /* PR_ON_STACK flag for each location in the list.		*/
 /*--------------------------------------------------------------*/
@@ -2463,14 +2475,16 @@ free_glist(struct routeinfo_ *iroute)
 {
    POINT gpoint;
    PROUTE *Pr;
-
-   while (iroute->glist) {
-      gpoint = iroute->glist;
-      iroute->glist = iroute->glist->next;
-      Pr = &OBS2VAL(gpoint->x, gpoint->y, gpoint->layer);
-      Pr->flags &= ~PR_ON_STACK;
-      freePOINT(gpoint);
-  }
+   int i; 
+   for (i = 0; i < 6; i++) {
+      while (iroute->glist[i]) {
+         gpoint = iroute->glist[i];
+         iroute->glist[i] = iroute->glist[i]->next;
+         Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
+         Pr->flags &= ~PR_ON_STACK;
+         freePOINT(gpoint);
+      }
+   }
 }
 
 /*--------------------------------------------------------------*/
@@ -2488,7 +2502,7 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 {
   ROUTE rt1, lrt;
   NETLIST nlist;
-  int result = 0, lastlayer, unroutable;
+  int result, lastlayer, unroutable, i;
   struct routeinfo_ iroute;
 
   if (!net) {
@@ -2499,11 +2513,12 @@ int doroute(NET net, u_char stage, u_char graphdebug)
   // Fill out route information record
   iroute.net = net;
   iroute.rt = NULL;
-  iroute.glist = NULL;
+  for (i = 0; i < 6; i++)
+     iroute.glist[i] = NULL;
   iroute.nsrc = NULL;
   iroute.nsrctap = NULL;
   iroute.maxcost = MAXRT;
-  iroute.do_pwrbus = (u_char)0;
+  iroute.do_pwrbus = FALSE;
   iroute.pwrbus_src = 0;
 
   lastlayer = -1;
@@ -2514,10 +2529,11 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   // Keep going until we are unable to route to a terminal
   while (net && (result > 0)) {
-     if(graphdebug) highlight_mask(net);
-     if(graphdebug) highlight_source(net);
-     if(graphdebug) highlight_dest(net);
-     //if (graphdebug) sleep(1);
+     if (graphdebug) highlight_source();
+     if (graphdebug) highlight_dest();
+     if (graphdebug)
+	for (i = 0; i < 6; i++)
+	    highlight_starts(iroute.glist[i]);
 
      rt1 = createemptyroute();
      rt1->netnum = net->netnum;
@@ -2614,7 +2630,8 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	else {
 	    result = set_powerbus_to_net(iroute->nsrc->netnum);
 	    clear_target_node(iroute->nsrc);
-	    rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist, iroute->bbox, stage);
+	    rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
+			&iroute->bbox, stage);
 	    if (rval == -2) {
 		if (forceRoutable) {
 		    make_routable(iroute->nsrc);
@@ -2634,7 +2651,8 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 
      // Set positions on last route to PR_SOURCE
      if (rt) {
-	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist, stage);
+	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist[0],
+			&iroute->bbox, stage);
         if (result == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
            return -1;
@@ -2682,7 +2700,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      // flag from all such target nodes, and placing the positions
      // on the stack for processing again.
 
-     clear_non_source_targets(iroute->net, &iroute->glist);
+     clear_non_source_targets(iroute->net, &iroute->glist[0]);
   }
 
   int num_taps;
@@ -2789,10 +2807,17 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
         return -1;
      }
 
+     iroute->bbox.x2 = iroute->bbox.y2 = 0;
+     iroute->bbox.x1 = NumChannelsX[0];
+     iroute->bbox.y1 = NumChannelsY[0];
      if (iroute->do_pwrbus == FALSE) {
 
         // Set associated routes to PR_SOURCE
         rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist, stage);
+
+	// Set node to PR_SOURCE
+	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
+		&iroute->bbox, stage);
 
         if (rval == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
@@ -2814,13 +2839,35 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	      unable_to_route(iroute->net->netname, node, forceRoutable);
 	      if (result == 0) result = -1;
 	      unroutable++;
+	      break;
            }
+	   else if (rval == 1) continue;	/* This node was part of source */
+
+	   // And add associated routes
+	   rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL,
+			&iroute->bbox, stage);
+           if (rval == 0) result = 1;	/* (okay to fail) */
         }
 
         /* If there's only one node and it's not routable, then fail. */
         if (result == -1) return -1;
      }
      else {	/* Do this for power bus connections */
+
+        while(1) {
+           rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
+			&iroute->bbox, stage);
+	   if (rval == -2) {
+	      iroute->nsrc = iroute->nsrc->next;
+	      if (iroute->nsrc == NULL) break;
+	   }
+	   else break;
+        }
+        if (rval == -2) {
+           if (forceRoutable) make_routable(iroute->net->netnodes);
+	   unable_to_route(iroute->net->netname, iroute->nsrc, forceRoutable);
+           return -1;
+        }
 
         /* Set all nodes that are NOT nsrc to an unused net number */
         for (node = iroute->net->netnodes; node; node = node->next) {
@@ -2831,8 +2878,6 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
         set_powerbus_to_net(iroute->nsrc->netnum);
      }
   }
-
-  // Check for the possibility that there is already a route to the target
 
   if (!result) {
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
@@ -2939,7 +2984,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
   u_int forbid;
   GRIDP best, curpt;
   int rval;
-  u_char first = (u_char)1;
+  u_char first = TRUE;
   u_char check_order[6];
   u_char max_reached;
   u_char conflict;
@@ -2955,21 +3000,32 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
   
   for (pass = 0; pass < Numpasses; pass++) {
 
-    max_reached = (u_char)0;
+    max_reached = FALSE;
     if (!first && (Verbose > 2)) {
-       FprintfT(stdout, "\n");
-       first = (u_char)1;
+       Fprintf(stdout, "\n");
+       first = TRUE;
     }
     if (Verbose > 2) {
        FprintfT(stdout, "%s: Pass %d",__FUNCTION__, pass + 1);
        FprintfT(stdout, " (maxcost is %d)\n", iroute->maxcost);
     }
 
-    if (graphdebug) highlight_mask(net);
-    if(graphdebug) highlight_source(net);
-    if(graphdebug) highlight_dest(net);
-    while ((gpoint = iroute->glist) != NULL) {
-      iroute->glist = gpoint->next;
+    while (TRUE) {
+      // Check priority stack and move down if 1st priorty is empty
+      while (iroute->glist[0] == NULL) {
+	 for (i = 0; i < 5; i++)
+	    iroute->glist[i] = iroute->glist[i + 1];
+	 iroute->glist[5] = NULL;
+	 if ((iroute->glist[0] == NULL) && (iroute->glist[1] == NULL) &&
+		(iroute->glist[2] == NULL) && (iroute->glist[3] == NULL) &&
+		(iroute->glist[4] == NULL))
+	    break;
+      }
+      gpoint = iroute->glist[0];
+      if (gpoint == NULL) break;
+
+      iroute->glist[0] = gpoint->next;
+
       curpt.x = gpoint->x;
       curpt.y = gpoint->y;
       curpt.lay = gpoint->layer;
@@ -3001,8 +3057,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
  	 if (curpt.cost <= best.cost) {
 	    if (first) {
 	       if (Verbose > 2)
-		  FprintfT(stdout, "%s: Found a route of cost \n",__FUNCTION__);
-	       first = (u_char)0;
+		  Fprintf(stdout, "Found a route of cost ");
+	       first = FALSE;
 	    }
 	    else if (Verbose > 2) {
 	       FprintfT(stdout, "|");
@@ -3045,7 +3101,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
          // from this point on the next pass, if needed.
 
          if (curpt.cost > iroute->maxcost) {
-	    max_reached = (u_char)1;
+	    max_reached = TRUE;
 	    gpoint->next = gunproc;
 	    gunproc = gpoint;
 	    continue;
@@ -3094,8 +3150,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case EAST:
 	       predecessor |= PR_PRED_W;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
 	       }
 	       break;
 
@@ -3104,8 +3160,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case WEST:
 	       predecessor |= PR_PRED_E;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
 	       }
 	       break;
          
@@ -3114,8 +3170,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case SOUTH:
 	       predecessor |= PR_PRED_N;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
 	       }
 	       break;
 
@@ -3124,8 +3180,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	    case NORTH:
 	       predecessor |= PR_PRED_S;
 	       if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
-         	     gpoint->next = iroute->glist;
-         	     iroute->glist = gpoint;
+         	     gpoint->next = iroute->glist[i];
+         	     iroute->glist[i] = gpoint;
 	       }
 	       break;
       
@@ -3135,8 +3191,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_U;
 	       if (curpt.lay > 0) {
 			if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
-				gpoint->next = iroute->glist;
-				iroute->glist = gpoint;
+				gpoint->next = iroute->glist[i];
+				iroute->glist[i] = gpoint;
 			}
 	       }
 	       break;
@@ -3147,8 +3203,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	       predecessor |= PR_PRED_D;
 	       if (curpt.lay < (Num_layers - 1)) {
 			if ((gpoint = eval_pt(net,&curpt, predecessor, stage))) {
-				gpoint->next = iroute->glist;
-				iroute->glist = gpoint;
+				gpoint->next = iroute->glist[i];
+				iroute->glist[i] = gpoint;
 			}
 	       }
 	       break;
@@ -3172,8 +3228,13 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	curpt.x = best.x;
 	curpt.y = best.y;
 	curpt.lay = best.lay;
-	curpt.cost = best.cost;
-	if ((rval = commit_proute(net, iroute->rt, &curpt, stage)) != 1) break;
+	if ((rval = commit_proute(iroute->rt, &curpt, stage)) != 1) break;
+	if (Verbose > 2) {
+	   Fprintf(stdout, "\nCommit to a route of cost %d\n", best.cost);
+	   Fprintf(stdout, "Between positions (%d %d) and (%d %d)\n",
+			best.x, best.y, curpt.x, curpt.y);
+	}
+	route_set_connections(iroute->net, iroute->rt);
 	goto done;	/* route success */
     }
 
@@ -3183,7 +3244,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
     // If the cost of the route exceeded maxcost at one or more locations,
     // then increase maximum cost for next pass.
 
-    if (max_reached == (u_char)1) {
+    if (max_reached == TRUE) {
        iroute->maxcost <<= 1;
        // Cost overflow;  we're probably completely hosed long before this.
        if (iroute->maxcost > MAXRT) break;
@@ -3195,7 +3256,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 					// search to maxcost or to masking
 
     // Regenerate the stack of unprocessed nodes
-    iroute->glist = gunproc;
+    iroute->glist[0] = gunproc;
     gunproc = NULL;
   } // pass
   
@@ -3214,7 +3275,7 @@ done:
 
   FprintfT(stdout, "%s: Exiting with code %d\n", __FUNCTION__, rval);
   // Regenerate the stack of unprocessed nodes
-  if (gunproc != NULL) iroute->glist = gunproc;
+  if (gunproc != NULL) iroute->glist[0] = gunproc;
   return rval;
   
 } /* route_segs() */
@@ -3240,1493 +3301,11 @@ static ROUTE createemptyroute(void)
    rt->segments = (SEG)NULL;
    rt->flags = (u_char)0;
    rt->next = (ROUTE)NULL;
+   rt->start.route = (ROUTE)NULL;
+   rt->end.route = (ROUTE)NULL;
    return rt;
 
 } /* createemptyroute(void) */
-
-/*--------------------------------------------------------------*/
-/* cleanup_net --						*/
-/*								*/
-/* Special handling for layers where needblock[] is non-zero,	*/
-/* and shows that two vias cannot be placed on adjacent routes. */
-/* emit_routed_net() will add specialnets to merge two adjacent	*/
-/* vias on the same route.  However, this cannot be used for	*/
-/* adjacent vias that are each in a different route record.  It	*/
-/* is easier just to find any such instances and remove them by	*/
-/* eliminating one of the vias and adding a segment to connect	*/
-/* the route to the neighboring via.				*/
-/*--------------------------------------------------------------*/
-
-static void cleanup_net(NET net)
-{
-   SEG segf, segl, seg;
-   ROUTE rt, rt2;
-   NODEINFO lnode;
-   int lf, ll, lf2, ll2;
-   u_char fcheck, lcheck;
-   u_char xcheckf, ycheckf, xcheckl, ycheckl; 
-
-   lf = ll = lf2 = ll2 = -1;
-
-   for (rt = net->routes; rt; rt = rt->next) {
-      fcheck = lcheck = FALSE;
-
-      // This problem will only show up on route endpoints.
-      // segf is the first segment of the route.
-      // segl is the last segment of the route.
-      // lf is the layer at the route start (layer first)
-      // lf2 is the layer of the second segment.
-      // ll is the layer at the route end (layer last)
-      // ll2 is the layer of the next-to-last segment
-
-      segf = rt->segments;
-      if (segf == NULL) continue;
-      if ((segf->next != NULL) && (segf->segtype == ST_VIA)) {
-	 if (segf->next->layer > segf->layer) {
-	    lf = segf->layer;
-	    lf2 = segf->layer + 1;
-	 }
-	 else {
-	    lf = segf->layer + 1;
-	    lf2 = segf->layer;
-	 }
-         // Set flag fcheck indicating that segf needs checking
-	 fcheck = TRUE;
-
-	 // We're going to remove the contact so it can't be a tap
-	 if ((lf < Pinlayers) && ((lnode = NODEIPTR(segf->x1, segf->y1, lf)) != NULL)
-			&& (lnode->nodesav != NULL))
-	    fcheck = FALSE;
-      }
-      xcheckf = needblock[lf] & VIABLOCKX;
-      ycheckf = needblock[lf] & VIABLOCKY;
-      if (!xcheckf && !ycheckf) fcheck = FALSE;
-
-      // Move to the next-to-last segment
-      for (segl = segf->next; segl && segl->next && segl->next->next;
-		segl = segl->next);
-
-      if (segl && (segl->next != NULL) && (segl->next->segtype == ST_VIA)) {
-	 if (segl->next->layer < segl->layer) {
-	    ll = segl->next->layer;
-	    ll2 = segl->next->layer + 1;
-	 }
-	 else {
-	    ll = segl->next->layer + 1;
-	    ll2 = segl->next->layer;
-	 }
-	 // Move segl to the last segment
-	 segl = segl->next;
-	 // Set flag lcheck indicating that segl needs checking.
-	 lcheck = TRUE;
-
-	 // We're going to remove the contact so it can't be a tap
-	 if ((ll < Pinlayers) && ((lnode = NODEIPTR(segl->x1, segl->y1, ll)) != NULL)
-			&& (lnode->nodesav != NULL))
-	    lcheck = FALSE;
-      }
-      xcheckl = needblock[ll] & VIABLOCKX;
-      ycheckl = needblock[ll] & VIABLOCKY;
-      if (!xcheckl && !ycheckl) lcheck = FALSE;
-
-      // For each route rt2 that is not rt, look at every via
-      // and see if it is adjacent to segf or segl.
-
-      for (rt2 = net->routes; rt2; rt2 = rt2->next) {
-
-         if ((fcheck == FALSE) && (lcheck == FALSE)) break;
-         if (rt2 == rt) continue;
-
-         for (seg = rt2->segments; seg; seg = seg->next) {
-	    if (seg->segtype & ST_VIA) {
-	       if (fcheck) {
-		  if ((seg->layer == lf) || ((seg->layer + 1) == lf)) {
-		     if (xcheckf && (seg->y1 == segf->y1) &&
-				(ABSDIFF(seg->x1, segf->x1) == 1)) {
-			if (seg->layer != segf->layer) {
-
-			   // Adjacent vias are different types.
-			   // Deal with it by creating a route between
-			   // the vias on their shared layer.  This
-			   // will later be made into a special net to
-			   // avoid notch DRC errors.
-
-			   SEG newseg;
-			   newseg = (SEG)malloc(sizeof(struct seg_));
-			   rt->segments = newseg;
-			   newseg->next = segf;
-			   newseg->layer = lf;
-			   newseg->segtype = ST_WIRE;
-			   newseg->x1 = segf->x1;
-			   newseg->y1 = segf->y1;
-			   newseg->x2 = seg->x1; 
-			   newseg->y2 = seg->y1;
-			}
-			else {
-			   // Change via to wire route, connect it to seg,
-			   // and make sure it has the same layer type as
-			   // the following route.
-			   segf->segtype = ST_WIRE;
-			   segf->x1 = seg->x1;
-			   segf->layer = lf2;
-		        }
-		     }
-		     else if (ycheckf && (seg->x1 == segf->x1) &&
-				(ABSDIFF(seg->y1, segf->y1) == 1)) {
-			if (seg->layer != segf->layer) {
-			   // Adjacent vias are different types.
-			   // Deal with it by creating a route between
-			   // the vias on their shared layer.  This
-			   // will later be made into a special net to
-			   // avoid notch DRC errors.
-
-			   SEG newseg;
-			   newseg = (SEG)malloc(sizeof(struct seg_));
-			   rt->segments = newseg;
-			   newseg->next = segf;
-			   newseg->layer = lf;
-			   newseg->segtype = ST_WIRE;
-			   newseg->x1 = segf->x1;
-			   newseg->y1 = segf->y1;
-			   newseg->x2 = seg->x1; 
-			   newseg->y2 = seg->y1;
-		        }
-		        else {
-			   // Change via to wire route, connect it to seg,
-			   // and make sure it has the same layer type as
-			   // the following route.
-			   segf->segtype = ST_WIRE;
-			   segf->y1 = seg->y1;
-			   segf->layer = lf2;
-			}
-		     }
-		  }
-	       }
-
-               if (lcheck) {
-		  if ((seg->layer == ll) || ((seg->layer + 1) == ll)) {
-		     if (xcheckl && (seg->y1 == segl->y1) &&
-				(ABSDIFF(seg->x1, segl->x1) == 1)) {
-			if (seg->layer != segl->layer) {
-
-			   // Adjacent vias are different types.
-			   // Deal with it by creating a route between
-			   // the vias on their shared layer.  This
-			   // will later be made into a special net to
-			   // avoid notch DRC errors.
-
-			   SEG newseg;
-			   newseg = (SEG)malloc(sizeof(struct seg_));
-			   segl->next = newseg;
-			   newseg->next = NULL;
-			   newseg->layer = ll;
-			   newseg->segtype = ST_WIRE;
-			   newseg->x1 = segl->x1;
-			   newseg->y1 = segl->y1;
-			   newseg->x2 = seg->x1; 
-			   newseg->y2 = seg->y1;
-			}
-			else {
-			   // Change via to wire route, connect it to seg,
-			   // and make sure it has the same layer type as
-			   // the previous route.
-			   segl->segtype = ST_WIRE;
-			   segl->x2 = seg->x2;
-			   segl->layer = ll2;
-			}
-		     }
-		     else if (ycheckl && (seg->x1 == segl->x1) &&
-				(ABSDIFF(seg->y1, segl->y1) == 1)) {
-			if (seg->layer != segl->layer) {
-
-			   // Adjacent vias are different types.
-			   // Deal with it by creating a route between
-			   // the vias on their shared layer.  This
-			   // will later be made into a special net to
-			   // avoid notch DRC errors.
-
-			   SEG newseg;
-			   newseg = (SEG)malloc(sizeof(struct seg_));
-			   segl->next = newseg;
-			   newseg->next = NULL;
-			   newseg->layer = ll;
-			   newseg->segtype = ST_WIRE;
-			   newseg->x1 = segl->x1;
-			   newseg->y1 = segl->y1;
-			   newseg->x2 = seg->x1; 
-			   newseg->y2 = seg->y1;
-			}
-			else {
-			   // Change via to wire route, connect it to seg,
-			   // and make sure it has the same layer type as
-			   // the previous route.
-			   segl->segtype = ST_WIRE;
-			   segl->y2 = seg->y2;
-			   segl->layer = ll2;
-			}
-		     }
-		  }
-	       }
-	    }
-	 }
-      }
-   }
-}
-
-/*--------------------------------------------------------------*/
-/* emit_routed_net --						*/
-/*								*/
-/* Core part of emit_routes().  Dumps the DEF format for a	*/
-/* complete net route to file Cmd.  If "special" is TRUE, then	*/
-/* it looks only for stub routes between a grid point and an	*/
-/* off-grid terminal, and dumps only the stub route geometry as	*/
-/* a SPECIALNET, which takes a width parameter.  This allows	*/
-/* the stub routes to be given the same width as a via, when	*/
-/* the via is larger than a route width, to avoid DRC notch	*/
-/* errors between the via and the terminal.  The SPECIALNETS	*/
-/* are redundant;  all routing information is in the NETS	*/
-/* section.  The SPECIALNETS only specify a wider route for the	*/
-/* stub connection.						*/
-/*--------------------------------------------------------------*/
-
-static void
-emit_routed_net(FILE *Cmd, NET net, u_char special, double oscale, int iscale)
-{
-   SEG seg, saveseg, lastseg, prevseg;
-   NODEINFO lnode, lnode1, lnode2;
-   ROUTE rt;
-   u_int dir1, dir2, tdir;
-   int layer;
-   int x = 0, y = 0, x2, y2;
-   double dc;
-   int lastx = -1, lasty = -1, lastlay;
-   int horizontal;
-   float offset1, offset2, stub, offset;
-   u_char cancel, segtype;
-   double invscale = (double)(1.0 / (double)iscale); 
-
-   /* If the STUB flag is set, then we need to write out the net name	*/
-   /* in the SPECIALNETS section.					*/
-
-   if ((special == (u_char)1) && (net->flags & NET_STUB)) {
-      fprintf(Cmd, ";\n- %s\n", net->netname);
-   }
-
-   u_char viaCheckX[MAX_LAYERS];
-   u_char viaCheckY[MAX_LAYERS];
-   double viaOffsetX[MAX_LAYERS][3];
-   double viaOffsetY[MAX_LAYERS][3];
-
-   /* Compute via offsets, if needed for adjacent vias on different nets. */
-
-   /* A well-designed standard cell set should not have DRC errors	*/
-   /* between vias spaced on adjacent tracks.  But not every standard	*/
-   /* cell set is well-designed. . .					*/
-
-   /* Example of offset measurements:					*/
-   /* viaOffsetX[layer][n]:  layer is the base layer of the via, n is	*/
-   /* 0 for the via one layer below, 1 for the same via, and 2 for the	*/
-   /* via one layer above.  Note that the n = 1 has interactions on two	*/
-   /* different metal layers.  The maximum distance is used.		*/
-
-   /* viaCheckX[1] is 0 if all of viaOffsetX[1][0-2] is zero.  This	*/
-   /*	 allows a quick determination if a check for neighboring vias	*/
-   /*    is required.							*/
-   /* viaOffsetX[1][0] is the additional spacing above the grid	width	*/
-   /*	 for via2-to-via1 (on metal2 only).				*/
-   /* viaOffsetX[1][1] is the additional spacing above the grid	width	*/
-   /*	 for via2-to-via2 (maximum for metal2 and metal3)		*/
-   /* viaOffsetX[1][2] is the additional spacing above the grid	width	*/
-   /*	 for via2-to-via3 (on metal3 only).				*/
-
-   viaOffsetX[0][0] = 0;		// nothing below the 1st via
-   viaOffsetY[0][0] = 0;
-   viaOffsetX[Num_layers - 1][2] = 0;	// nothing above the last via
-   viaOffsetY[Num_layers - 1][2] = 0;
-
-   for (layer = 0; layer < Num_layers - 1; layer++) {
-      double s1  = LefGetRouteSpacing(layer);
-      double s2  = LefGetRouteSpacing(layer + 1);
-      double p1x = PitchX[layer];
-      double p2x = PitchX[layer + 1];
-      double p1y = PitchY[layer];
-      double p2y = PitchY[layer + 1];
-      double w1x = LefGetViaWidth(layer, layer, 0);
-      double w1y = LefGetViaWidth(layer, layer, 1);
-      double w2x = LefGetViaWidth(layer, layer + 1, 0);
-      double w2y = LefGetViaWidth(layer, layer + 1, 1);
-    
-      double w0x, w0y, w3x, w3y;
-
-      viaCheckX[layer] = 0;
-      viaCheckY[layer] = 0;
-
-      if (layer > 0) {
-
-	 /* Space from via to (via - 1) */
-
-         w0x = LefGetViaWidth(layer - 1, layer, 0);
-         w0y = LefGetViaWidth(layer - 1, layer, 1);
-
-         dc = s1 + (w1x + w0x) / 2 - p1x;
-         viaOffsetX[layer][0] = (dc > 0.0) ? dc : 0.0;
-
-         dc = s1 + (w1y + w0y) / 2 - p1y;
-         viaOffsetY[layer][0] = (dc > 0.0) ? dc : 0.0;
-      }
-
-      /* Space from via to via (check both lower and upper metal layers) */
-
-      dc = s1 + w1x - p1x;
-      viaOffsetX[layer][1] = (dc > 0.0) ? dc : 0.0;
-
-      dc = s2 + w2x - p2x;
-      if (dc < 0.0) dc = 0.0;
-      if (dc > viaOffsetX[layer][1]) viaOffsetX[layer][1] = dc;
-
-      dc = s1 + w1y - p1y;
-      viaOffsetY[layer][1] = (dc > 0.0) ? dc : 0.0;
-
-      dc = s2 + w2y - p2y;
-      if (dc < 0.0) dc = 0.0;
-      if (dc > viaOffsetY[layer][1]) viaOffsetY[layer][1] = dc;
-
-      if (layer < Num_layers - 1) {
-
-	 /* Space from via to (via + 1) */
-
-         w3x = LefGetViaWidth(layer + 1, layer, 0);
-         w3y = LefGetViaWidth(layer + 1, layer, 1);
-
-         dc = s2 + (w2x + w3x) / 2 - p2x;
-         viaOffsetX[layer][2] = (dc > 0.0) ? dc : 0.0;
-
-         dc = s2 + (w2y + w3y) / 2 - p2y;
-         viaOffsetY[layer][2] = (dc > 0.0) ? dc : 0.0;
-      }
-
-      if (viaOffsetX[layer][0] > 0 || viaOffsetX[layer][1] > 0 ||
-		viaOffsetX[layer][2] > 0)
-	 viaCheckX[layer] = 1;
-      if (viaOffsetY[layer][0] > 0 || viaOffsetY[layer][1] > 0 ||
-		viaOffsetY[layer][2] > 0)
-	 viaCheckY[layer] = 1;
-   }
-
-   Pathon = -1;
-   lastlay = -1;
-
-   /* Insert routed net here */
-   for (rt = net->routes; rt; rt = rt->next) {
-      if (rt->segments && !(rt->flags & RT_OUTPUT)) {
-	 horizontal = FALSE;
-	 cancel = FALSE;
-
-	 // Check first position for terminal offsets
-	 seg = (SEG)rt->segments;
-	 lastseg = saveseg = seg;
-	 layer = seg->layer;
-	 if (seg) {
-
-	    // It is rare but possible to have a stub route off of an
-	    // endpoint via, so check this case, and use the layer type
-	    // of the via top if needed.
-
-	    if ((seg->segtype & ST_VIA) && seg->next && (seg->next->layer <=
-			seg->layer))
-	       layer++;
-
-	    lnode = (layer < Pinlayers) ? NODEIPTR(seg->x1, seg->y1, layer) : NULL;
-	    stub = (lnode) ? lnode->stub : 0.0;
-	    if (OBSVAL(seg->x1, seg->y1, layer) & STUBROUTE) {
-	       if ((special == (u_char)0) && (Verbose > 2))
-		  Fprintf(stdout, "Stub route distance %g to terminal"
-				" at %d %d (%d)\n", stub,
-				seg->x1, seg->y1, layer);
-
-	       dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
-	       x = (int)((REPS(dc)) * oscale);
-	       if (lnode->flags & NI_STUB_EW)
-		  dc += stub;
-	       x2 = (int)((REPS(dc)) * oscale);
-	       dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
-	       y = (int)((REPS(dc)) * oscale);
-	       if (lnode->flags & NI_STUB_NS)
-		  dc += stub;
-	       y2 = (int)((REPS(dc)) * oscale);
-	       if (lnode->flags & NI_STUB_EW) {
-		  horizontal = TRUE;
-
-		  // If the gridpoint ahead of the stub has a route
-		  // on the same net, and the stub is long enough
-		  // to come within a DRC spacing distance of the
-		  // other route, then lengthen it to close up the
-		  // distance and resolve the error.  (NOTE:  This
-		  // unnecessarily stretches routes to cover taps
-		  // that have not been routed to.  At least on the
-		  // test standard cell set, these rules remove a
-		  // handful of DRC errors and don't create any new
-		  // ones.  If necessary, a flag can be added to
-		  // distinguish routes from taps.
-
-		  if ((x < x2) && (seg->x1 < (NumChannelsX[layer] - 1))) {
-		     tdir = OBSVAL(seg->x1 + 1, seg->y1, layer);
-		     if ((tdir & ROUTED_NET_MASK) ==
-					(net->netnum | ROUTED_NET)) {
-			if (stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	   dc = Xlowerbound + (double)(seg->x1 + 1)
-					* PitchX[layer];
-		      	   x2 = (int)((REPS(dc)) * oscale);
-			}
-		     }
-		  }
-		  else if ((x > x2) && (seg->x1 > 0)) {
-		     tdir = OBSVAL(seg->x1 - 1, seg->y1, layer);
-		     if ((tdir & ROUTED_NET_MASK) ==
-					(net->netnum | ROUTED_NET)) {
-			if (-stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	   dc = Xlowerbound + (double)(seg->x1 - 1)
-					* PitchX[layer];
-		      	   x2 = (int)((REPS(dc)) * oscale);
-			}
-		     }
-		  }
-
-		  dc = oscale * 0.5 * LefGetRouteWidth(layer);
-		  if (special == (u_char)0) {
-		     // Regular nets include 1/2 route width at
-		     // the ends, so subtract from the stub terminus
-		     if (x < x2) {
-			x2 -= dc;
-			if (x >= x2) cancel = TRUE;
-		     }
-		     else {
-			x2 += dc;
-			if (x <= x2) cancel = TRUE;
-		     }
-		  }
-		  else {
-		     // Special nets don't include 1/2 route width
-		     // at the ends, so add to the route at the grid
-		     if (x < x2)
-			x -= dc;
-		     else
-			x += dc;
-
-		     // Routes that extend for more than one track
-		     // without a bend do not need a wide stub
-		     if (seg->x1 != seg->x2) cancel = TRUE;
-	  	  }
-	       }
-	       else {
-		  horizontal = FALSE;
-
-		  // If the gridpoint ahead of the stub has a route
-		  // on the same net, and the stub is long enough
-		  // to come within a DRC spacing distance of the
-		  // other route, then lengthen it to close up the
-		  // distance and resolve the error.
-
-		  if ((y < y2) && (seg->y1 < (NumChannelsY[layer] - 1))) {
-		     tdir = OBSVAL(seg->x1, seg->y1 + 1, layer);
-		     if ((tdir & ROUTED_NET_MASK) ==
-						(net->netnum | ROUTED_NET)) {
-			if (stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	   dc = Ylowerbound + (double)(seg->y1 + 1)
-					* PitchY[layer];
-		      	   y2 = (int)((REPS(dc)) * oscale);
-			}
-		     }
-		  }
-		  else if ((y > y2) && (seg->y1 > 0)) {
-		     tdir = OBSVAL(seg->x1, seg->y1 - 1, layer);
-		     if ((tdir & ROUTED_NET_MASK) ==
-						(net->netnum | ROUTED_NET)) {
-			if (-stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	   dc = Ylowerbound + (double)(seg->y1 - 1)
-					* PitchY[layer];
-		      	   y2 = (int)((REPS(dc)) * oscale);
-			}
-		     }
-		  }
-
-		  dc = oscale * 0.5 * LefGetRouteWidth(layer);
-		  if (special == (u_char)0) {
-		     // Regular nets include 1/2 route width at
-		     // the ends, so subtract from the stub terminus
-		     if (y < y2) {
-			y2 -= dc;
-			if (y >= y2) cancel = TRUE;
-		     }
-		     else {
-			y2 += dc;
-			if (y <= y2) cancel = TRUE;
-		     }
-		  }
-		  else {
-		     // Special nets don't include 1/2 route width
-		     // at the ends, so add to the route at the grid
-		     if (y < y2)
-			y -= dc;
-		     else
-			y += dc;
-
-		     // Routes that extend for more than one track
-		     // without a bend do not need a wide stub
-		     if (seg->y1 != seg->y2) cancel = TRUE;
-		  }
-	       }
-
-	       if (cancel == FALSE) {
-		  net->flags |= NET_STUB;
-		  rt->flags |= RT_STUB;
-		  pathstart(Cmd, layer, x2, y2, special, oscale, invscale, horizontal);
-		  pathto(Cmd, x, y, horizontal, x2, y2, invscale);
-	       }
-	       lastx = x;
-	       lasty = y;
-	       lastlay = layer;
-	    }
-	 }
-
-	 prevseg = NULL;
-	 lastseg = NULL;
-	 for (seg = rt->segments; seg; seg = seg->next) {
-	    layer = seg->layer;
-
-	    // Check for offset terminals at either point
-
-	    offset1 = 0.0;
-	    offset2 = 0.0;
-	    dir1 = 0;
-	    dir2 = 0;
-
-	    if (seg->segtype & ST_OFFSET_START) {
-	       dir1 = OBSVAL(seg->x1, seg->y1, seg->layer) & OFFSET_TAP;
-	       if ((dir1 == 0) && lastseg) {
-		  dir1 = OBSVAL(lastseg->x2, lastseg->y2, lastseg->layer)
-				& OFFSET_TAP;
-		  lnode1 = NODEIPTR(lastseg->x2, lastseg->y2, lastseg->layer);
-		  offset1 = lnode1->offset;
-	       }
-	       else {
-		  lnode1 = NODEIPTR(seg->x1, seg->y1, seg->layer);
-		  offset1 = lnode1->offset;
-	       }
-
-	       // Offset was calculated for vias;  plain metal routes
-	       // typically will need less offset distance, so subtract off
-	       // the difference.
-
-	       if (!(seg->segtype & ST_VIA)) {
-		  if (offset1 < 0) {
-		     offset1 += 0.5 * (LefGetViaWidth(seg->layer, seg->layer, 
-				horizontal) - LefGetRouteWidth(seg->layer));
-		     if (offset1 > 0) offset1 = 0;
-		  }
-		  else if (offset1 > 0) {
-		     offset1 -= 0.5 * (LefGetViaWidth(seg->layer, seg->layer,
-				horizontal) - LefGetRouteWidth(seg->layer));
-		     if (offset1 < 0) offset1 = 0;
-		  }
-	       }
-
-	       if (special == (u_char)0) {
-		  if ((seg->segtype & ST_VIA) && (Verbose > 2))
-		     Fprintf(stdout, "Offset terminal distance %g to grid"
-					" at %d %d (%d)\n", offset1,
-					seg->x1, seg->y1, layer);
-	       }
-	    }
-	    if (seg->segtype & ST_OFFSET_END) {
-	       dir2 = OBSVAL(seg->x2, seg->y2, seg->layer) & OFFSET_TAP;
-	       if ((dir2 == 0) && seg->next) {
-		  dir2 = OBSVAL(seg->next->x1, seg->next->y1, seg->next->layer) &
-					OFFSET_TAP;
-		  lnode2 = NODEIPTR(seg->next->x1, seg->next->y1, seg->next->layer);
-		  offset2 = lnode2->offset;
-	       }
-	       else {
-		  lnode2 = NODEIPTR(seg->x2, seg->y2, seg->layer);
-		  offset2 = lnode2->offset;
-	       }
-
-	       // Offset was calculated for vias;  plain metal routes
-	       // typically will need less offset distance, so subtract off
-	       // the difference.
-
-	       if (!(seg->segtype & ST_VIA)) {
-		  if (offset2 < 0) {
-		     offset2 += 0.5 * (LefGetViaWidth(seg->layer, seg->layer,
-				horizontal) - LefGetRouteWidth(seg->layer));
-		     if (offset2 > 0) offset2 = 0;
-		  }
-		  else if (offset2 > 0) {
-		     offset2 -= 0.5 * (LefGetViaWidth(seg->layer, seg->layer, 
-				horizontal) - LefGetRouteWidth(seg->layer));
-		     if (offset2 < 0) offset2 = 0;
-		  }
-	       }
-
-	       if (special == (u_char)0) {
-		  if ((seg->segtype & ST_VIA)
-					&& !(seg->segtype & ST_OFFSET_START))
-		     if (Verbose > 2)
-		        Fprintf(stdout, "Offset terminal distance %g to grid"
-					" at %d %d (%d)\n", offset2,
-					seg->x2, seg->y2, layer);
-	       }
-	    }
-
-	    // To do: pick up route layer name from lefInfo.
-	    // At the moment, technology names don't even match,
-	    // and are redundant between CIFLayer[] from the
-	    // config file and lefInfo.
-
-	    dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
-	    if ((dir1 & OFFSET_TAP) && (lnode1->flags & NI_OFFSET_EW)) dc += offset1;
-	    x = (int)((REPS(dc)) * oscale);
-	    dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
-	    if ((dir1 & OFFSET_TAP) && (lnode1->flags & NI_OFFSET_NS)) dc += offset1;
-	    y = (int)((REPS(dc)) * oscale);
-	    dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
-	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_EW)) dc += offset2;
-	    x2 = (int)((REPS(dc)) * oscale);
-	    dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
-	    if ((dir2 & OFFSET_TAP) && (lnode2->flags & NI_OFFSET_NS)) dc += offset2;
-	    y2 = (int)((REPS(dc)) * oscale);
-	    segtype = seg->segtype & ~(ST_OFFSET_START | ST_OFFSET_END);
-	    switch (segtype) {
-	       case ST_WIRE:
-
-		  // Normally layers change only at a via.  However, if
-		  // a via has been removed and replaced by a 1-track
-		  // segment to a neighboring via to avoid DRC errors
-		  // (see cleanup_net()), then a layer change may happen
-		  // between two ST_WIRE segments, and a new path should
-		  // be started.
-
-		  if ((Pathon != -1) && (lastlay != -1) && (lastlay != seg->layer))
-		     Pathon = 0;
-
-		  if (Pathon != 1) {	// 1st point of route seg
-		     if (x == x2) {
-			horizontal = FALSE;
-		     }
-		     else if (y == y2) {
-			horizontal = TRUE;
-		     }
-		     else if (Verbose > 3) {
-			// NOTE:  This is a development diagnostic.  The
-			// occasional non-Manhanhattan route is due to a
-			// tap offset and is corrected automatically by
-			// making an L-bend in the wire.
-
-		     	Flush(stdout);
-			Fprintf(stderr, "Warning:  non-Manhattan wire in route"
-				" at (%d %d) to (%d %d)\n", x, y, x2, y2);
-		     }
-		     if (special == (u_char)0) {
-			pathstart(Cmd, seg->layer, x, y, special, oscale, invscale,
-				horizontal);
-			lastx = x;
-			lasty = y;
-			lastlay = seg->layer;
-		     }
-		  }
-		  rt->flags |= RT_OUTPUT;
-		  if (horizontal && x == x2) {
-		     horizontal = FALSE;
-		  }
-		  if ((!horizontal) && y == y2) {
-		     horizontal = TRUE;
-		  }
-		  if (!(x == x2) && !(y == y2)) {
-		     horizontal = FALSE;
-		  }
-		  if (special == (u_char)0) {
-		     pathto(Cmd, x2, y2, horizontal, lastx, lasty, invscale);
-		     lastx = x2;
-		     lasty = y2;
-		  }
-
-		  // If a segment is 1 track long, there is a via on either
-		  // end, and the needblock flag is set for the layer, then
-		  // draw a stub route along the length of the track.
-
-		  if (horizontal && needblock[seg->layer] & VIABLOCKX) {
-		     if (ABSDIFF(seg->x2, seg->x1) == 1) {
-			if ((lastseg && lastseg->segtype == ST_VIA) ||
-			    (seg->next && seg->next->segtype == ST_VIA)) {
-			   if (special == (u_char)0) {
-			      net->flags |= NET_STUB;
-			      rt->flags |= RT_STUB;
-			   }
-			   else {
-			      if (Pathon != -1) Pathon = 0;
-			      pathstart(Cmd, layer, x, y, special, oscale,
-						invscale, horizontal);
-			      pathto(Cmd, x2, y2, horizontal, x, y, invscale);
-			      lastlay = layer;
-			   }
-			}
-		     }
-		  }
-		  else if (!horizontal && needblock[seg->layer] & VIABLOCKY) {
-		     if (ABSDIFF(seg->y2, seg->y1) == 1)  {
-			if ((lastseg && lastseg->segtype == ST_VIA) ||
-			    (seg->next && seg->next->segtype == ST_VIA)) {
-			   if (special == (u_char)0) {
-			      net->flags |= NET_STUB;
-			      rt->flags |= RT_STUB;
-			   }
-			   else {
-			      if (Pathon != -1) Pathon = 0;
-			      pathstart(Cmd, layer, x, y, special, oscale,
-						invscale, horizontal);
-			      pathto(Cmd, x2, y2, horizontal, x, y, invscale);
-			      lastlay = layer;
-			   }
-			}
-		     }
-		  }
-		  break;
-	       case ST_VIA:
-		  rt->flags |= RT_OUTPUT;
-		  if (special == (u_char)0) {
-		     double viaoffx, viaoffy;
-		     int vx = 0;
-		     int vy = 0;
-		     u_int tdirpp, tdirp, tdirn;
-		     u_char viaNL, viaNM, viaNU;
-		     u_char viaSL, viaSM, viaSU;
-		     u_char viaEL, viaEM, viaEU;
-		     u_char viaWL, viaWM, viaWU;
-
-		     if (lastseg == NULL) {
-			// Make sure last position is valid
-			lastx = x;
-			lasty = y;
-		     }
-
-		     // Check for vias between adjacent but different nets
-		     // that need position offsets to avoid a DRC spacing error
-
-		     // viaCheckX[layer] indicates whether a check for
-		     // vias is needed.  If so, record what vias are to east
-		     // and west.
-
-		     if (viaCheckX[layer] > 0) {
-
-			viaEL = viaEM = viaEU = 0;
-			viaWL = viaWM = viaWU = 0;
-
-			// Check for via to west
-			if (seg->x1 > 0) {
-			   tdir = OBSVAL(seg->x1 - 1, seg->y1, layer)
-					& ROUTED_NET_MASK;
-
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
-				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1 - 1, seg->y1, layer + 1)
-					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
-				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1 - 1, seg->y1, layer + 2)
-						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaWU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaWM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1 - 1, seg->y1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaWL = 1;
-			      }
-			   }
-			}
-
-			// Check for via to east
-			if (seg->x1 < NumChannelsX[layer] - 1) {
-			   tdir = OBSVAL(seg->x1 + 1, seg->y1, layer)
-					& ROUTED_NET_MASK;
-
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
-				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1 + 1, seg->y1, layer + 1)
-					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
-				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1 + 1, seg->y1, layer + 2)
-						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaEU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaEM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1 + 1, seg->y1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaEL = 1;
-			      }
-			   }
-			}
-
-			// Compute X offset
-			viaoffx = 0.0;
-
-			if (viaWL) viaoffx = viaOffsetX[layer][0];
-			else if (viaEL) viaoffx = -viaOffsetX[layer][0];
-
-			if (viaWM && viaOffsetX[layer][1] > viaoffx)
-			   viaoffx = viaOffsetX[layer][1];
-			else if (viaEM && -viaOffsetX[layer][1] < viaoffx)
-			   viaoffx = -viaOffsetX[layer][1];
-
-			if (viaWU && viaOffsetX[layer][2] > viaoffx)
-			   viaoffx = viaOffsetX[layer][2];
-			else if (viaEU && -viaOffsetX[layer][2] < viaoffx)
-			   viaoffx = -viaOffsetX[layer][2];
-
-		        vx = (int)((REPS(viaoffx)) * oscale);
-		     }
-
-		     // viaCheckY[layer] indicates whether a check for
-		     // vias is needed.  If so, record what vias are to north
-		     // and south.
-
-		     if (viaCheckY[layer] > 0) {
-
-			viaNL = viaNM = viaNU = 0;
-			viaSL = viaSM = viaSU = 0;
-
-			// Check for via to south
-			if (seg->y1 > 0) {
-			   tdir = OBSVAL(seg->x1, seg->y1 - 1, layer)
-					& ROUTED_NET_MASK;
-
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
-				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1, seg->y1 - 1, layer + 1)
-					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
-				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1, seg->y1 - 1, layer + 2)
-						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaSU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaSM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1, seg->y1 - 1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaSL = 1;
-			      }
-			   }
-			}
-
-			// Check for via to north
-			if (seg->y1 < NumChannelsY[layer] - 1) {
-			   tdir = OBSVAL(seg->x1, seg->y1 + 1, layer)
-					& ROUTED_NET_MASK;
-
-			   if (((tdir & NO_NET) == 0) && (tdir != 0) &&
-				(tdir != (net->netnum | ROUTED_NET))) {
-
-			      if (layer < Num_layers - 1) {
-			         tdirp = OBSVAL(seg->x1, seg->y1 + 1, layer + 1)
-					& ROUTED_NET_MASK;
-			         if (((tdirp & NO_NET) == 0) && (tdirp != 0) &&
-				     	(tdirp != (net->netnum | ROUTED_NET))) {
-
-			            if (layer < Num_layers - 2) {
-			               tdirpp = OBSVAL(seg->x1, seg->y1 + 1, layer + 2)
-						& ROUTED_NET_MASK;
-			               if (tdirp == tdirpp) viaNU = 1;
-				    }
-				 }
-			         if (tdir == tdirp) viaNM = 1;
-			      }
-			
-			      if (layer > 0) {
-			         tdirn = OBSVAL(seg->x1, seg->y1 + 1, layer - 1)
-					& ROUTED_NET_MASK;
-			         if (tdir == tdirn) viaNL = 1;
-			      }
-			   }
-			}
-
-			// Compute Y offset
-			viaoffy = 0;
-
-			if (viaSL) viaoffy = viaOffsetY[layer][0];
-			else if (viaNL) viaoffy = -viaOffsetY[layer][0];
-
-			if (viaSM && viaOffsetY[layer][1] > viaoffy)
-			   viaoffy = viaOffsetY[layer][1];
-			else if (viaNM && -viaOffsetY[layer][1] < viaoffy)
-			   viaoffy = -viaOffsetY[layer][1];
-
-			if (viaSU && viaOffsetY[layer][2] > viaoffy)
-			   viaoffy = viaOffsetY[layer][2];
-			else if (viaNU && -viaOffsetY[layer][2] < viaoffy)
-			   viaoffy = -viaOffsetY[layer][2];
-
-		        vy = (int)((REPS(viaoffy)) * oscale);
-		     }
-
-		     // via-to-via interactions are symmetric, so move each
-		     // via half the distance (?)
-
-		     pathvia(Cmd, layer, x + vx, y + vy, lastx, lasty,
-					seg->x1, seg->y1, invscale);
-
-		     lastx = x;
-		     lasty = y;
-		     lastlay = -1;
-		  }
-		  break;
-	       default:
-		  break;
-	    }
-
-	    // Break here on last segment so that seg and lastseg are valid
-	    // in the following section of code.
-
-	    if (seg->next == NULL) break;
-	    prevseg = lastseg;
-	    lastseg = seg;
-	 }
-
-	 // For stub routes, reset the path between terminals, since
-	 // the stubs are not connected.
-	 if (special == (u_char)1 && Pathon != -1) Pathon = 0;
-
-	 // Check last position for terminal offsets
-	 if (seg && ((seg != saveseg) || (seg->segtype & ST_WIRE))) {
-	     cancel = FALSE;
-	     layer = seg->layer;
-	     lnode = (layer < Pinlayers) ? NODEIPTR(seg->x2, seg->y2, layer) : NULL;
-
-	     // Look for stub routes and offset taps
-	     dir2 = OBSVAL(seg->x2, seg->y2, layer) & (STUBROUTE | OFFSET_TAP);
-
-	     if ((dir2 & OFFSET_TAP) && (seg->segtype & ST_VIA) && prevseg) {
-
-	        // Additional handling for offset taps.  When a tap position
-	        // is a via and is offset in the direction of the last
-	        // route segment, then a DRC violation can be created if
-	        // (1) the via is wider than the route width, and (2) the
-	        // adjacent track position is another via or a bend in the
-	        // route, and (3) the tap offset is large enough to create
-	        // a spacing violation between the via and the adjacent via
-	        // or perpendicular route.  If these three conditions are
-	        // satisfied, then generate a stub route the width of the
-	        // via and one track pitch in length back toward the last
-	        // track position.
-
- 	        // Problems only arise when the via width is larger than
-	        // the width of the metal route leaving the via.
- 
-	        offset = lnode->offset;
-	        if (LefGetViaWidth(seg->layer, lastseg->layer, 1 - horizontal) >
-			LefGetRouteWidth(lastseg->layer)) {
-
-		   // Problems only arise when the last segment is exactly
-		   // one track long.
-
-		   if ((ABSDIFF(lastseg->x2, lastseg->x1) == 1) ||
-			(ABSDIFF(lastseg->y2, lastseg->y1) == 1)) {
-
-		      if (prevseg->segtype & ST_VIA) {
-
-		 	 dc = Xlowerbound + (double)seg->x1 * PitchX[layer];
-			 x = (int)((REPS(dc)) * oscale);
-			 dc = Ylowerbound + (double)seg->y1 * PitchY[layer];
-			 y = (int)((REPS(dc)) * oscale);
-
-			 dc = Xlowerbound + (double)prevseg->x1 * PitchX[layer];
-			 x2 = (int)((REPS(dc)) * oscale);
-			 dc = Ylowerbound + (double)prevseg->y1 * PitchY[layer];
-			 y2 = (int)((REPS(dc)) * oscale);
-
-			 // Setup is (via, 1 track route, via with offset)
-
-			 if (prevseg->x1 != seg->x1) {
-			    if ((PitchX[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
-				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 1) -
-				(prevseg->x1 - seg->x1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			       if (special == (u_char)0) {
-				  rt->flags |= RT_STUB;
-				  net->flags |= NET_STUB;
-			       }
-			       else {
-				  pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 1);
-				  pathto(Cmd, x2, y2, 1, x, y, invscale);
-		      		  lastx = x2;
-				  lasty = y2;
-			       }
-			    }
-			 }
-			 else if (prevseg->y1 != seg->y1) {
-			    if ((PitchY[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
-				0.5 * LefGetViaWidth(prevseg->layer, lastseg->layer, 0)
-				- (prevseg->y1 - seg->y1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			       if (special == (u_char)0) {
-				 rt->flags |= RT_STUB;
-				 net->flags |= NET_STUB;
-			       }
-			       else {
-				  pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 0);
-				  pathto(Cmd, x2, y2, 0, x, y, invscale);
-		      		  lastx = x2;
-				  lasty = y2;
-			       }
-			    }
-			 }
-		      }
-		      else {	// Metal route bends at next track
-			 if (prevseg->x1 != seg->x1) {
-			    if ((PitchX[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 1) -
-				0.5 * LefGetRouteWidth(prevseg->layer) -
-				(prevseg->x1 - seg->x1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			       if (special == (u_char)0) {
-				 rt->flags |= RT_STUB;
-				 net->flags |= NET_STUB;
-			       }
-			       else {
-				  pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 1);
-				  pathto(Cmd, x2, y2, 1, x, y, invscale);
-		      		  lastx = x2;
-				  lasty = y2;
-			       }
-			    }
-			 }
-			 else if (prevseg->y1 != seg->y1) {
-			    if ((PitchY[lastseg->layer] -
-				0.5 * LefGetViaWidth(seg->layer, lastseg->layer, 0) -
-				0.5 * LefGetRouteWidth(prevseg->layer) -
-				(prevseg->y1 - seg->y1) * offset)
-				< LefGetRouteSpacing(lastseg->layer)) {
-			       if (special == (u_char)0) {
-				  rt->flags |= RT_STUB;
-				  net->flags |= NET_STUB;
-			       }
-			       else {
-				  pathstart(Cmd, lastseg->layer, x, y,
-					(u_char)1, oscale, invscale, 0);
-				  pathto(Cmd, x2, y2, 0, x, y, invscale);
-		      		  lastx = x2;
-				  lasty = y2;
-			       }
-			    }
-			 }
-		      }
-		   }
-	        }
-	     }
-
-	     // For stub routes, reset the path between terminals, since
-	     // the stubs are not connected.
-	     if (special == (u_char)1 && Pathon != -1) Pathon = 0;
-
-	     // Handling of stub routes
-	     if (dir2 & STUBROUTE) {
-	        stub = lnode->stub;
-		if ((special == (u_char)0) && (Verbose > 2))
-		   Fprintf(stdout, "Stub route distance %g to terminal"
-				" at %d %d (%d)\n",
-				stub, seg->x2, seg->y2, layer);
-
-		dc = Xlowerbound + (double)seg->x2 * PitchX[layer];
-		if (lnode->flags & NI_OFFSET_EW)
-		   dc += offset;
-		x = (int)((REPS(dc)) * oscale);
-		if (lnode->flags & NI_STUB_EW)
-		   dc += stub;
-		x2 = (int)((REPS(dc)) * oscale);
-		dc = Ylowerbound + (double)seg->y2 * PitchY[layer];
-		if (lnode->flags & NI_OFFSET_NS)
-		   dc += offset;
-		y = (int)((REPS(dc)) * oscale);
-		if (lnode->flags & NI_STUB_NS)
-		   dc += stub;
-		y2 = (int)((REPS(dc)) * oscale);
-		if (lnode->flags & NI_STUB_EW) {
-		   horizontal = TRUE;
-
-		   // If the gridpoint ahead of the stub has a route
-		   // on the same net, and the stub is long enough
-		   // to come within a DRC spacing distance of the
-		   // other route, then lengthen it to close up the
-		   // distance and resolve the error.
-
-		   if ((x < x2) && (seg->x2 < (NumChannelsX[layer] - 1))) {
-		      tdir = OBSVAL(seg->x2 + 1, seg->y2, layer);
-		      if ((tdir & ROUTED_NET_MASK) ==
-						(net->netnum | ROUTED_NET)) {
-			 if (stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	    dc = Xlowerbound + (double)(seg->x2 + 1)
-					* PitchX[layer];
-		      	    x2 = (int)((REPS(dc)) * oscale);
-			 }
-		      }
-		   }
-		   else if ((x > x2) && (seg->x2 > 0)) {
-		      tdir = OBSVAL(seg->x2 - 1, seg->y2, layer);
-		      if ((tdir & ROUTED_NET_MASK) ==
-						(net->netnum | ROUTED_NET)) {
-			 if (-stub + LefGetRouteKeepout(layer) >= PitchX[layer]) {
-		      	    dc = Xlowerbound + (double)(seg->x2 - 1)
-					* PitchX[layer];
-		      	    x2 = (int)((REPS(dc)) * oscale);
-			 }
-		      }
-		   }
-
-		   dc = oscale * 0.5 * LefGetRouteWidth(layer);
-		   if (special == (u_char)0) {
-		      // Regular nets include 1/2 route width at
-		      // the ends, so subtract from the stub terminus
-		      if (x < x2) {
-			 x2 -= dc;
-			 if (x >= x2) cancel = TRUE;
-		      }
-		      else {
-			 x2 += dc;
-			 if (x <= x2) cancel = TRUE;
-		      }
-		   }
-		   else {
-		      // Special nets don't include 1/2 route width
-		      // at the ends, so add to the route at the grid
-		      if (x < x2)
-			 x -= dc;
-		      else
-			 x += dc;
-
-		      // Routes that extend for more than one track
-		      // without a bend do not need a wide stub
-		      if (seg->x1 != seg->x2) cancel = TRUE;
-		   }
-		}
-		else {  /* lnode->flags & NI_STUB_EW implied */
-		   horizontal = FALSE;
-
-		   // If the gridpoint ahead of the stub has a route
-		   // on the same net, and the stub is long enough
-		   // to come within a DRC spacing distance of the
-		   // other route, then lengthen it to close up the
-		   // distance and resolve the error.
-
-		   if ((y < y2) && (seg->y2 < (NumChannelsY[layer] - 1))) {
-		      tdir = OBSVAL(seg->x2, seg->y2 + 1, layer);
-		      if ((tdir & ROUTED_NET_MASK) ==
-						(net->netnum | ROUTED_NET)) {
-			 if (stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	    dc = Ylowerbound + (double)(seg->y2 + 1)
-					* PitchY[layer];
-		      	    y2 = (int)((REPS(dc)) * oscale);
-			 }
-		      }
-		   }
-		   else if ((y > y2) && (seg->y2 > 0)) {
-		      tdir = OBSVAL(seg->x2, seg->y2 - 1, layer);
-		      if ((tdir & ROUTED_NET_MASK) ==
-						(net->netnum | ROUTED_NET)) {
-			 if (-stub + LefGetRouteKeepout(layer) >= PitchY[layer]) {
-		      	    dc = Ylowerbound + (double)(seg->y2 - 1)
-					* PitchY[layer];
-		      	    y2 = (int)((REPS(dc)) * oscale);
-			 }
-		      }
-		   }
-
-		   dc = oscale * 0.5 * LefGetRouteWidth(layer);
-		   if (special == (u_char)0) {
-		      // Regular nets include 1/2 route width at
-		      // the ends, so subtract from the stub terminus
-		      if (y < y2) {
-			 y2 -= dc;
-			 if (y >= y2) cancel = TRUE;
-		      }
-		      else {
-			 y2 += dc;
-			 if (y <= y2) cancel = TRUE;
-		      }
-		   }
-		   else {
-		      // Special nets don't include 1/2 route width
-		      // at the ends, so add to the route at the grid
-		      if (y < y2)
-			 y -= dc;
-		      else
-			 y += dc;
-
-		      // Routes that extend for more than one track
-		      // without a bend do not need a wide stub
-		      if (seg->y1 != seg->y2) cancel = TRUE;
-		   }
-		}
-		if (cancel == FALSE) {
-	           net->flags |= NET_STUB;
-	           rt->flags |= RT_STUB;
-		   if (Pathon != 1) {
-		      pathstart(Cmd, layer, x, y, special, oscale, invscale,
-				horizontal);
-		      lastx = x;
-		      lasty = y;
-		   }
-		   pathto(Cmd, x2, y2, horizontal, lastx, lasty, invscale);
-		   lastx = x2;
-		   lasty = y2;
-		}
-	    }
-	 }
-	 if (Pathon != -1) Pathon = 0;
-
-      } // if (rt->segments && !(rt->flags & RT_OUTPUT))
-   }
-}
-
-/*--------------------------------------------------------------*/
-/* emit_routes - DEF file output from the list of routes	*/
-/*								*/
-/*  Reads the <project>.def file and rewrites file		*/
-/*  <project>_route.def, where each net definition has the	*/
-/*  physical route appended.					*/
-/*								*/
-/*   ARGS: filename to list to					*/
-/*   RETURNS: nothing						*/
-/*   SIDE EFFECTS: 						*/
-/*   AUTHOR and DATE: steve beccue      Mon Aug 11 2003		*/
-/*--------------------------------------------------------------*/
-
-static void emit_routes(char *filename, double oscale, int iscale)
-{
-    FILE *Cmd;
-    int i, j, numnets, stubroutes;
-    char line[MAX_LINE_LEN + 1], *lptr = NULL;
-    char netname[MAX_NAME_LEN];
-    NET net = NULL;
-    ROUTE rt;
-    FILE *fdef;
-    u_char errcond = FALSE;
-    u_char need_cleanup = FALSE;
-
-    fdef = fopen(filename, "r");
-    if (fdef == NULL) {
-	if (strchr(filename, '.') == NULL) {
-	    char *extfilename = malloc(strlen(filename) + 5);
-	    sprintf(extfilename, "%s.def", filename);
-	    fdef = fopen(extfilename, "r");
-	    free(extfilename);
-	}
-    }
-    if (fdef == NULL) {
-	Fprintf(stderr, "emit_routes(): Cannot open DEF file for reading.\n");
-	return;
-    } 
-
-    if (!strcmp(filename, "stdout")) {
-	Cmd = stdout;
-    }
-    else {
-	char *dotptr;
-
-	if (filename == DEFfilename) {
-	    char *newDEFfile = (char *)malloc(strlen(filename) + 11);
-	    strcpy(newDEFfile, filename);
-	    dotptr = strrchr(newDEFfile, '.');
-	    if (dotptr)
-		strcpy(dotptr, "_route.def");
-	    else
-		strcat(newDEFfile, "_route.def");
-	    
-	    Cmd = fopen(newDEFfile, "w");
-	    free(newDEFfile);
-	}
-	else
-	    Cmd = fopen(filename, "w");
-    }
-    if (!Cmd) {
-	Fprintf(stderr, "emit_routes():  Couldn't open output (routed) DEF file.\n");
-	return;
-    }
-
-    // Copy DEF file up to NETS line
-    numnets = 0;
-    while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
-       lptr = line;
-       while (isspace(*lptr)) lptr++;
-       if (!strncmp(lptr, "NETS", 4)) {
-	  sscanf(lptr + 4, "%d", &numnets);
-	  break;
-       }
-       fputs(line, Cmd);
-    }
-    fputs(line, Cmd);	// Write the NETS line
-
-    // NOTE:  May want to remove this message.  It may merely reflect
-    // that the DEF file defined one or more SPECIALNETS.
-
-    if (numnets != Numnets) {
-      	Flush(stdout);
-	Fprintf(stderr, "emit_routes():  DEF file has %d nets, but we want"
-		" to write %d\n", numnets, Numnets);
-    }
-
-    // Quick check to see if cleanup_nets can be avoided
-    for (i = 0; i < Num_layers; i++)
-       if (needblock[i] & (VIABLOCKX | VIABLOCKY))
-	  break;
-
-    if (i != Num_layers) need_cleanup = TRUE;
-
-    for (i = 0; i < numnets; i++) {
-       if (errcond == TRUE) break;
-       while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
-	  if ((lptr = strchr(line, ';')) != NULL) {
-	     *lptr = '\n';
-	     *(lptr + 1) = '\0';
-	     break;
-	  }
-	  else {
-             lptr = line;
-             while (isspace(*lptr)) lptr++;
-	     if (*lptr == '-') {
-		lptr++;
-                while (isspace(*lptr)) lptr++;
-	        sscanf(lptr, "%s", netname);
-		fputs(line, Cmd);
-	     }
-	     else if (*lptr == '+') {
-		lptr++;
-                while (isspace(*lptr)) lptr++;
-		if (!strncmp(lptr, "ROUTED", 6)) {
-		   // This net is being handled by qrouter, so remove
-		   // the original routing information
-		   while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
-		      if ((lptr = strchr(line, ';')) != NULL) {
-			 *lptr = '\n';
-			 *(lptr + 1) = '\0';
-			 break;
-		      }
-		   }
-		   break;
-		}
-		else
-		   fputs(line, Cmd);
-	     }
-	     else if (!strncmp(lptr, "END", 3)) {	// This should not happen
-		fputs(line, Cmd);
-		errcond = TRUE;
-		break;
-	     }
-	     else
-		fputs(line, Cmd);
-	  }
-       }
-
-       /* Find this net */
-
-       for (j = 0; j < Numnets; j++) {
-          net = Nlnets[j];
-	  if (!strcmp(net->netname, netname))
-	     break;
-       }
-       if (!net) {
-	  Fprintf(stderr, "emit_routes():  Net %s cannot be found.\n",
-		netname);
-
-	  /* Dump rest of net and continue---no routing information */
-	  *(lptr) = ';';
-	  fputs(line, Cmd);
-	  continue;
-       }
-       else {
-	  /* Add last net terminal, without the semicolon */
-	  fputs(line, Cmd);
-
-	  if (need_cleanup) cleanup_net(net);
-	  emit_routed_net(Cmd, net, (u_char)0, oscale, iscale);
-	  fprintf(Cmd, ";\n");
-       }
-    }
-
-    // Finish copying the rest of the NETS section
-    if (errcond == FALSE) {
-       while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
-	  lptr = line;
-	  while (isspace(*lptr)) lptr++;
-	  fputs(line, Cmd);
-	  if (!strncmp(lptr, "END", 3)) {
-	     break;
-	  }
-       }
-    }
-
-    // Determine how many stub routes we will write to SPECIALNETS
-    // Also reset the OUTPUT flag for each route needing a stubroute
-    // to be written.
-
-    stubroutes = 0;
-    for (i = 0; i < Numnets; i++) {
-	net = Nlnets[i];
-	if (net->flags & NET_STUB) {
-	    stubroutes++;
-	    for (rt = net->routes; rt; rt = rt->next)
-		if (rt->flags & RT_STUB)
-		    rt->flags &= ~RT_OUTPUT;
-	}
-    }
-
-    // If there were stub routes, repeat them in SPECIALNETS at the
-    // proper width.
-    if (stubroutes > 0) {
-
-        fprintf(Cmd, "\nSPECIALNETS %d ", stubroutes);
-	for (i = 0; i < Numnets; i++) {
-	     net = Nlnets[i];
-	     emit_routed_net(Cmd, net, (u_char)1, oscale, iscale);
-	}
-	fprintf(Cmd, ";\nEND SPECIALNETS\n");
-    }    
-
-    // Finish copying the rest of the file
-    while (fgets(line, MAX_LINE_LEN, fdef) != NULL) {
-       fputs(line, Cmd);
-    }
-    fclose(fdef);
-    fclose(Cmd);
-
-} /* emit_routes() */
 
 /*--------------------------------------------------------------*/
 /* helpmessage - tell user how to use the program		*/
@@ -4757,7 +3336,7 @@ static void helpmessage(void)
 	Fprintf(stdout, "\t-g <name>\t\t\tSpecify global ground bus name.\n");
 	Fprintf(stdout, "\t-r <value>\t\t\tForce output resolution scale.\n");
 	Fprintf(stdout, "\t-f       \t\t\tForce all pins to be routable.\n");
-	Fprintf(stdout, "\t-k <level>\t\t\tLevel of effort to keep trying.\n");
+	Fprintf(stdout, "\t-e <level>\t\t\tLevel of effort to keep trying.\n");
 	Fprintf(stdout, "\n");
     }
 #ifdef TCL_QROUTER

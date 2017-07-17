@@ -24,6 +24,7 @@
 #include "lef.h"
 #include "graphics.h"
 #include "node.h"
+#include "output.h"
 #include "tkSimple.h"
 
 /* Global variables */

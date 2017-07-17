@@ -72,10 +72,6 @@ char *delayfilename = NULL;
 ScaleRec Scales;	// record of input and output scales
 
 /* Prototypes for some local functions */
-static void initMask(void);
-static void fillMask(NET net, u_char value);
-static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
-static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 static ROUTE createemptyroute(void);
 static void emit_routes(char *filename, double oscale, int iscale);
@@ -1093,45 +1089,6 @@ int dofirststage(u_char graphdebug, int debug_netnum)
 }
 
 /*--------------------------------------------------------------*/
-/* Write the output annotated DEF file.				*/
-/*--------------------------------------------------------------*/
-
-int write_def(char *filename)
-{
-   NET net;
-   NETLIST nl;
-
-   emit_routes((filename == NULL) ? DEFfilename : filename,
-		Scales.oscale, Scales.iscale);
-
-   Fprintf(stdout, "----------------------------------------------\n");
-   Fprintf(stdout, "Final: ");
-   if (FailedNets == (NETLIST)NULL)
-      Fprintf(stdout, "No failed routes!\n");
-   else {
-      if (FailedNets != (NETLIST)NULL) {
-         Fprintf(stdout, "Failed net routes: %d\n", countlist(FailedNets));
-	 Fprintf(stdout, "List of failed nets follows:\n");
-
-	 // Make sure FailedNets is cleaned up as we output the failed nets
-
- 	 while (FailedNets) {
-	    net = FailedNets->net;
-	    Fprintf(stdout, " %s\n", net->netname);
-	    nl = FailedNets->next;
-	    free(FailedNets);
-	    FailedNets = nl;
-	 }
-	 Fprintf(stdout, "\n");
-      }
-   }
-   Fprintf(stdout, "----------------------------------------------\n");
-
-   return 0;
-
-} /* write_def() */
-
-/*--------------------------------------------------------------*/
 /* pathstart - begin a DEF format route path           		*/
 /*								*/
 /* 	If "special" is true, then this path is in a		*/
@@ -1265,252 +1222,6 @@ pathvia(FILE *cmd, int layer, int x, int y, int lastx, int lasty,
     Pathon = 0;
 
 } /* pathvia() */
-
-/*--------------------------------------------------------------*/
-/* Nodes aren't saved in a way that makes it easy to recall	*/
-/* the name of the cell and pin to which they belong.  But	*/
-/* that information doesn't need to be looked up except as a	*/
-/* diagnostic output.  This routine does that lookup.		*/
-/*--------------------------------------------------------------*/
-
-char *print_node_name(NODE node)
-{
-    GATE g;
-    int i;
-    static char *nodestr = NULL;
-
-    for (g = Nlgates; g; g = g->next) {
-	for (i = 0; i < g->nodes; i++) {
-	    if (g->noderec[i] == node) {
-		if(nodestr) free(nodestr);
-		nodestr = (char *)malloc(strlen(g->gatename)
-			+ strlen(g->node[i]) + 2);
-		if(nodestr==NULL) exit(0);
-		if (!strcmp(g->node[i], "pin"))
-		    sprintf(nodestr, "PIN/%s", g->gatename);
-		else
-		    sprintf(nodestr, "%s/%s", g->gatename, g->node[i]);
-		return nodestr;
-	    }
-	}
-    }
-    if (nodestr != NULL) free(nodestr);
-    nodestr = (char *)malloc(22);
-    sprintf(nodestr, "(error: no such node)");
-    return nodestr;
-}
-
-/*--------------------------------------------------------------*/
-/* print_nets - print the nets list - created from Nlgates list */
-/*								*/
-/*   ARGS: filename to list to					*/
-/*   RETURNS: nothing						*/
-/*   SIDE EFFECTS: 						*/
-/*   AUTHOR and DATE: steve beccue      Sat July 26		*/
-/*--------------------------------------------------------------*/
-
-void print_nets(char *filename)
-{
-   FILE *o;
-   GATE g;
-   int i;
-   DSEG drect;
-
-   if (!strcmp(filename, "stdout")) {
-	o = stdout;
-   } else {
-	o = fopen(filename, "w");
-   }
-   if (!o) {
-	Fprintf(stderr, "route:print_nets.  Couldn't open output file\n");
-	return;
-   }
-
-   for (g = Nlgates; g; g = g->next) {
-      fprintf(o, "%s: %s: nodes->", g->gatename, g->gatetype->gatename);
-      for (i = 0; i < g->nodes; i++) {
-	 // This prints the first tap position only.
-	 drect = g->taps[i];
-	 fprintf( o, "%s(%g,%g) ", g->node[i], drect->x1, drect->y1);
-      }
-   }
-   fprintf( o, "\n");
-} /* print_nets() */
-
-/*--------------------------------------------------------------*/
-/* print_routes - print the routes list				*/
-/*								*/
-/*   ARGS: filename to list to					*/
-/*   RETURNS: nothing						*/
-/*   SIDE EFFECTS: 						*/
-/*   AUTHOR and DATE: steve beccue      Sat July 26		*/
-/*--------------------------------------------------------------*/
-
-void print_routes( char *filename )
-{
-    FILE *o;
-    GATE g;
-    int i;
-
-    if( !strcmp( filename, "stdout" ) ) {
-	o = stdout;
-    } else {
-	o = fopen( filename, "w" );
-    }
-    if( !o ) {
-	Fprintf( stderr, "route:print_routes.  Couldn't open output file\n" );
-	return;
-    }
-
-    for (g = Nlgates; g; g = g->next) {
-	fprintf( o, "%s: %s: nodes->", g->gatename, g->gatetype->gatename );
-	for( i = 0 ; i < g->nodes; i++ ) {
-	    fprintf( o, "%s ", g->node[i] );
-	}
-	fprintf(o, "\n");
-    }
-} /* print_routes() */
-
-/*--------------------------------------------------------------*/
-/* print_nlgates - print the nlgate list			*/
-/*								*/
-/*   ARGS: filename to list to					*/
-/*   RETURNS: nothing						*/
-/*   SIDE EFFECTS: 						*/
-/*   AUTHOR and DATE: steve beccue      Wed July 23		*/
-/*--------------------------------------------------------------*/
-
-void print_nlgates( char *filename )
-{
-    FILE *o;
-    GATE g;
-    int i;
-    DSEG drect;
-
-    if( !strcmp( filename, "stdout" ) ) {
-	o = stdout;
-    } else {
-	o = fopen( filename, "w" );
-    }
-    if( !o ) {
-	Fprintf( stderr, "route:print_nlgates.  Couldn't open output file\n" );
-	return;
-    }
-
-    for (g = Nlgates; g; g = g->next) {
-	fprintf( o, "%s: %s: nodes->", g->gatename, g->gatetype->gatename );
-	for( i = 0 ; i < g->nodes; i++ ) {
-	    // This prints the first tap position only.
-	    drect = g->taps[i];
-	    fprintf( o, "%s(%g,%g)", g->node[i], drect->x1, drect->y1);
-	}
-        fprintf(o, "\n");
-    }
-} /* print_nlgates() */
-
-
-/*--------------------------------------------------------------*/
-/* print_net - print info about the net to stdout               */
-/*								*/
-/*   ARGS: net to print info about				*/
-/*   RETURNS: nothing						*/
-/*   SIDE EFFECTS: 						*/
-/*--------------------------------------------------------------*/
-
-void print_net(NET net) {
-    NODE node;
-    DPOINT tap;
-    int i, first;
-
-    Fprintf(stdout, "Net %d: %s", net->netnum, net->netname);
-    for (node = net->netnodes; node != NULL; node = node->next) {
-        Fprintf(stdout, "\n  Node %d: \n    Taps: ", node->nodenum);
-        for (tap = node->taps, i = 0, first = TRUE;
-             tap != NULL;
-             tap = tap->next, i = (i + 1) % 4, first = FALSE) {
-            Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
-                    (i == 0 ? (first ? "" : "\n        ") : " "),
-                    tap->layer, tap->x, tap->y
-            );
-        }
-        Fprintf(stdout, "\n    Tap extends: ");
-        for (tap = node->extend, i = 0, first = TRUE;
-             tap != NULL;
-             tap = tap->next, i = (i + 1) % 4, first = FALSE) {
-            Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
-                    (i == 0 ? (first ? "" : "\n        ") : " "),
-                    tap->layer, tap->x, tap->y
-            );
-        }
-    }
-}
-
-
-/*--------------------------------------------------------------*/
-/* print_gate - print info about the net to stdout              */
-/*								*/
-/*   ARGS: gate to print info about				*/
-/*   RETURNS: nothing						*/
-/*   SIDE EFFECTS: 						*/
-/*--------------------------------------------------------------*/
-
-void print_gate(GATE gate) {
-    int i, j, first;
-    DSEG seg;
-    NODE node;
-    DPOINT tap;
-
-    Fprintf(stdout, "Gate %s\n", gate->gatename);
-    Fprintf(stdout, "  Loc: (%.2lf, %.2lf), WxH: %.2lfx%.2lf\n",
-            gate->placedX, gate->placedY, gate->width, gate->height
-    );
-    Fprintf(stdout, "  Pins");
-    for (i = 0; i < gate->nodes; i++) {
-        Fprintf(stdout, "\n    Pin %s, net %d\n",
-                gate->node[i], gate->netnum[i]
-        );
-        Fprintf(stdout, "      Segs: ");
-        for (seg = gate->taps[i], j = 0, first = TRUE;
-             seg != NULL;
-             seg = seg->next, j = (j + 1) % 3, first = FALSE) {
-            Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)-(%.2lf,%.2lf)",
-                    (j == 0 ? (first ? "" : "\n        ") : " "),
-                    seg->layer, seg->x1, seg->y1, seg->x2, seg->y2
-            );
-        }
-        if ((node = gate->noderec[i]) != NULL) {
-            Fprintf(stdout, "\n      Taps: ");
-            for (tap = node->taps, j = 0, first = TRUE;
-                 tap != NULL;
-                 tap = tap->next, j = (j + 1) % 4, first = FALSE) {
-                Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
-                        (j == 0 ? (first ? "" : "\n        ") : " "),
-                        tap->layer, tap->x, tap->y
-                );
-            }
-            Fprintf(stdout, "\n      Tap extends: ");
-            for (tap = node->extend, j = 0, first = TRUE;
-                 tap != NULL;
-                 tap = tap->next, j = (j + 1) % 4, first = FALSE) {
-                Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)",
-                        (j == 0 ? (first ? "" : "\n        ") : " "),
-                        tap->layer, tap->x, tap->y
-                );
-            }
-        }
-    }
-    Fprintf(stdout, "\n  Obstructions: ");
-    for (seg = gate->obs, j = 0, first = TRUE;
-         seg != NULL;
-         seg = seg->next, j = (j + 1) % 3, first = FALSE) {
-        Fprintf(stdout, "%sL%d:(%.2lf,%.2lf)-(%.2lf,%.2lf)",
-                (j == 0 ? (first ? "" : "\n    ") : " "),
-                seg->layer, seg->x1, seg->y1, seg->x2, seg->y2
-        );
-    }
-    Fprintf(stdout, "\n");
-}
-
 
 /*--------------------------------------------------------------*/
 /* getnettoroute - get a net to route				*/
@@ -1989,21 +1700,6 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 }
 
 /*--------------------------------------------------------------*/
-
-/* initMask() ---						*/
-/*--------------------------------------------------------------*/
-
-static void initMask(void)
-{
-   RMask = (u_char *)calloc(NumChannelsX[0] * NumChannelsY[0],
-			sizeof(u_char));
-   if (!RMask) {
-      fprintf(stderr, "Out of memory 3.\n");
-      exit(3);
-   }
-}
-
-/*--------------------------------------------------------------*/
 /* Fill mask around the area of a vertical line			*/
 /*--------------------------------------------------------------*/
 
@@ -2443,28 +2139,6 @@ static void createMask(NET net, u_char slack, u_char halo)
 }
 
 /*--------------------------------------------------------------*/
-/* fillMask() fills the Mask[] array with all 1s as a last	*/
-/* resort, ensuring that no valid routes are missed due to a	*/
-/* bad guess about the optimal route positions.			*/
-/*--------------------------------------------------------------*/
-
-static void fillMask(NET net, u_char value) {
-	if(!net) return;
-	POINT p1, p2, vpnt;
-	p1 = get_left_lower_trunk_point(net->bbox);
-	p2 = get_right_upper_trunk_point(net->bbox);
-	vpnt = create_point(0,0,0);
-	for(vpnt->x=p1->x;vpnt->x<p2->x;vpnt->x++) {
-		for(vpnt->y=p1->y;vpnt->y<p2->y;vpnt->y++) {
-			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(vpnt->x, vpnt->y) = value;
-		}
-	}
-	free(vpnt);
-	free(p1);
-	free(p2);
-}
-
-/*--------------------------------------------------------------*/
 
 /* Free memory of an iroute glist and clear the Obs2		*/
 /* PR_ON_STACK flag for each location in the list.		*/
@@ -2480,7 +2154,7 @@ free_glist(struct routeinfo_ *iroute)
       while (iroute->glist[i]) {
          gpoint = iroute->glist[i];
          iroute->glist[i] = iroute->glist[i]->next;
-         Pr = &OBS2VAL(gpoint->x1, gpoint->y1, gpoint->layer);
+         Pr = &OBS2VAL(gpoint->x, gpoint->y, gpoint->layer);
          Pr->flags &= ~PR_ON_STACK;
          freePOINT(gpoint);
       }
@@ -2529,8 +2203,8 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 
   // Keep going until we are unable to route to a terminal
   while (net && (result > 0)) {
-     if (graphdebug) highlight_source();
-     if (graphdebug) highlight_dest();
+     if (graphdebug) highlight_source(net);
+     if (graphdebug) highlight_dest(net);
      if (graphdebug)
 	for (i = 0; i < 6; i++)
 	    highlight_starts(iroute.glist[i]);
@@ -2631,7 +2305,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	    result = set_powerbus_to_net(iroute->nsrc->netnum);
 	    clear_target_node(iroute->nsrc);
 	    rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
-			&iroute->bbox, stage);
+			iroute->bbox, stage);
 	    if (rval == -2) {
 		if (forceRoutable) {
 		    make_routable(iroute->nsrc);
@@ -2651,8 +2325,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 
      // Set positions on last route to PR_SOURCE
      if (rt) {
-	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist[0],
-			&iroute->bbox, stage);
+	result = set_route_to_net(iroute->net, rt, PR_SOURCE, &iroute->glist[0], stage);
         if (result == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
            return -1;
@@ -2794,7 +2467,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   if (result) {
      while(1) {
         if (iroute->nsrc == NULL) break;
-        rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist, iroute->bbox, stage);
+        rval = set_node_to_net(iroute->nsrc, PR_SOURCE, iroute->glist, iroute->bbox, stage);
 	if (rval == -2) {
 	   iroute->nsrc = iroute->nsrc->next;
 	   if (iroute->nsrc == NULL) break;
@@ -2807,17 +2480,13 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
         return -1;
      }
 
-     iroute->bbox.x2 = iroute->bbox.y2 = 0;
-     iroute->bbox.x1 = NumChannelsX[0];
-     iroute->bbox.y1 = NumChannelsY[0];
      if (iroute->do_pwrbus == FALSE) {
 
         // Set associated routes to PR_SOURCE
-        rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist, stage);
+        //rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist, stage);
 
 	// Set node to PR_SOURCE
-	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
-		&iroute->bbox, stage);
+	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0], iroute->bbox, stage);
 
         if (rval == -2) {
 	   unable_to_route(iroute->net->netname, NULL, 0);
@@ -2844,8 +2513,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	   else if (rval == 1) continue;	/* This node was part of source */
 
 	   // And add associated routes
-	   rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL,
-			&iroute->bbox, stage);
+	   //rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL, stage);
            if (rval == 0) result = 1;	/* (okay to fail) */
         }
 
@@ -2855,8 +2523,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      else {	/* Do this for power bus connections */
 
         while(1) {
-           rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0],
-			&iroute->bbox, stage);
+           rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0], iroute->bbox, stage);
 	   if (rval == -2) {
 	      iroute->nsrc = iroute->nsrc->next;
 	      if (iroute->nsrc == NULL) break;
@@ -3228,7 +2895,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	curpt.x = best.x;
 	curpt.y = best.y;
 	curpt.lay = best.lay;
-	if ((rval = commit_proute(iroute->rt, &curpt, stage)) != 1) break;
+	if ((rval = commit_proute(net, iroute->rt, &curpt, stage)) != 1) break;
 	if (Verbose > 2) {
 	   Fprintf(stdout, "\nCommit to a route of cost %d\n", best.cost);
 	   Fprintf(stdout, "Between positions (%d %d) and (%d %d)\n",

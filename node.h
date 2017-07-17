@@ -23,7 +23,6 @@
 #define COORDS(l) l->pt1->x,l->pt1->y,l->pt2->x,l->pt2->y
 
 void create_netorder(u_char method);
-void find_bounding_box(NET net);
 void define_route_tree(NET);
 void print_nodes(char *filename);
 void print_nlnets(char *filename);
@@ -72,6 +71,7 @@ NETLIST get_bbox_collisions(NET net, BOOL thread);
 BOOL resolve_bbox_collisions(NET net, BOOL thread);
 BOOL check_single_bbox_collision(BBOX box1, BBOX box2);
 BOOL point_on_edge(BBOX box, POINT pnt);
+BBOX_LINE add_line_to_edge(BBOX_LINE list, BBOX_LINE l);
 
 #define NODE_H
 #endif 

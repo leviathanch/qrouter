@@ -11,7 +11,8 @@
 extern u_char *RMask;                // mask out best area to route
 
 extern void initMask(void);
-extern void fillMask(u_char value);
+extern void fillMask(NET net, u_char value);
 extern void setBboxCurrent(NET net);
+void find_bounding_box(NET net);
 
 #endif /* _MASKINT_H */

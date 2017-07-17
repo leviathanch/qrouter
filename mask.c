@@ -92,6 +92,7 @@ int altCompNets(NET *a, NET *b)
 
    // Otherwise sort as described above.
 
+#if 0
    pwidth = p->xmax - p->xmin;
    pheight = p->ymax - p->ymin;
    pdim = (pwidth > pheight) ? pheight : pwidth;
@@ -111,6 +112,7 @@ int altCompNets(NET *a, NET *b)
          return (-1);
       return (0);
    }
+#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -169,6 +171,19 @@ void create_netorder(u_char method)
 
 } /* create_netorder() */
 
+
+BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
+{
+	BBOX_LINE line = NULL; // line to add
+	BBOX b = (bbox==NULL)?create_fresh_bbox():bbox;
+	line = get_fresh_line(); // creating requested line
+	line->pt1 = create_point(x1,y1,0);
+	line->pt2 = create_point(x2,y2,0);
+	b->num_edges++; // incrementing line count
+	b->edges=add_line_to_edge(b->edges, line);
+	return b;
+}
+
 /*--------------------------------------------------------------*/
 /* Measure and record the bounding box of a net.		*/
 /* This is preparatory to generating a mask for the net.	*/
@@ -189,71 +204,63 @@ void find_bounding_box(NET net)
 {
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
-   int mindist, dist, dx, dy;
-
-   if (net->numnodes == 2) {
-
-      n1 = (NODE)net->netnodes;
-      n2 = (NODE)net->netnodes->next;
-
-      // Simple 2-pass---pick up first tap on n1, find closest tap on n2,
-      // then find closest tap on n1.
-
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      if (d1tap == NULL) return;
-      d2tap = (n2->taps == NULL) ? n2->extend : n2->taps;
-      if (d2tap == NULL) return;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d2tap;
-      for (d2tap = d2tap->next; d2tap != NULL; d2tap = d2tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d2tap;
-         }
-      }
-      d2tap = mintap;
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d1tap;
-      for (d1tap = d1tap->next; d1tap != NULL; d1tap = d1tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d1tap;
-         }
-      }
-      d1tap = mintap;
-
-      net->xmin = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      net->xmax = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      net->ymin = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      net->ymax = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
-   }
-   else {	// Net with more than 2 nodes
+   if(!net) return;
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
-      net->xmax = net->ymax = -(MAXRT);
-      net->xmin = net->ymin = MAXRT;
+
+      int x1=0, x2=0, y1=0, y2=0;
+      if (net->numnodes == 0) return;	 // e.g., vdd or gnd bus
+
+      n1 = net->netnodes;
+      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      x1=dtap->gridx;
+      y1=dtap->gridy;
       for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
-            if (dtap->gridx > net->xmax) net->xmax = dtap->gridx;
-            if (dtap->gridx < net->xmin) net->xmin = dtap->gridx;
-            if (dtap->gridy > net->ymax) net->ymax = dtap->gridy;
-            if (dtap->gridy < net->ymin) net->ymin = dtap->gridy;
+            if (dtap->gridx < x1) x1 = dtap->gridx;
+            if (dtap->gridy < y1) y1 = dtap->gridy;
 	 }
       }
-   }
+      n1 = net->netnodes;
+      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      x2=dtap->gridx;
+      y2=dtap->gridy;
+      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+	 if (dtap) {
+            if (dtap->gridx > x2) x2 = dtap->gridx;
+            if (dtap->gridy > y2) y2 = dtap->gridy;
+	 }
+      }
+      
+      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+	 if (dtap) {
+            if (dtap->gridx > x2) x2 = dtap->gridx;
+            if (dtap->gridx < x1) x1 = dtap->gridx;
+            if (dtap->gridy > y2) y2 = dtap->gridy;
+            if (dtap->gridy < y1) y1 = dtap->gridy;
+	 }
+      }
+
+      if(!net->bbox) net->bbox = create_fresh_bbox();
+
+      net->bbox->x1_exception=FALSE;
+      net->bbox->y1_exception=FALSE;
+      net->bbox->x2_exception=FALSE;
+      net->bbox->y2_exception=FALSE;
+
+      x1-=BOX_ROOM_X;
+      y1-=BOX_ROOM_Y;
+      x2+=BOX_ROOM_X;
+      y2+=BOX_ROOM_Y;
+
+      net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x1, y2); // left lower point -> left upper point
+      net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x2, y1); // left lower point -> right lower point
+      net->bbox = add_line_to_bbox_ints(net->bbox, x2, y2, x2, y1); // right upper point -> right lower point
+      net->bbox = add_line_to_bbox_ints(net->bbox, x2, y2, x1, y2); // right upper point -> left upper point
 }
 
 /*--------------------------------------------------------------*/
@@ -283,6 +290,7 @@ void defineRouteTree(NET net)
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
 
+#if 0
     xmin = net->xmin;
     xmax = net->xmax;
     ymin = net->ymin;
@@ -336,6 +344,7 @@ void defineRouteTree(NET net)
 	n1->branchx = dtap->gridx;
 	n1->branchy = dtap->gridy;
     }
+#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -467,6 +476,7 @@ void setBboxCurrent(NET net)
     // If net is routed, increase the bounding box to
     // include the current route solution.
 
+#if 0
     for (rt = net->routes; rt; rt = rt->next)
 	for (seg = rt->segments; seg; seg = seg->next)
 	{
@@ -482,6 +492,7 @@ void setBboxCurrent(NET net)
 	    if (seg->y2 < net->ymin) net->ymin = seg->y2;
 	    else if (seg->y2 > net->ymax) net->ymax = seg->y2;
 	}
+#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -500,8 +511,9 @@ void createBboxMask(NET net, u_char halo)
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
 
-    fillMask((u_char)halo);
+    fillMask(net, (u_char)halo);
 
+#if 0
     xmin = net->xmin;
     xmax = net->xmax;
     ymin = net->ymin;
@@ -536,6 +548,7 @@ void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0])
 		 RMASK(j, gy2) = (u_char)i;
      }
+#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -613,8 +626,9 @@ void createMask(NET net, u_char slack, u_char halo)
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
 
-  fillMask((u_char)halo);
+  fillMask(net, (u_char)halo);
 
+#if 0
   xmin = net->xmin;
   xmax = net->xmax;
   ymin = net->ymin;
@@ -782,6 +796,7 @@ void createMask(NET net, u_char slack, u_char halo)
         Fprintf(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
   }
+#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -790,10 +805,20 @@ void createMask(NET net, u_char slack, u_char halo)
 /* bad guess about the optimal route positions.			*/
 /*--------------------------------------------------------------*/
 
-void fillMask(u_char value) {
-   memset((void *)RMask, (int)value,
-		(size_t)(NumChannelsX[0] * NumChannelsY[0]
-		* sizeof(u_char)));
+void fillMask(NET net, u_char value) {
+	if(!net) return;
+	POINT p1, p2, vpnt;
+	p1 = get_left_lower_trunk_point(net->bbox);
+	p2 = get_right_upper_trunk_point(net->bbox);
+	vpnt = create_point(0,0,0);
+	for(vpnt->x=p1->x;vpnt->x<p2->x;vpnt->x++) {
+		for(vpnt->y=p1->y;vpnt->y<p2->y;vpnt->y++) {
+			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(vpnt->x, vpnt->y) = value;
+		}
+	}
+	free(vpnt);
+	free(p1);
+	free(p2);
 }
 
 /* end of mask.c */

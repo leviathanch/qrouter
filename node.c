@@ -19,38 +19,8 @@
 #include "node.h"
 #include "qconfig.h"
 #include "lef.h"
-
-/*--------------------------------------------------------------*/
-/* Comparison routine used for qsort.  Sort nets by number of	*/
-/* nodes.							*/
-/*--------------------------------------------------------------*/
-
-int compNets(NET *a, NET *b)
-{
-   NET p = *a;
-   NET q = *b;
-
-   // NULL nets get shoved up front
-   if (p == NULL) return ((q == NULL) ? 0 : -1);
-   if (q == NULL) return 1;
-
-   // Sort critical nets at the front by assigned order
-
-   if (p->flags & NET_CRITICAL) {
-      if (q->flags & NET_CRITICAL) {
-	 return (p->netorder < q->netorder) ? -1 : 1;
-      }
-      else return -1;
-   }
-
-   // Otherwise sort by number of nodes
-
-   if (p->numnodes < q->numnodes)
-      return 1;
-   if (p->numnodes > q->numnodes)
-      return -1;
-   return 0;
-}
+#include "mask.h"
+#include "output.h"
 
 POINT get_left_lower_trunk_point(BBOX bbox)
 {
@@ -321,18 +291,6 @@ BBOX add_line_to_bbox(BBOX bbox, BBOX_LINE ol)
 	if(!ol) return bbox;
 	BBOX b = (bbox)?bbox:create_fresh_bbox();
 	BBOX_LINE line = clone_line(ol);
-	b->num_edges++; // incrementing line count
-	b->edges=add_line_to_edge(b->edges, line);
-	return b;
-}
-
-BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
-{
-	BBOX_LINE line = NULL; // line to add
-	BBOX b = (bbox==NULL)?create_fresh_bbox():bbox;
-	line = get_fresh_line(); // creating requested line
-	line->pt1 = create_point(x1,y1,0);
-	line->pt2 = create_point(x2,y2,0);
 	b->num_edges++; // incrementing line count
 	b->edges=add_line_to_edge(b->edges, line);
 	return b;
@@ -1084,201 +1042,6 @@ BOOL resolve_bbox_collisions(NET net, BOOL thread)
 }
 
 /*--------------------------------------------------------------*/
-/* Alternative net comparison used for qsort.  Sort nets by	*/
-/* minimum dimension of the bounding box, and if equal, by the	*/
-/* number of nodes in the net.  Bounding box dimensions are	*/
-/* ordered smallest to largest, and number of nodes are ordered	*/
-/* largest to smallest.						*/
-/*--------------------------------------------------------------*/
-
-int altCompNets(NET *a, NET *b)
-{
-   NET p = *a;
-   NET q = *b;
-   POINT llpt_p = get_left_lower_trunk_point(p->bbox);
-   POINT rupt_p = get_right_upper_trunk_point(p->bbox);
-   POINT llpt_q = get_left_lower_trunk_point(q->bbox);
-   POINT rupt_q = get_right_upper_trunk_point(q->bbox);
-
-   int pwidth, qwidth, pheight, qheight, pdim, qdim;
-
-   // Any NULL nets get shoved up front
-   if (p == NULL) return ((q == NULL) ? 0 : -1);
-   if (q == NULL) return 1;
-
-   // Sort critical nets at the front by assigned order
-
-   if (p->flags & NET_CRITICAL) {
-      if (q->flags & NET_CRITICAL) {
-	 return (p->netorder < q->netorder) ? -1 : 1;
-      }
-      else return -1;
-   }
-
-   // Otherwise sort as described above.
-
-   pwidth = rupt_p->x - llpt_p->x;
-   pheight = rupt_p->y - llpt_p->y;
-   pdim = (pwidth > pheight) ? pheight : pwidth;
-
-   qwidth = rupt_q->x - llpt_q->x;
-   qheight =  rupt_q->y - llpt_p->y;
-   qdim = (qwidth > qheight) ? qheight : qwidth;
-
-   free(llpt_p);
-   free(rupt_p);
-   free(llpt_q);
-   free(rupt_q);
-
-   if (pdim < qdim)
-      return (-1);
-   else if (pdim > qdim)
-      return (1);
-   else {
-      if (p->numnodes < q->numnodes)
-         return (1);
-      if (p->numnodes > q->numnodes)
-         return (-1);
-      return (0);
-   }
-}
-
-/*--------------------------------------------------------------*/
-/* create_netorder --- assign indexes to net->netorder    	*/
-/* Re-sort Nlnets according to net order.  Since Nlnets is a	*/
-/* global variable, nothing is returned from this routine.	*/
-/*								*/
-/* method = 0							*/
-/* 	Nets are ordered simply from those with the most nodes	*/
-/*	to those with the fewest.  However, any nets marked	*/
-/* 	critical in the configuration or critical net files	*/
-/*	will be given precedence.				*/
-/*								*/
-/* method = 1							*/
-/*	Nets are ordered by minimum bounding box dimension.	*/
-/*	This is based on the principle that small or narrow	*/
-/*	nets have little room to be moved around without	*/
-/*	greatly increasing the net length.  If these are put	*/
-/*	down first, then remaining nets can route around them.	*/
-/*--------------------------------------------------------------*/
-
-void create_netorder(u_char method)
-{
-  int i, j;
-  NET  net;
-  STRING cn;
-
-  i = 1;
-  for (cn = CriticalNet; cn; cn = cn->next) {
-     if (Verbose > 1)
-	Fprintf(stdout, "critical net %s\n", cn->name);
-     for (j = 0; j < Numnets; j++) {
-	net = Nlnets[j];
-	if (!strcmp(net->netname, (char *)cn->name)) {
-           net->netorder = i++;
-	   net->flags |= NET_CRITICAL;
-	}
-     }
-  }
-
-  switch (method) {
-      case 0:
-	 qsort((char *)Nlnets, Numnets, (int)sizeof(NET),
-			(__compar_fn_t)compNets);
-	 break;
-      case 1:
-	 qsort((char *)Nlnets, Numnets, (int)sizeof(NET),
-			(__compar_fn_t)altCompNets);
-	 break;
-  }
-
-  for (i = 0; i < Numnets; i++) {
-     net = Nlnets[i];
-     net->netorder = i++;
-  }
-
-} /* create_netorder() */
-
-/*--------------------------------------------------------------*/
-/* Measure and record the bounding box of a net.		*/
-/* This is preparatory to generating a mask for the net.	*/
-/* Find the bounding box of each node, and record that		*/
-/* information, at the same time computing the whole net's	*/
-/* bounding box as the area bounding all of the nodes.		*/
-/* Determine if the bounding box is more horizontal or		*/
-/* vertical, and specify a direction for the net's trunk line.	*/
-/* Initialize the trunk line as the midpoint between all of the	*/
-/* nodes, extending the width (or height) of the bounding box.	*/
-/* Initialize the node branch position as the line extending	*/
-/* from the middle of the node's bounding box to the trunk	*/
-/* line.  These positions (trunk and branches) will be sorted	*/
-/* and readjusted by "create_nodeorder()".			*/
-/*--------------------------------------------------------------*/
-
-void find_bounding_box(NET net)
-{
-   NODE n1, n2;
-   DPOINT d1tap, d2tap, dtap, mintap;
-   if(!net) return;
-
-      // Use the first tap point for each node to get a rough bounding box and
-      // centroid of all taps
-
-      int x1=0, x2=0, y1=0, y2=0;
-      if (net->numnodes == 0) return;	 // e.g., vdd or gnd bus
-
-      n1 = net->netnodes;
-      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      x1=dtap->gridx;
-      y1=dtap->gridy;
-      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
-         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-	 if (dtap) {
-            if (dtap->gridx < x1) x1 = dtap->gridx;
-            if (dtap->gridy < y1) y1 = dtap->gridy;
-	 }
-      }
-      n1 = net->netnodes;
-      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      x2=dtap->gridx;
-      y2=dtap->gridy;
-      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
-         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-	 if (dtap) {
-            if (dtap->gridx > x2) x2 = dtap->gridx;
-            if (dtap->gridy > y2) y2 = dtap->gridy;
-	 }
-      }
-      
-      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
-         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
-	 if (dtap) {
-            if (dtap->gridx > x2) x2 = dtap->gridx;
-            if (dtap->gridx < x1) x1 = dtap->gridx;
-            if (dtap->gridy > y2) y2 = dtap->gridy;
-            if (dtap->gridy < y1) y1 = dtap->gridy;
-	 }
-      }
-
-      if(!net->bbox) net->bbox = create_fresh_bbox();
-
-      net->bbox->x1_exception=FALSE;
-      net->bbox->y1_exception=FALSE;
-      net->bbox->x2_exception=FALSE;
-      net->bbox->y2_exception=FALSE;
-
-      x1-=BOX_ROOM_X;
-      y1-=BOX_ROOM_Y;
-      x2+=BOX_ROOM_X;
-      y2+=BOX_ROOM_Y;
-
-      net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x1, y2); // left lower point -> left upper point
-      net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x2, y1); // left lower point -> right lower point
-      net->bbox = add_line_to_bbox_ints(net->bbox, x2, y2, x2, y1); // right upper point -> right lower point
-      net->bbox = add_line_to_bbox_ints(net->bbox, x2, y2, x1, y2); // right upper point -> left upper point
-}
-
-/*--------------------------------------------------------------*/
 /* defineRouteTree() ---					*/
 /*								*/
 /* Define a trunk-and-branches potential best route for a net.	*/
@@ -1451,9 +1214,7 @@ count_reachable_taps()
 	    if (node == NULL) continue;
 	    if (node->numnodes == 0) continue;	 // e.g., vdd or gnd bus
 	    if (node->numtaps == 0) {
-		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n",
-			print_node_name(node), node->netname);
-
+		Fprintf(stderr, "Error: Node %s of net \"%s\" has no taps!\n", print_node_name(node), node->netname);
 		for (ds = g->taps[i]; ds; ds = ds->next) {
 		    deltax = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 0);
 		    deltay = 0.5 * LefGetViaWidth(ds->layer, ds->layer, 1);

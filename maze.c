@@ -237,6 +237,7 @@ void clear_non_source_targets(NET net, POINT *pushlist)
       }
    }
 }
+}
 
 /*--------------------------------------------------------------*/
 /* clear_target_node --						*/
@@ -360,7 +361,7 @@ count_targets(NET net)
 /* will be no way to route the net.				*/
 /*--------------------------------------------------------------*/
 
-int set_node_to_net(NODE node, int newflags, POINT *pushlist, BBOX bbox, u_char stage)
+int set_node_to_net(NODE node, int newflags, POINT* pushlist, BBOX bbox, u_char stage)
 {
     int x, y, lay, obsnet = 0;
     int result = 0;
@@ -640,7 +641,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 		n2 = (lnode) ? lnode->nodesav : NULL;
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
-		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
+		   result = set_node_to_net(n2, newflags, pushlist, net->bbox, stage);
 		   // On error, continue processing
 		}
 
@@ -664,8 +665,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 /* connect do the nodes.					*/
 /*--------------------------------------------------------------*/
 
-int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
-		POINT *pushlist, SEG bbox, u_char stage)
+int set_route_to_net_recursive(NET net, ROUTE rt, int newflags, POINT *pushlist, u_char stage)
 {
     ROUTE route;
     int result;
@@ -675,7 +675,7 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
     rt->flags |= RT_VISITED;
 
     /* First mark this route */
-    result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
+    result = set_route_to_net(net, rt, newflags, pushlist, stage);
     if (result < 0) return result;
 
     /* Recursively mark the routes connected to the nodes of	*/
@@ -684,33 +684,33 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
     if (rt->flags & RT_START_NODE) {
 	for (route = net->routes; route; route = route->next) {
 	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	    if (!(route->flags & RT_END_NODE) && (route->end.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	}
     }
     else {
-	result = set_route_to_net(net, rt->start.route, newflags, pushlist, bbox, stage);
+	result = set_route_to_net(net, rt->start.route, newflags, pushlist, stage);
 	if (result < 0) return result;
     }
     if (rt->flags & RT_END_NODE) {
 	for (route = net->routes; route; route = route->next) {
 	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	    if (!(route->flags & RT_END_NODE) && (route->end.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	}
     }
     else {
-	result = set_route_to_net(net, rt->end.route, newflags, pushlist, bbox, stage);
+	result = set_route_to_net(net, rt->end.route, newflags, pushlist, stage);
 	if (result < 0) return result;
     }
     return result;
@@ -722,9 +722,7 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
 /* "newflags" (PR_SOURCE or PR_DEST) in Obs2[].			*/
 /*--------------------------------------------------------------*/
 
-int set_routes_to_net(NODE node, NET net, int newflags, POINT *pushlist,
-		SEG bbox, u_char stage)
-
+int set_routes_to_net(NODE node, NET net, int newflags, POINT* pushlist, int stage)
 {
     ROUTE rt;
     int result = 0;
@@ -735,11 +733,9 @@ int set_routes_to_net(NODE node, NET net, int newflags, POINT *pushlist,
     /* Find any route that has node as an endpoint */
     for (rt = net->routes; rt; rt = rt->next) {
 	if ((rt->flags & RT_START_NODE) && (rt->start.node == node))
-	    result = set_route_to_net_recursive(net, rt, newflags,
-				pushlist, bbox, stage);
+	    result = set_route_to_net_recursive(net, rt, newflags, pushlist, stage);
 	else if ((rt->flags & RT_END_NODE) && (rt->end.node == node))
-	    result = set_route_to_net_recursive(net, rt, newflags,
-				pushlist, bbox, stage);
+	    result = set_route_to_net_recursive(net, rt, newflags, pushlist, stage);
 	if (result < 0) return result;
     }
     return result;
@@ -1479,7 +1475,6 @@ POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 		 free(ptret);
 	 }
        }
-    }
     return NULL;	// New position did not get a lower cost
 
 } /* eval_pt() */

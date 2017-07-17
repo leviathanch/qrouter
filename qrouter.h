@@ -511,9 +511,8 @@ extern NETLIST clknets;
 #endif
 
 /* Function prototypes */
-
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_setup(struct routeinfo_ *iroute, u_char stage);
+static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
+static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
 static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
 static ROUTE createemptyroute(void);
 static void helpmessage(void);

@@ -496,27 +496,37 @@ void setBboxCurrent(NET net)
 {
     ROUTE rt;
     SEG seg;
+    POINT pnt;
+    int xmin, ymin, xmax, ymax;
 
     // If net is routed, increase the bounding box to
     // include the current route solution.
 
-#if 0
+    pnt = get_left_lower_trunk_point(net->bbox);
+    xmin = pnt->x;
+    ymin = pnt->y;
+    free(pnt);
+
+    pnt = get_right_upper_trunk_point(net->bbox);
+    xmax = pnt->x;
+    ymax = pnt->y;
+    free(pnt);
+
     for (rt = net->routes; rt; rt = rt->next)
 	for (seg = rt->segments; seg; seg = seg->next)
 	{
-	    if (seg->x1 < net->xmin) net->xmin = seg->x1;
-	    else if (seg->x1 > net->xmax) net->xmax = seg->x1;
+	    if (seg->x1 < xmin) xmin = seg->x1;
+	    else if (seg->x1 > xmax) xmax = seg->x1;
 
-	    if (seg->x2 < net->xmin) net->xmin = seg->x2;
-	    else if (seg->x2 > net->xmax) net->xmax = seg->x2;
+	    if (seg->x2 < xmin) xmin = seg->x2;
+	    else if (seg->x2 > xmax) xmax = seg->x2;
 
-	    if (seg->y1 < net->ymin) net->ymin = seg->y1;
-	    else if (seg->y1 > net->ymax) net->ymax = seg->y1;
+	    if (seg->y1 < ymin) ymin = seg->y1;
+	    else if (seg->y1 > ymax) ymax = seg->y1;
 
-	    if (seg->y2 < net->ymin) net->ymin = seg->y2;
-	    else if (seg->y2 > net->ymax) net->ymax = seg->y2;
+	    if (seg->y2 < ymin) ymin = seg->y2;
+	    else if (seg->y2 > ymax) ymax = seg->y2;
 	}
-#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -534,14 +544,19 @@ void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
+    POINT pnt;
 
     fillMask(net, (u_char)halo);
 
-#if 0
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
+    pnt = get_left_lower_trunk_point(net->bbox);
+    xmin = pnt->x;
+    ymin = pnt->y;
+    free(pnt);
+
+    pnt = get_right_upper_trunk_point(net->bbox);
+    xmax = pnt->x;
+    ymax = pnt->y;
+    free(pnt);
 
     for (gx1 = xmin; gx1 <= xmax; gx1++)
 	for (gy1 = ymin; gy1 <= ymax; gy1++)
@@ -572,7 +587,6 @@ void createBboxMask(NET net, u_char halo)
 	      if (j >= 0 && j < NumChannelsX[0])
 		 RMASK(j, gy2) = (u_char)i;
      }
-#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -646,20 +660,25 @@ void createMask(NET net, u_char slack, u_char halo)
 {
   NODE n1, n2;
   DPOINT dtap;
+  POINT pnt;
   int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
 
   fillMask(net, (u_char)halo);
 
-#if 0
-  xmin = net->xmin;
-  xmax = net->xmax;
-  ymin = net->ymin;
-  ymax = net->ymax;
+  pnt = get_left_lower_trunk_point(net->bbox);
+  xmin = pnt->x;
+  ymin = pnt->y;
+  free(pnt);
 
-  xcent = net->trunkx;
-  ycent = net->trunky;
+  pnt = get_right_upper_trunk_point(net->bbox);
+  xmax = pnt->x;
+  ymax = pnt->y;
+  free(pnt);
+
+  xcent = xmin;
+  ycent = ymin;
 
   orient = 0;
 
@@ -669,7 +688,7 @@ void createMask(NET net, u_char slack, u_char halo)
      // Horizontal trunk
      orient |= 1;
 
-     ycent = analyzeCongestion(net->trunky, ymin, ymax, xmin, xmax);
+     ycent = analyzeCongestion(ymin, ymin, ymax, xmin, xmax);
      ymin = ymax = ycent;
 
      for (i = xmin - slack; i <= xmax + slack; i++) {
@@ -820,7 +839,6 @@ void createMask(NET net, u_char slack, u_char halo)
         Fprintf(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
   }
-#endif
 }
 
 /*--------------------------------------------------------------*/

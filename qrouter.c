@@ -2337,7 +2337,6 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   }
 
   // Check for the possibility that there is already a route to the target
-
   if (!result) {
 
      // Remove nodes of the net from Nodeinfo.nodeloc so that they will not be
@@ -2372,7 +2371,6 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      // Make sure this doesn't happen my clearing the "processed"
      // flag from all such target nodes, and placing the positions
      // on the stack for processing again.
-
      clear_non_source_targets(iroute->net, &iroute->glist[0]);
   }
 
@@ -2483,7 +2481,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
      if (iroute->do_pwrbus == FALSE) {
 
         // Set associated routes to PR_SOURCE
-        //rval = set_routes_to_net(iroute->net, PR_SOURCE, &iroute->glist, stage);
+        rval = set_routes_to_net(iroute->nsrc, iroute->net, PR_SOURCE, iroute->glist, stage);
 
 	// Set node to PR_SOURCE
 	rval = set_node_to_net(iroute->nsrc, PR_SOURCE, &iroute->glist[0], iroute->bbox, stage);
@@ -2513,7 +2511,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 	   else if (rval == 1) continue;	/* This node was part of source */
 
 	   // And add associated routes
-	   //rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL, stage);
+	   rval = set_routes_to_net(node, iroute->net, PR_TARGET, NULL, stage);
            if (rval == 0) result = 1;	/* (okay to fail) */
         }
 

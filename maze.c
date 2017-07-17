@@ -440,14 +440,6 @@ int set_node_to_net(NODE node, int newflags, POINT* pushlist, BBOX bbox, u_char 
 	     }
 	  }
 	  found_one = TRUE;
-
-	  // record extents
-	  /*if (bbox) {
-	     if (x < bbox->x1) bbox->x1 = x;
-	     if (x > bbox->x2) bbox->x2 = x;
-	     if (y < bbox->y1) bbox->y1 = y;
-	     if (y > bbox->y2) bbox->y2 = y;
-	  }*/
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -597,7 +589,7 @@ int disable_node_nets(NODE node)
 /* source nodes) is routable by definition. . .			*/
 /*--------------------------------------------------------------*/
 
-int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char stage)
+int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, u_char stage)
 {
     int x, y, lay;
     int result = 0;
@@ -607,14 +599,21 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
     NODE n2;
     PROUTE *Pr;
 
-    if (rt) if(rt->segments) {
+    if (rt && rt->segments) {
 	for (seg = rt->segments; seg; seg = seg->next) {
 	    lay = seg->layer;
 	    x = seg->x1;
 	    y = seg->y1;
 	    while (1) {
+		Pr = &OBS2VAL(x, y, lay);
+		Pr->flags = (newflags == PR_SOURCE) ? newflags : (newflags | PR_COST);
+		// Conflicts should not happen (check for this?)
+		// if (Pr->prdata.net != node->netnum) Pr->flags |= PR_CONFLICT;
+		Pr->prdata.cost = (newflags == PR_SOURCE) ? 0 : MAXRT;
+
+		// push this point on the stack to process
+
 		if (pushlist != NULL) {
-		   Pr = &OBS2VAL(x, y, lay);
 		   if (~(Pr->flags & PR_ON_STACK)) {
 	  	      gpoint = create_point(x,y,lay);
 		      if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
@@ -626,14 +625,6 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 			}
 		   }
 		}
-
-		// record extents
-		/*if (bbox) {
-		   if (x < bbox->x1) bbox->x1 = x;
-		   if (x > bbox->x2) bbox->x2 = x;
-		   if (y < bbox->y1) bbox->y1 = y;
-		   if (y > bbox->y2) bbox->y2 = y;
-		}*/
 
 		// If we found another node connected to the route,
 		// then process it, too.
@@ -652,6 +643,13 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 		   lay++;
 		   continue;
 		}
+
+		// Move to next grid position in segment
+		if (x == seg->x2 && y == seg->y2) break;
+		if (seg->x2 > seg->x1) x++;
+		else if (seg->x2 < seg->x1) x--;
+		if (seg->y2 > seg->y1) y++;
+		else if (seg->y2 < seg->y1) y--;
 	    }
 	}
     }

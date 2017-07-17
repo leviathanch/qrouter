@@ -76,6 +76,9 @@ int altCompNets(NET *a, NET *b)
    NET q = *b;
 
    int pwidth, qwidth, pheight, qheight, pdim, qdim;
+   int pxmin, pxmax, pymin, pymax;
+   int qxmin, qxmax, qymin, qymax;
+   POINT pnt;
 
    // Any NULL nets get shoved up front
    if (p == NULL) return ((q == NULL) ? 0 : -1);
@@ -91,14 +94,32 @@ int altCompNets(NET *a, NET *b)
    }
 
    // Otherwise sort as described above.
+   pnt = get_left_lower_trunk_point((*a)->bbox);
+   pxmin = pnt->x;
+   pymin = pnt->y;
+   free(pnt);
 
-#if 0
-   pwidth = p->xmax - p->xmin;
-   pheight = p->ymax - p->ymin;
+   pnt = get_right_upper_trunk_point((*a)->bbox);
+   pxmax = pnt->x;
+   pymax = pnt->y;
+   free(pnt);
+
+   pnt = get_left_lower_trunk_point((*b)->bbox);
+   qxmin = pnt->x;
+   qymin = pnt->y;
+   free(pnt);
+
+   pnt = get_right_upper_trunk_point((*b)->bbox);
+   qxmax = pnt->x;
+   qymax = pnt->y;
+   free(pnt);
+
+   pwidth = pxmax - pxmin;
+   pheight = pymax - pymin;
    pdim = (pwidth > pheight) ? pheight : pwidth;
 
-   qwidth = q->xmax - q->xmin;
-   qheight = q->ymax - q->ymin;
+   qwidth = qxmax - qxmin;
+   qheight = qymax - qymin;
    qdim = (qwidth > qheight) ? qheight : qwidth;
 
    if (pdim < qdim)
@@ -112,7 +133,6 @@ int altCompNets(NET *a, NET *b)
          return (-1);
       return (0);
    }
-#endif
 }
 
 /*--------------------------------------------------------------*/
@@ -286,15 +306,20 @@ void defineRouteTree(NET net)
     NODE n1;
     DPOINT dtap;
     int xcent, ycent, xmin, ymin, xmax, ymax;
+    POINT pnt;
 
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
 
-#if 0
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
+    pnt = get_left_lower_trunk_point(net->bbox);
+    xmin = pnt->x;
+    ymin = pnt->y;
+    free(pnt);
+
+    pnt = get_right_upper_trunk_point(net->bbox);
+    xmax = pnt->x;
+    ymax = pnt->y;
+    free(pnt);
 
     if (net->numnodes == 2) {
 
@@ -303,8 +328,8 @@ void defineRouteTree(NET net)
 	// the bounding box, and one vertical trunk + one
 	// branch for the other "L" of the bounding box.
 
-	net->trunkx = xmin;
-	net->trunky = ymin;
+	//net->trunkx = xmin;
+	//net->trunky = ymin;
     }
     else if (net->numnodes > 0) {
 
@@ -323,8 +348,8 @@ void defineRouteTree(NET net)
 
 	// Record the trunk line in the net record
 
-	net->trunkx = xcent;
-	net->trunky = ycent;
+	//net->trunkx = xcent;
+	//net->trunky = ycent;
     }
 
     if (xmax - xmin > ymax - ymin) {
@@ -344,7 +369,6 @@ void defineRouteTree(NET net)
 	n1->branchx = dtap->gridx;
 	n1->branchy = dtap->gridy;
     }
-#endif
 }
 
 /*--------------------------------------------------------------*/

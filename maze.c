@@ -614,6 +614,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT* pushlist, u_char st
 	    y = seg->y1;
 	    while (1) {
 		if (pushlist != NULL) {
+		   Pr = &OBS2VAL(x, y, lay);
 		   if (~(Pr->flags & PR_ON_STACK)) {
 	  	      gpoint = create_point(x,y,lay);
 		      if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
@@ -1724,7 +1725,7 @@ route_set_connections(net, route)
    }
 
    if (!found) {
-      Fprintf(stderr, "Error:  Failure to find route start node/route!\n");
+      FprintfT(stderr, "Error:  Failure to find route start node/route!\n");
    }
 
    /* Does last route segment connect to a node? */
@@ -1777,7 +1778,7 @@ route_set_connections(net, route)
    }
 
    if (!found) {
-      Fprintf(stderr, "Error:  Failure to find route end node/route!\n");
+      FprintfT(stderr, "Error:  Failure to find route end node/route!\n");
    }
 }
 

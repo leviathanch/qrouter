@@ -1020,7 +1020,7 @@ void route_postponed_nets(NETLIST l, int *remaining, u_char graphdebug)
 			if(thret == TCL_OK) {
 				threadIDs[c]=idPtr;
 				if(graphdebug) FprintfT(stdout, "%s: routing net %s\n", __FUNCTION__, netname);
-				else Fprintf(stdout, "%s: routing net %s\n", __FUNCTION__, netname);
+				else FprintfT(stdout, "%s: routing net %s\n", __FUNCTION__, netname);
 				numThreadsRunningG++;
 			} else {
 				exit(0);
@@ -2669,7 +2669,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 
     max_reached = FALSE;
     if (!first && (Verbose > 2)) {
-       Fprintf(stdout, "\n");
+       FprintfT(stdout, "\n");
        first = TRUE;
     }
     if (Verbose > 2) {
@@ -2724,7 +2724,7 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
  	 if (curpt.cost <= best.cost) {
 	    if (first) {
 	       if (Verbose > 2)
-		  Fprintf(stdout, "Found a route of cost ");
+		  FprintfT(stdout, "Found a route of cost ");
 	       first = FALSE;
 	    }
 	    else if (Verbose > 2) {
@@ -2897,8 +2897,8 @@ static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug
 	curpt.lay = best.lay;
 	if ((rval = commit_proute(net, iroute->rt, &curpt, stage)) != 1) break;
 	if (Verbose > 2) {
-	   Fprintf(stdout, "\nCommit to a route of cost %d\n", best.cost);
-	   Fprintf(stdout, "Between positions (%d %d) and (%d %d)\n",
+	   FprintfT(stdout, "\nCommit to a route of cost %d\n", best.cost);
+	   FprintfT(stdout, "Between positions (%d %d) and (%d %d)\n",
 			best.x, best.y, curpt.x, curpt.y);
 	}
 	route_set_connections(iroute->net, iroute->rt);

@@ -996,7 +996,7 @@ void route_postponed_nets(NETLIST l, int *remaining, u_char graphdebug)
 				if(resolve_bbox_collisions(net,FOR_THREAD)) {
 					Fprintf(stdout,"%s: Found alternative shape for %s. Friendship is magic!\n", __FUNCTION__,  net->netname);
 				} else {
-					Fprintf(stdout,"%s: Box of %s still overlaps. Post-Pony-ing\n", __FUNCTION__, net->netname);
+					FprintfT(stdout,"%s: Box of %s still overlaps. Post-Pony-ing\n", __FUNCTION__, net->netname);
 					continue;
 				}
 			}

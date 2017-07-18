@@ -8,7 +8,7 @@
 #ifndef _MASKINT_H
 #define _MASKINT_H
 
-extern u_char *RMask;                // mask out best area to route
+u_char *RMask;                // mask out best area to route
 
 extern void initMask(void);
 extern void fillMask(NET net, u_char value);

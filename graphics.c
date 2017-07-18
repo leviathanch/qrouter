@@ -18,6 +18,7 @@
 #include "qconfig.h"
 #include "node.h"
 #include "maze.h"
+#include "mask.h"
 #include "lef.h"
 
 BOOL drawTrunk = FALSE;

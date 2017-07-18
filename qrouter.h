@@ -457,7 +457,6 @@ extern GATE   PinMacro;		// macro definition for a pin
 extern GATE   Nlgates;
 extern NET    *Nlnets;
 
-extern u_char *RMask;
 extern u_int  *Obs[MAX_LAYERS];		// obstructions by layer, y, x
 extern PROUTE *Obs2[MAX_LAYERS]; 	// working copy of Obs 
 extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info

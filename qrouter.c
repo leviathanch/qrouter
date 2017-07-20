@@ -1737,12 +1737,13 @@ create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char halo)
    if (gy1 < 0) gy1 = 0;
    if (gy2 >= ymax) gy2 = ymax - 1;
 
-   /*for (i = gx1; i <= gx2; i++)
+   for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++) {
 	 pt->x = i;
 	 pt->y = j;
-	 if(check_point_area(net->bbox,pt,TRUE,0)) RMASK(i, j) = (u_char)0;
-      }*/
+	 if(check_point_area(net->bbox,pt,TRUE,0))
+		 RMASK(i, j) = (u_char)0;
+      }
 
    for (v = 1; v < halo; v++) {
       tb = shrink_bbox(net->bbox, i);
@@ -1806,12 +1807,13 @@ create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char halo)
    if (gy1 < 0) gy1 = 0;
    if (gy2 >= ymax) gy2 = ymax - 1;
 
-   /*for (i = gx1; i <= gx2; i++)
+   for (i = gx1; i <= gx2; i++)
       for (j = gy1; j <= gy2; j++) {
 	 pt->x = i;
 	 pt->y = j;
-	 if(check_point_area(net->bbox,pt,TRUE,0)) RMASK(i, j) = (u_char)0;
-      }*/
+	 if(check_point_area(net->bbox,pt,TRUE,0))
+		 RMASK(i, j) = (u_char)0;
+      }
 
    for (v = 1; v < halo; v++) {
       if (gy1 > 0) gy1--;
@@ -1869,7 +1871,8 @@ static void createBboxMask(NET net, u_char halo)
 
     for (vpnt->x = xmin; vpnt->x <= xmax; vpnt->x++)
 	for (vpnt->y = ymin; vpnt->y <= ymax; vpnt->y++)
-	    if(check_point_area(net->bbox, vpnt, TRUE, 0)) RMASK(vpnt->x, vpnt->y) = 0; // block everything around the inside
+	    if(check_point_area(net->bbox, vpnt, TRUE, 0))
+		RMASK(vpnt->x, vpnt->y) = 0; // block everything around the inside
 
      for (i = 1; i <= halo; i++) {
 		tb = shrink_bbox(net->bbox, i);
@@ -2571,12 +2574,12 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
   // Generate a search area mask representing the "likely best route".
   if ((iroute->do_pwrbus == FALSE) && (maskMode == MASK_AUTO)) {
      if (stage == 0)
-	createMask(iroute->net, MASK_SMALL, (u_char)Numpasses);
+	createMask(net, MASK_SMALL, (u_char)Numpasses);
      else
-	createMask(iroute->net, MASK_LARGE, (u_char)Numpasses);
+	createMask(net, MASK_LARGE, (u_char)Numpasses);
   }
   else if ((iroute->do_pwrbus == TRUE) || (maskMode == MASK_NONE))
-     fillMask(iroute->net, (u_char)0);
+     fillMask(net, (u_char)0);
   else if (maskMode == MASK_BBOX)
      createBboxMask(iroute->net, (u_char)Numpasses);
   else

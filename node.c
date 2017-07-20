@@ -107,7 +107,6 @@ POINT clone_point(POINT p)
 
 POINT create_point(int x, int y, int layer)
 {
-	Tcl_MutexLock(bbox_point_mutex);
 	POINT pt = malloc(sizeof(struct point_)); // creating requested point
 	if(!pt) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
@@ -117,13 +116,11 @@ POINT create_point(int x, int y, int layer)
 	pt->y=y;
 	pt->layer=layer;
 	pt->next = NULL;
-	Tcl_MutexUnlock(bbox_point_mutex);
 	return pt;
 }
 
 BBOX create_fresh_bbox()
 {
-	Tcl_MutexLock(bbox_mutex);
 	BBOX pt = malloc(sizeof(struct bbox_)); // creating requested box
 	if(!pt) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
@@ -135,7 +132,6 @@ BBOX create_fresh_bbox()
 	pt->x2_exception = FALSE;
 	pt->y1_exception = FALSE;
 	pt->y2_exception = FALSE;
-	Tcl_MutexUnlock(bbox_mutex);
 	return pt;
 }
 
@@ -144,18 +140,15 @@ BBOX_LINE clone_line(BBOX_LINE orig)
 	if(!orig) return NULL;
 	if(!orig->pt1) return NULL;
 	if(!orig->pt2) return NULL;
-	Tcl_MutexLock(clone_line_mutex);
 	BBOX_LINE r = get_fresh_line();
 	r->pt1=clone_point(orig->pt1);
 	r->pt2=clone_point(orig->pt2);
 	r->next = NULL;
-	Tcl_MutexUnlock(clone_line_mutex);
 	return r;
 }
 
 BBOX_LINE get_fresh_line()
 {
-	Tcl_MutexLock(bbox_line_mutex);
 	BBOX_LINE r = malloc(sizeof(struct bbox_line_));
 	if(!r) {
 		printf("%s: memory leak. dying!\n",__FUNCTION__);
@@ -164,7 +157,6 @@ BBOX_LINE get_fresh_line()
 	r->next = NULL;
 	r->pt1 = NULL;
 	r->pt2 = NULL;
-	Tcl_MutexUnlock(bbox_line_mutex);
 	return r;
 }
 
@@ -231,7 +223,7 @@ BBOX clone_bbox(BBOX orig)
 {
 	if(!orig) return NULL;
 	BBOX r = create_fresh_bbox();
-	r->edges =  clone_line_list(orig->edges);
+	r->edges = clone_line_list(orig->edges);
 	r->num_edges = orig->num_edges;
 	return r;
 }
@@ -278,9 +270,9 @@ BOOL edge_contains_line(BBOX_LINE list, BBOX_LINE line)
 BBOX_LINE add_line_to_edge(BBOX_LINE list, BBOX_LINE l)
 {
 	if(!l) return list;
-	if(edge_contains_line(list,l)) {
+	if(edge_contains_line(list,l))
 		return list;
-	}
+
 	BBOX_LINE line = clone_line(l); // cloning line
 	line->next = list;
 	return line;
@@ -290,9 +282,8 @@ BBOX add_line_to_bbox(BBOX bbox, BBOX_LINE ol)
 {
 	if(!ol) return bbox;
 	BBOX b = (bbox)?bbox:create_fresh_bbox();
-	BBOX_LINE line = clone_line(ol);
 	b->num_edges++; // incrementing line count
-	b->edges=add_line_to_edge(b->edges, line);
+	b->edges=add_line_to_edge(b->edges, ol);
 	return b;
 }
 
@@ -300,8 +291,8 @@ BOOL check_point_to_line(int mode, BBOX_LINE line, POINT pnt, BOOL with_edge, in
 {
 	if(!line) return FALSE;
 	if(!pnt) return FALSE;
-	if(!line->pt1) return FALSE;
-	if(!line->pt2) return FALSE;
+	if(!(line->pt1)) return FALSE;
+	if(!(line->pt2)) return FALSE;
 	int xmin, xmax;
 	int ymin, ymax;
 	int x,y;
@@ -386,18 +377,22 @@ int count_line_list(BBOX_LINE list)
 {
 	int ret=0;
 	if(!list) return ret;
-	for(BBOX_LINE l=list;l;l=l->next) if(l) ret++;
+	for(BBOX_LINE l=list;l;l=l->next) {
+		ret++;
+	}
 	return ret;
 }
 
 BOOL is_closed_shape(BBOX box)
 {
+	BOOL ret = FALSE;
 	if(!box) return FALSE;
 	if(!box->edges) return FALSE;
 	if(box->num_edges<4) return FALSE;
-	BOOL ret = FALSE;
-	BBOX_LINE obj = box->edges;
+
+	BBOX_LINE obj = clone_line_list(box->edges);
 	BBOX_LINE edge = NULL;
+
 	POINT pt = clone_point(obj->pt1);
 	for(BBOX_LINE l2=obj;l2;l2=l2->next) {
 		for(BBOX_LINE l=obj;l;l=l->next) {
@@ -416,9 +411,13 @@ BOOL is_closed_shape(BBOX box)
 			}
 		}
 	}
-	free(pt);
+
 	if(count_line_list(edge)==count_line_list(obj)) ret = TRUE;
+
+	free(pt);
 	free_line_list(edge);
+	free_line_list(obj);
+
 	return ret;
 }
 
@@ -430,12 +429,13 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	if(bbox->num_edges<4) return FALSE;
 	if(!pnt) return FALSE;
 	int xmin, xmax, ymin, ymax;
+	BBOX_LINE hlines = NULL, vlines = NULL;
 
 	// first check die area
 	if((pnt->x<0)||(pnt->x>NumChannelsX[0])||(pnt->y<0)||(pnt->y>NumChannelsY[0])) return FALSE; // outside die
 
 	// is not a closed shape then false
-	if(!is_closed_shape(bbox)) return FALSE;
+	//if(!is_closed_shape(bbox)) return FALSE;
 
 	// then  check trunk box
 	POINT pt1 = get_left_lower_trunk_point(bbox);
@@ -451,8 +451,8 @@ BOOL check_point_area(BBOX bbox, POINT pnt, BOOL with_edge, int edge_distance)
 	if((pnt->x<xmin)||(pnt->x>xmax)||(pnt->y<ymin)||(pnt->y>ymax)) return FALSE; // outside trunk
 
 	// now check structure
-	BBOX_LINE hlines = get_horizontal_lines(bbox->edges);
-	BBOX_LINE vlines = get_vertical_lines(bbox->edges);
+	hlines = get_horizontal_lines(bbox->edges);
+	vlines = get_vertical_lines(bbox->edges);
 	for(BBOX_LINE hll = hlines;hll;hll=hll->next) { // horizontal lower line hll
 		//if(bbox->y1_exception) printf("%s lower die area violated, adapting\n",__FUNCTION__);
 		if(check_point_to_line(CHECK_POINT_ABOVE_HLINE,hll,pnt,with_edge,bbox->y1_exception?0:edge_distance)) {
@@ -590,6 +590,7 @@ void free_bbox(BBOX t)
 {
 	if(!t) return;
 	free_line_list(t->edges);
+	t->edges = NULL;
 	free(t);
 }
 
@@ -785,63 +786,6 @@ BBOX_LINE get_intersecting_lines(BBOX box1, BBOX box2)
 		for(BBOX_LINE lb=box2->edges; lb; lb=lb->next)
 			if(lines_are_intersecting(la,lb))
 				ret = add_line_to_edge(ret, la);
-	return ret;
-}
-
-BBOX_LINE connect_edge_gaps(BBOX box)
-{
-	if(!box) return NULL;
-	BBOX_LINE ret = NULL;
-	BBOX_LINE line = NULL;
-	BBOX_LINE edge = clone_line_list(box->edges);
-	if(!edge) return NULL;
-	POINT pt = clone_point(edge->pt1);
-
-	for(BBOX_LINE l1=box->edges;l1;l1=l1->next) {
-		for(BBOX_LINE l2=edge;l2;l2=l2->next) {
-			if(points_equal(pt,l2->pt1)) {
-				free(pt);
-				pt=clone_point(l2->pt2);
-				edge=delete_line_from_edge(edge,l2);
-				break;
-			}
-			if(points_equal(pt,l2->pt2)) {
-				free(pt);
-				pt=clone_point(l2->pt1);
-				edge=delete_line_from_edge(edge,l2);
-				break;
-			}
-		}
-	}
-
-	if(count_line_list(edge)) {
-		for(BBOX_LINE la=edge;la;la=la->next) {
-			for(BBOX_LINE l=edge;l;l=l->next) {
-				if(((pt->x==l->pt1->x)&&(pt->y!=l->pt1->y))||((pt->x!=l->pt1->x)&&(pt->y==l->pt1->y))) {
-					line=get_fresh_line();
-					line->pt1=clone_point(pt);
-					line->pt2=clone_point(l->pt1);
-					ret=add_line_to_edge(ret,line);
-					free_line(line);
-					free(pt);
-					pt=clone_point(l->pt2);
-				}
-				if(((pt->x==l->pt2->x)&&(pt->y!=l->pt2->y))||((pt->x!=l->pt2->x)&&(pt->y==l->pt2->y))) {
-					line=get_fresh_line();
-					line->pt1=clone_point(pt);
-					line->pt2=clone_point(l->pt2);
-					ret=add_line_to_edge(ret,line);
-					free_line(line);
-					free(pt);
-					pt=clone_point(l->pt2);
-				}
-			}
-		}
-	}
-
-	free(pt);
-	free_line_list(edge);
-
 	return ret;
 }
 

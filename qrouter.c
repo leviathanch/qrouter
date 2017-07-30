@@ -71,12 +71,6 @@ char *delayfilename = NULL;
 
 ScaleRec Scales;	// record of input and output scales
 
-/* Prototypes for some local functions */
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
-static ROUTE createemptyroute(void);
-static void emit_routes(char *filename, double oscale, int iscale);
-static void helpmessage(void);
-
 NETLIST gndnets = NULL;
 NETLIST vddnets = NULL;
 NETLIST clknets = NULL;
@@ -1882,7 +1876,6 @@ free_glist(struct routeinfo_ *iroute)
 int doroute(NET net, u_char stage, u_char graphdebug)
 {
   ROUTE rt1, lrt;
-  NETLIST nlist;
   int result, lastlayer, unroutable, i;
   struct routeinfo_ iroute;
 
@@ -1972,14 +1965,12 @@ int doroute(NET net, u_char stage, u_char graphdebug)
 /* to a single subroutine.					*/
 /*--------------------------------------------------------------*/
 
-static void unable_to_route(char *netname, NODE node, unsigned char forced)
+void unable_to_route(char *netname, NODE node, unsigned char forced)
 {
     if (node)
-	FprintfT(stderr, "Node %s of net %s has no tap points---",
-		print_node_name(node), netname);
+	FprintfT(stderr, "Node %s of net %s has no tap points---", print_node_name(node), netname);
     else
-	FprintfT(stderr, "Node of net %s has no tap points---",
-		netname);
+	FprintfT(stderr, "Node of net %s has no tap points---", netname);
 
     if (forced)
 	FprintfT(stderr, "forcing a tap point.\n");
@@ -1991,7 +1982,7 @@ static void unable_to_route(char *netname, NODE node, unsigned char forced)
 /* next_route_setup --						*/
 /*								*/
 /*--------------------------------------------------------------*/
-static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
+int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 {
   ROUTE rt;
   NODE node;
@@ -2099,7 +2090,7 @@ static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 /*								*/
 /*--------------------------------------------------------------*/
 
-static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
+int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 {
   int  xmin, xmax, ymin, ymax;
   u_int netnum, dir;
@@ -2347,7 +2338,7 @@ static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage)
 /*   AUTHOR and DATE: steve beccue      Fri Aug 8		*/
 /*--------------------------------------------------------------*/
 
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
+int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
 {
   POINT gpoint, gunproc;
   NET net = iroute->net;
@@ -2662,7 +2653,7 @@ done:
 /*--------------------------------------------------------------*/
 
 TCL_DECLARE_MUTEX(createemptyrouteMutex)
-static ROUTE createemptyroute(void)
+ROUTE createemptyroute(void)
 {
    ROUTE rt;
 
@@ -2694,7 +2685,7 @@ static ROUTE createemptyroute(void)
 /*								*/
 /*--------------------------------------------------------------*/
 
-static void helpmessage(void)
+void helpmessage(void)
 {
     if (Verbose > 0) {
 	Fprintf(stdout, "qrouter - maze router by Tim Edwards\n\n");

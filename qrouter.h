@@ -510,11 +510,11 @@ extern NETLIST clknets;
 #endif
 
 /* Function prototypes */
-static int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
-static int route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
-static ROUTE createemptyroute(void);
-static void helpmessage(void);
+int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
+int route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
+int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+ROUTE createemptyroute(void);
+void helpmessage(void);
 
 int    set_num_channels(void);
 int    allocate_obs_array();

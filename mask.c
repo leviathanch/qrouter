@@ -872,10 +872,10 @@ void createMask(NET net, u_char slack, u_char halo)
 
   if (Verbose > 2) {
      if (net->numnodes == 2)
-        Fprintf(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
+        FprintfT(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
      else
-        Fprintf(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
+        FprintfT(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
   }
 }

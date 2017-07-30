@@ -1413,6 +1413,43 @@ int route_net_ripup(NET net, u_char graphdebug, u_char onlybreak)
 /* Return value:  The number of failing nets			*/
 /*--------------------------------------------------------------*/
 
+TCL_DECLARE_MUTEX(dosecondstage_threadMutex)
+void dosecondstage_thread(ClientData parm)
+{
+	NET net;
+	qThreadData *thread_params = (qThreadData*)parm;
+	int result=0;
+	int *remaining = thread_params->remaining;
+	u_char graphdebug = thread_params->graphdebug;
+	net = thread_params->net;
+	net->locked = TRUE;
+	if ((net != NULL) && (net->netnodes != NULL)) {
+		result = doroute(net, (u_char)0, graphdebug);
+		if (result == 0) {
+			Tcl_MutexLock(&dosecondstage_threadMutex);
+			(*remaining)--;
+			Tcl_MutexUnlock(&dosecondstage_threadMutex);
+			if (Verbose > 0) {
+				FprintfT(stdout, "%s: Finished routing net %s\n",__FUNCTION__, net->netname);
+			}
+			FprintfT(stdout, "%s: Nets remaining: %d\n",__FUNCTION__, (*remaining));
+		} else {
+			if (Verbose > 0) {
+				FprintfT(stdout, "%s: Failed to route net %s\n",__FUNCTION__, net->netname);
+			}
+		}
+	} else {
+		if (net && (Verbose > 0)) {
+			FprintfT(stdout, "%s: Nothing to do for net %s\n",__FUNCTION__, net->netname);
+		}
+		Tcl_MutexLock(&dosecondstage_threadMutex);
+		(*remaining)--;
+		Tcl_MutexUnlock(&dosecondstage_threadMutex);
+	}
+	net->locked = FALSE;
+	return TCL_THREAD_CREATE_RETURN;
+}
+
 int
 dosecondstage(u_char graphdebug, u_char singlestep, u_char onlybreak, u_int effort)
 {
@@ -1697,145 +1734,6 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
       Fprintf(stdout, "----------------------------------------------\n");
 
    return failcount;
-}
-
-/*--------------------------------------------------------------*/
-/* Fill mask around the area of a vertical line			*/
-/*--------------------------------------------------------------*/
-
-static void
-create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char halo)
-{
-   int gx1, gx2, gy1, gy2;
-   int i, j, v;
-   int xmin, xmax, ymin, ymax;
-   u_char m;
-   POINT pt;
-   BBOX tb;
-   pt = get_left_lower_trunk_point(net->bbox);
-   xmin = pt->x;
-   ymin = pt->y;
-   free(pt);
-   pt = get_right_upper_trunk_point(net->bbox);
-   xmax = pt->x;
-   ymax = pt->y;
-   free(pt);
-
-   pt = create_point(0,0,0);
-   gx1 = x - slack;
-   gx2 = x + slack;
-   if (y1 > y2) {
-      gy1 = y2 - slack;
-      gy2 = y1 + slack;
-   }
-   else {
-      gy1 = y1 - slack;
-      gy2 = y2 + slack;
-   }
-   if (gx1 < 0) gx1 = 0;
-   if (gx2 >= xmax) gx2 = xmax - 1;
-   if (gy1 < 0) gy1 = 0;
-   if (gy2 >= ymax) gy2 = ymax - 1;
-
-   for (i = gx1; i <= gx2; i++)
-      for (j = gy1; j <= gy2; j++) {
-	 pt->x = i;
-	 pt->y = j;
-	 if(check_point_area(net->bbox,pt,TRUE,0))
-		 RMASK(i, j) = (u_char)0;
-      }
-
-   for (v = 1; v < halo; v++) {
-      tb = shrink_bbox(net->bbox, i);
-      if(!tb) continue;
-      if (gx1 > 0) gx1--;
-      if (gx2 < xmax - 1) gx2++;
-      if (y1 > y2) {
-         if (gy1 < ymax - 1) gy1++;
-         if (gy2 < ymax - 1) gy2++;
-      }
-      else {
-	 if (gy1 > 0) gy1--;
-	 if (gy2 > 0) gy2--;
-      }
-      for (i = gx1; i <= gx2; i++)
-         for (j = gy1; j <= gy2; j++) {
-	    pt->x = i;
-	    pt->y = j;
-	    if(point_on_edge(tb, pt)) {
-		m = RMASK(i, j);
-		if (m > v) RMASK(i, j) = (u_char)v;
-	    }
-	 }
-      free_bbox(tb);
-   }
-}
-
-/*--------------------------------------------------------------*/
-/* Fill mask around the area of a horizontal line		*/
-/*--------------------------------------------------------------*/
-
-static void
-create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char halo)
-{
-   int gx1, gx2, gy1, gy2;
-   int i, j, v;
-   int xmin, xmax, ymin, ymax;
-   u_char m;
-   POINT pt;
-   pt = get_left_lower_trunk_point(net->bbox);
-   xmin = pt->x;
-   ymin = pt->y;
-   free(pt);
-   pt = get_right_upper_trunk_point(net->bbox);
-   xmax = pt->x;
-   ymax = pt->y;
-   free(pt);
-
-   gy1 = y - slack;
-   gy2 = y + slack;
-   if (x1 > x2) {
-      gx1 = x2 - slack;
-      gx2 = x1 + slack;
-   }
-   else {
-      gx1 = x1 - slack;
-      gx2 = x2 + slack;
-   }
-   if (gx1 < 0) gx1 = 0;
-   if (gx2 >= xmax) gx2 = xmax - 1;
-   if (gy1 < 0) gy1 = 0;
-   if (gy2 >= ymax) gy2 = ymax - 1;
-
-   for (i = gx1; i <= gx2; i++)
-      for (j = gy1; j <= gy2; j++) {
-	 pt->x = i;
-	 pt->y = j;
-	 if(check_point_area(net->bbox,pt,TRUE,0))
-		 RMASK(i, j) = (u_char)0;
-      }
-
-   for (v = 1; v < halo; v++) {
-      if (gy1 > 0) gy1--;
-      if (gy2 < ymax - 1) gy2++;
-      if (x1 > x2) {
-         if (gx1 < xmax - 1) gx1++;
-         if (gx2 < xmax - 1) gx2++;
-      }
-      else {
-	 if (gx1 > 0) gx1--;
-	 if (gx2 > 0) gx2--;
-      }
-      for (i = gx1; i <= gx2; i++)
-         for (j = gy1; j <= gy2; j++) {
-	    pt->x = i;
-	    pt->y = j;
-	    if(check_point_area(net->bbox,pt,FALSE,WIRE_ROOM)) {
-		m = RMASK(i, j);
-		if (m > v) RMASK(i, j) = (u_char)v;
-	    }
-	 }
-   }
 }
 
 /*--------------------------------------------------------------*/

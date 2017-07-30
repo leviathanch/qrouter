@@ -119,7 +119,7 @@ POINT create_point(int x, int y, int layer)
 	return pt;
 }
 
-BBOX create_fresh_bbox()
+BBOX new_bbox()
 {
 	BBOX pt = malloc(sizeof(struct bbox_)); // creating requested box
 	if(!pt) {
@@ -140,14 +140,14 @@ BBOX_LINE clone_line(BBOX_LINE orig)
 	if(!orig) return NULL;
 	if(!orig->pt1) return NULL;
 	if(!orig->pt2) return NULL;
-	BBOX_LINE r = get_fresh_line();
+	BBOX_LINE r = new_line();
 	r->pt1=clone_point(orig->pt1);
 	r->pt2=clone_point(orig->pt2);
 	r->next = NULL;
 	return r;
 }
 
-BBOX_LINE get_fresh_line()
+BBOX_LINE new_line()
 {
 	BBOX_LINE r = malloc(sizeof(struct bbox_line_));
 	if(!r) {
@@ -163,11 +163,15 @@ BBOX_LINE get_fresh_line()
 BBOX_LINE clone_line_list(BBOX_LINE orig)
 {
 	if(!orig) return NULL;
-	BBOX_LINE head = clone_line(orig);
-	BBOX_LINE current = head;
+	BBOX_LINE nl = NULL;
+	BBOX_LINE head = NULL;
+	BBOX_LINE current = NULL;
 
+	head = clone_line(orig);
+	current = head;
 	for(BBOX_LINE t = orig->next; t; t=t->next) {
-		current->next = clone_line(t);
+		nl = clone_line(t);
+		current->next = nl;
 		current = current->next;
 	}
 
@@ -222,7 +226,7 @@ BBOX shrink_bbox(BBOX orig, int num_pixels)
 BBOX clone_bbox(BBOX orig)
 {
 	if(!orig) return NULL;
-	BBOX r = create_fresh_bbox();
+	BBOX r = new_bbox();
 	r->edges = clone_line_list(orig->edges);
 	r->num_edges = orig->num_edges;
 	return r;
@@ -281,7 +285,7 @@ BBOX_LINE add_line_to_edge(BBOX_LINE list, BBOX_LINE l)
 BBOX add_line_to_bbox(BBOX bbox, BBOX_LINE ol)
 {
 	if(!ol) return bbox;
-	BBOX b = (bbox)?bbox:create_fresh_bbox();
+	BBOX b = (bbox)?bbox:new_bbox();
 	b->num_edges++; // incrementing line count
 	b->edges=add_line_to_edge(b->edges, ol);
 	return b;
@@ -827,12 +831,12 @@ BBOX_LINE get_cutout_edge(BBOX box1, BBOX box2)
 				if(lines_are_parallel(vtl,line)) continue;
 				i=get_line_intersection(line,vtl);
 				if(i) {
-					tl = get_fresh_line();
+					tl = new_line();
 					tl->pt1 = clone_point(line->pt1);
 					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
 					free_line(tl);
-					tl = get_fresh_line();
+					tl = new_line();
 					tl->pt1 = clone_point(check_point_area(box2,vtl->pt1,TRUE,0)?vtl->pt2:vtl->pt1);
 					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
@@ -845,12 +849,12 @@ BBOX_LINE get_cutout_edge(BBOX box1, BBOX box2)
 				if(lines_are_parallel(vtl,line)) continue;
 				i=get_line_intersection(line,vtl);
 				if(i) {
-					tl = get_fresh_line();
+					tl = new_line();
 					tl->pt1 = clone_point(line->pt2);
 					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);
 					free_line(tl);
-					tl = get_fresh_line();
+					tl = new_line();
 					tl->pt1 = clone_point(check_point_area(box2,vtl->pt1,TRUE,0)?vtl->pt2:vtl->pt1);
 					tl->pt2 = clone_point(i);
 					ret=add_line_to_edge(ret,tl);

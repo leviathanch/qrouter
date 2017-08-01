@@ -541,6 +541,7 @@ NETLIST postpone_net(NETLIST postponed, NET net);
 void free_postponed(NETLIST postponed);
 void free_bbox(BBOX t);
 void hide_all_nets();
+int doroute(NET net, u_char stage, u_char graphdebug);
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

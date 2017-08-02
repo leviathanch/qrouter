@@ -454,6 +454,7 @@ void create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char ha
 	 }
       free_bbox(tb);
    }
+   free(pt);
 }
 
 /*--------------------------------------------------------------*/
@@ -476,6 +477,7 @@ void create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char ha
    ymax = pt->y;
    free(pt);
 
+   pt=create_point(0,0,0);
    gy1 = y - slack;
    gy2 = y + slack;
    if (x1 > x2) {
@@ -520,6 +522,7 @@ void create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char ha
 	    }
 	 }
    }
+   free(pt);
 }
 
 /*--------------------------------------------------------------*/

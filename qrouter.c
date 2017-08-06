@@ -1731,116 +1731,6 @@ int dothirdstage(u_char graphdebug, int debug_netnum, u_int effort)
 }
 
 /*--------------------------------------------------------------*/
-/* createBboxMask() ---						*/
-/*								*/
-/* Create mask limiting the area to search for routing		*/
-/*								*/
-/* The bounding box mask generates an area including the	*/
-/* bounding box as defined in the net record, includes all pin	*/
-/* positions in the mask, and increases the mask area by one	*/
-/* route track for each pass, up to "halo".			*/
-/*--------------------------------------------------------------*/
-
-static void createBboxMask(NET net, u_char halo)
-{
-    int xmin, ymin, xmax, ymax;
-    int i, j;
-    BBOX tb;
-    POINT pt1, pt2, vpnt;
-    pt1 = get_left_lower_trunk_point(net->bbox);
-    pt2 = get_right_upper_trunk_point(net->bbox);
-    vpnt = create_point(0,0,0);
-
-    fillMask(net, (u_char)halo);
-    
-    xmin = pt1->x;
-    xmax = pt2->x;
-    ymin = pt1->y;
-    ymax = pt2->y;
-    
-    free(pt1);
-    free(pt2);
-
-    for (vpnt->x = xmin; vpnt->x <= xmax; vpnt->x++)
-	for (vpnt->y = ymin; vpnt->y <= ymax; vpnt->y++)
-	    if(check_point_area(net->bbox, vpnt, TRUE, 0))
-		RMASK(vpnt->x, vpnt->y) = 0; // block everything around the inside
-
-     for (i = 1; i <= halo; i++) {
-		tb = shrink_bbox(net->bbox, i);
-		if(!tb) continue;
-		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
-			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
-				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
-		free_bbox(tb);
-		tb = shrink_bbox(net->bbox, 2*halo-i);
-		if(!tb) continue;
-		for (vpnt->x = xmin;  vpnt->x <= xmax;  vpnt->x++)
-			for (vpnt->y = ymin;  vpnt->y <= ymax;  vpnt->y++)
-				if(point_on_edge(tb,vpnt)) RMASK(vpnt->x,  vpnt->y) = (u_char)i;
-		free_bbox(tb);
-     }
-     free(vpnt);
-}
-
-/*--------------------------------------------------------------*/
-/* analyzeCongestion() ---					*/
-/*								*/
-/* Given a trunk route at ycent, between ymin and ymax, score	*/
-/* the neighboring positions as a function of congestion and	*/
-/* offset from the ideal location.  Return the position of the	*/
-/* best location for the trunk route.				*/
-/*--------------------------------------------------------------*/
-
-static int analyzeCongestion(BBOX box)
-{
-	int x, y, i, minidx = -1, sidx, n;
-	int xmin, xmax;
-	int ymin, ymax;
-	int *score, minscore;
-	POINT vpnt = create_point(0,0,0);
-	POINT pt1, pt2;
-	pt1 = get_left_lower_trunk_point(box);
-	pt2 = get_right_upper_trunk_point(box);
-	xmin = pt1->x;
-	ymin = pt1->y;
-	xmax = pt2->x;
-	ymax = pt2->y;
-	
-	free(pt1);
-	free(pt2);
-
-	score = (int *)malloc((ymax - ymin + 1) * sizeof(int));
-
-	for (y = ymin; y <= ymax; y++) {
-		sidx = y - ymin;
-		score[sidx] = Num_layers;
-		for (x = xmin; x <= xmax; x++) {
-			if(check_point_area(box, vpnt, TRUE, 0)) {
-				for (i = 0; i < Num_layers; i++) {
-					n = OBSVAL(x, y, i);
-					if (n & ROUTED_NET) score[sidx]++;
-					if (n & NO_NET) score[sidx]++;
-					if (n & PINOBSTRUCTMASK) score[sidx]++;
-				}
-			}
-		}
-	}
-	minscore = MAXRT;
-	for (i = 0; i < (ymax - ymin + 1); i++) {
-			if (score[i] < minscore) {
-			minscore = score[i];
-			minidx = i + ymin;
-		}
-	}
-
-	free(vpnt);
-	free(score);
-	return minidx;
-}
-
-/*--------------------------------------------------------------*/
-
 /* Free memory of an iroute glist and clear the Obs2		*/
 /* PR_ON_STACK flag for each location in the list.		*/
 /*--------------------------------------------------------------*/
@@ -2404,8 +2294,7 @@ int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug)
       //if (graphdebug) highlight_source(net);
       //if (graphdebug) highlight_dest(net);
       //if (graphdebug) highlight_starts(iroute.glist);
-      if (graphdebug) highlight(curpt.x, curpt.y);
-      if (graphdebug) usleep(DEBUG_DELAY);
+      //if (graphdebug) highlight(curpt.x, curpt.y);
 
       if (Pr->flags & PR_COST)
 	 curpt.cost = Pr->prdata.cost;	// Route points, including target

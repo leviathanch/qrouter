@@ -3009,15 +3009,15 @@ if test "$ac_test_CFLAGS" = set; then
   CFLAGS=$ac_save_CFLAGS
 elif test $ac_cv_prog_cc_g = yes; then
   if test "$GCC" = yes; then
-    CFLAGS="-g -O2"
+    CFLAGS="-g -O2 -std=c99"
   else
-    CFLAGS="-g"
+    CFLAGS="-g -std=c99"
   fi
 else
   if test "$GCC" = yes; then
-    CFLAGS="-O2"
+    CFLAGS="-O2 -std=c99"
   else
-    CFLAGS=
+    CFLAGS="-std=c99"
   fi
 fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $CC option to accept ISO C89" >&5
@@ -5280,7 +5280,7 @@ if ${ac_cv_lib_Xt_XtToolkitInitialize+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
-LIBS="-lXt  $LIBS"
+LIBS="-lXt -lX11 $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -5465,7 +5465,7 @@ if test $usingTcl ; then
   fi
   if test "${TK_LIB_DIR}" = "/usr/lib" -o \
         "${TK_LIB_DIR}" = "/usr/lib64" ; then
-    LIB_SPECS="${LIB_SPECS} ${TK_LIB_SPEC}"
+    LIB_SPECS="${LIB_SPECS} ${TK_LIB_SPEC} -lX11"
   else
     LIB_SPECS="${LIB_SPECS} -L${TK_LIB_DIR} ${TK_LIB_SPEC}"
     if test "x${loader_run_path}" = "x" ; then
@@ -5769,7 +5769,7 @@ ${
 	p
 }
 '
-DEFS=`sed -n "$ac_script" confdefs.h`
+DEFS="`sed -n "$ac_script" confdefs.h` -D_DEFAULT_SOURCE"
 
 
 ac_libobjs=

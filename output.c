@@ -360,6 +360,14 @@ void print_net(NET net) {
     NODE node;
     DPOINT tap;
     int i, first;
+    
+    int xmin, ymin, xmax, ymax;
+    POINT p1 = get_left_lower_trunk_point(net->bbox);
+    POINT p2 = get_right_upper_trunk_point(net->bbox);
+    xmin = p1->x;
+    ymin = p1->y;
+    xmax = p2->x;
+    ymax = p2->y;
 
     Fprintf(stdout, "Net %d: %s", net->netnum, net->netname);
     for (node = net->netnodes; node != NULL; node = node->next) {
@@ -383,7 +391,7 @@ void print_net(NET net) {
         }
     }
     Fprintf(stdout, "\n  bbox: (%d,%d)-(%d,%d)\n",
-            net->xmin, net->ymin, net->xmax, net->ymax
+            xmin, ymin, xmax, ymax
     );
 }
 

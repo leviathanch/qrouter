@@ -76,6 +76,9 @@ int altCompNets(NET *a, NET *b)
    NET q = *b;
 
    int pwidth, qwidth, pheight, qheight, pdim, qdim;
+   int pxmin, pxmax, pymin, pymax;
+   int qxmin, qxmax, qymin, qymax;
+   POINT pnt;
 
    // Any NULL nets get shoved up front
    if (p == NULL) return ((q == NULL) ? 0 : -1);
@@ -91,13 +94,32 @@ int altCompNets(NET *a, NET *b)
    }
 
    // Otherwise sort as described above.
+   pnt = get_left_lower_trunk_point((*a)->bbox);
+   pxmin = pnt->x;
+   pymin = pnt->y;
+   free(pnt);
 
-   pwidth = p->xmax - p->xmin;
-   pheight = p->ymax - p->ymin;
+   pnt = get_right_upper_trunk_point((*a)->bbox);
+   pxmax = pnt->x;
+   pymax = pnt->y;
+   free(pnt);
+
+   pnt = get_left_lower_trunk_point((*b)->bbox);
+   qxmin = pnt->x;
+   qymin = pnt->y;
+   free(pnt);
+
+   pnt = get_right_upper_trunk_point((*b)->bbox);
+   qxmax = pnt->x;
+   qymax = pnt->y;
+   free(pnt);
+
+   pwidth = pxmax - pxmin;
+   pheight = pymax - pymin;
    pdim = (pwidth > pheight) ? pheight : pwidth;
 
-   qwidth = q->xmax - q->xmin;
-   qheight = q->ymax - q->ymin;
+   qwidth = qxmax - qxmin;
+   qheight = qymax - qymin;
    qdim = (qwidth > qheight) ? qheight : qwidth;
 
    if (pdim < qdim)
@@ -169,6 +191,19 @@ void create_netorder(u_char method)
 
 } /* create_netorder() */
 
+
+BBOX add_line_to_bbox_ints(BBOX bbox, int x1, int y1, int x2, int y2)
+{
+	BBOX_LINE line = NULL; // line to add
+	BBOX b = (bbox==NULL)?new_bbox():bbox;
+	line = new_line(); // creating requested line
+	line->pt1 = create_point(x1,y1,0);
+	line->pt2 = create_point(x2,y2,0);
+	b->num_edges++; // incrementing line count
+	b->edges=add_line_to_edge(b->edges, line);
+	return b;
+}
+
 /*--------------------------------------------------------------*/
 /* Measure and record the bounding box of a net.		*/
 /* This is preparatory to generating a mask for the net.	*/
@@ -189,71 +224,63 @@ void find_bounding_box(NET net)
 {
    NODE n1, n2;
    DPOINT d1tap, d2tap, dtap, mintap;
-   int mindist, dist, dx, dy;
-
-   if (net->numnodes == 2) {
-
-      n1 = (NODE)net->netnodes;
-      n2 = (NODE)net->netnodes->next;
-
-      // Simple 2-pass---pick up first tap on n1, find closest tap on n2,
-      // then find closest tap on n1.
-
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      if (d1tap == NULL) return;
-      d2tap = (n2->taps == NULL) ? n2->extend : n2->taps;
-      if (d2tap == NULL) return;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d2tap;
-      for (d2tap = d2tap->next; d2tap != NULL; d2tap = d2tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d2tap;
-         }
-      }
-      d2tap = mintap;
-      d1tap = (n1->taps == NULL) ? n1->extend : n1->taps;
-      dx = d2tap->gridx - d1tap->gridx;
-      dy = d2tap->gridy - d1tap->gridy;
-      mindist = dx * dx + dy * dy;
-      mintap = d1tap;
-      for (d1tap = d1tap->next; d1tap != NULL; d1tap = d1tap->next) {
-         dx = d2tap->gridx - d1tap->gridx;
-         dy = d2tap->gridy - d1tap->gridy;
-         dist = dx * dx + dy * dy;
-         if (dist < mindist) {
-            mindist = dist;
-            mintap = d1tap;
-         }
-      }
-      d1tap = mintap;
-
-      net->xmin = (d1tap->gridx < d2tap->gridx) ? d1tap->gridx : d2tap->gridx;
-      net->xmax = (d1tap->gridx < d2tap->gridx) ? d2tap->gridx : d1tap->gridx;
-      net->ymin = (d1tap->gridy < d2tap->gridy) ? d1tap->gridy : d2tap->gridy;
-      net->ymax = (d1tap->gridy < d2tap->gridy) ? d2tap->gridy : d1tap->gridy;
-   }
-   else {	// Net with more than 2 nodes
+   if(!net) return;
 
       // Use the first tap point for each node to get a rough bounding box and
       // centroid of all taps
-      net->xmax = net->ymax = -(MAXRT);
-      net->xmin = net->ymin = MAXRT;
+
+      int x1=0, x2=0, y1=0, y2=0;
+      if (net->numnodes == 0) return;	 // e.g., vdd or gnd bus
+
+      n1 = net->netnodes;
+      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      x1=dtap->gridx;
+      y1=dtap->gridy;
       for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
          dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
 	 if (dtap) {
-            if (dtap->gridx > net->xmax) net->xmax = dtap->gridx;
-            if (dtap->gridx < net->xmin) net->xmin = dtap->gridx;
-            if (dtap->gridy > net->ymax) net->ymax = dtap->gridy;
-            if (dtap->gridy < net->ymin) net->ymin = dtap->gridy;
+            if (dtap->gridx < x1) x1 = dtap->gridx;
+            if (dtap->gridy < y1) y1 = dtap->gridy;
 	 }
       }
-   }
+      n1 = net->netnodes;
+      dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+      x2=dtap->gridx;
+      y2=dtap->gridy;
+      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+	 if (dtap) {
+            if (dtap->gridx > x2) x2 = dtap->gridx;
+            if (dtap->gridy > y2) y2 = dtap->gridy;
+	 }
+      }
+      
+      for (n1 = net->netnodes; n1 != NULL; n1 = n1->next) {
+         dtap = (n1->taps == NULL) ? n1->extend : n1->taps;
+	 if (dtap) {
+            if (dtap->gridx > x2) x2 = dtap->gridx;
+            if (dtap->gridx < x1) x1 = dtap->gridx;
+            if (dtap->gridy > y2) y2 = dtap->gridy;
+            if (dtap->gridy < y1) y1 = dtap->gridy;
+	 }
+      }
+
+      if(!net->bbox) net->bbox = new_bbox();
+
+      net->bbox->x1_exception=FALSE;
+      net->bbox->y1_exception=FALSE;
+      net->bbox->x2_exception=FALSE;
+      net->bbox->y2_exception=FALSE;
+
+      x1-=BOX_ROOM_X;
+      y1-=BOX_ROOM_Y;
+      x2+=BOX_ROOM_X;
+      y2+=BOX_ROOM_Y;
+
+      net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x1, y2); // left lower point -> left upper point
+      net->bbox = add_line_to_bbox_ints(net->bbox, x1, y1, x2, y1); // left lower point -> right lower point
+      net->bbox = add_line_to_bbox_ints(net->bbox, x2, y2, x2, y1); // right upper point -> right lower point
+      net->bbox = add_line_to_bbox_ints(net->bbox, x2, y2, x1, y2); // right upper point -> left upper point
 }
 
 /*--------------------------------------------------------------*/
@@ -279,14 +306,20 @@ void defineRouteTree(NET net)
     NODE n1;
     DPOINT dtap;
     int xcent, ycent, xmin, ymin, xmax, ymax;
+    POINT pnt;
 
     // This is called after create_bounding_box(), so bounds have
     // been calculated.
 
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
+    pnt = get_left_lower_trunk_point(net->bbox);
+    xmin = pnt->x;
+    ymin = pnt->y;
+    free(pnt);
+
+    pnt = get_right_upper_trunk_point(net->bbox);
+    xmax = pnt->x;
+    ymax = pnt->y;
+    free(pnt);
 
     if (net->numnodes == 2) {
 
@@ -295,8 +328,8 @@ void defineRouteTree(NET net)
 	// the bounding box, and one vertical trunk + one
 	// branch for the other "L" of the bounding box.
 
-	net->trunkx = xmin;
-	net->trunky = ymin;
+	//net->trunkx = xmin;
+	//net->trunky = ymin;
     }
     else if (net->numnodes > 0) {
 
@@ -315,8 +348,8 @@ void defineRouteTree(NET net)
 
 	// Record the trunk line in the net record
 
-	net->trunkx = xcent;
-	net->trunky = ycent;
+	//net->trunkx = xcent;
+	//net->trunky = ycent;
     }
 
     if (xmax - xmin > ymax - ymin) {
@@ -356,13 +389,24 @@ void initMask(void)
 /* Fill mask around the area of a vertical line			*/
 /*--------------------------------------------------------------*/
 
-void
-create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
+void create_vbranch_mask(NET net, int x, int y1, int y2, u_char slack, u_char halo)
 {
    int gx1, gx2, gy1, gy2;
    int i, j, v;
+   int xmin, xmax, ymin, ymax;
    u_char m;
+   POINT pt;
+   BBOX tb;
+   pt = get_left_lower_trunk_point(net->bbox);
+   xmin = pt->x;
+   ymin = pt->y;
+   free(pt);
+   pt = get_right_upper_trunk_point(net->bbox);
+   xmax = pt->x;
+   ymax = pt->y;
+   free(pt);
 
+   pt = create_point(0,0,0);
    gx1 = x - slack;
    gx2 = x + slack;
    if (y1 > y2) {
@@ -374,20 +418,26 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
       gy2 = y2 + slack;
    }
    if (gx1 < 0) gx1 = 0;
-   if (gx2 >= NumChannelsX[0]) gx2 = NumChannelsX[0] - 1;
+   if (gx2 >= xmax) gx2 = xmax - 1;
    if (gy1 < 0) gy1 = 0;
-   if (gy2 >= NumChannelsY[0]) gy2 = NumChannelsY[0] - 1;
+   if (gy2 >= ymax) gy2 = ymax - 1;
 
    for (i = gx1; i <= gx2; i++)
-      for (j = gy1; j <= gy2; j++)
-	 RMASK(i, j) = (u_char)0;
+      for (j = gy1; j <= gy2; j++) {
+	 pt->x = i;
+	 pt->y = j;
+	 if(check_point_area(net->bbox,pt,TRUE,0))
+		 RMASK(i, j) = (u_char)0;
+      }
 
    for (v = 1; v < halo; v++) {
+      tb = shrink_bbox(net->bbox, i);
+      if(!tb) continue;
       if (gx1 > 0) gx1--;
-      if (gx2 < NumChannelsX[0] - 1) gx2++;
+      if (gx2 < xmax - 1) gx2++;
       if (y1 > y2) {
-         if (gy1 < NumChannelsY[0] - 1) gy1++;
-         if (gy2 < NumChannelsY[0] - 1) gy2++;
+         if (gy1 < ymax - 1) gy1++;
+         if (gy2 < ymax - 1) gy2++;
       }
       else {
 	 if (gy1 > 0) gy1--;
@@ -395,23 +445,39 @@ create_vbranch_mask(int x, int y1, int y2, u_char slack, u_char halo)
       }
       for (i = gx1; i <= gx2; i++)
          for (j = gy1; j <= gy2; j++) {
-	    m = RMASK(i, j);
-	    if (m > v) RMASK(i, j) = (u_char)v;
+	    pt->x = i;
+	    pt->y = j;
+	    if(point_on_edge(tb, pt)) {
+		m = RMASK(i, j);
+		if (m > v) RMASK(i, j) = (u_char)v;
+	    }
 	 }
+      free_bbox(tb);
    }
+   free(pt);
 }
 
 /*--------------------------------------------------------------*/
 /* Fill mask around the area of a horizontal line		*/
 /*--------------------------------------------------------------*/
 
-void
-create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
+void create_hbranch_mask(NET net, int y, int x1, int x2, u_char slack, u_char halo)
 {
    int gx1, gx2, gy1, gy2;
    int i, j, v;
+   int xmin, xmax, ymin, ymax;
    u_char m;
+   POINT pt;
+   pt = get_left_lower_trunk_point(net->bbox);
+   xmin = pt->x;
+   ymin = pt->y;
+   free(pt);
+   pt = get_right_upper_trunk_point(net->bbox);
+   xmax = pt->x;
+   ymax = pt->y;
+   free(pt);
 
+   pt=create_point(0,0,0);
    gy1 = y - slack;
    gy2 = y + slack;
    if (x1 > x2) {
@@ -423,20 +489,24 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
       gx2 = x2 + slack;
    }
    if (gx1 < 0) gx1 = 0;
-   if (gx2 >= NumChannelsX[0]) gx2 = NumChannelsX[0] - 1;
+   if (gx2 >= xmax) gx2 = xmax - 1;
    if (gy1 < 0) gy1 = 0;
-   if (gy2 >= NumChannelsY[0]) gy2 = NumChannelsY[0] - 1;
+   if (gy2 >= ymax) gy2 = ymax - 1;
 
    for (i = gx1; i <= gx2; i++)
-      for (j = gy1; j <= gy2; j++)
-	 RMASK(i, j) = (u_char)0;
+      for (j = gy1; j <= gy2; j++) {
+	 pt->x = i;
+	 pt->y = j;
+	 if(check_point_area(net->bbox,pt,TRUE,0))
+		 RMASK(i, j) = (u_char)0;
+      }
 
    for (v = 1; v < halo; v++) {
       if (gy1 > 0) gy1--;
-      if (gy2 < NumChannelsY[0] - 1) gy2++;
+      if (gy2 < ymax - 1) gy2++;
       if (x1 > x2) {
-         if (gx1 < NumChannelsX[0] - 1) gx1++;
-         if (gx2 < NumChannelsX[0] - 1) gx2++;
+         if (gx1 < xmax - 1) gx1++;
+         if (gx2 < xmax - 1) gx2++;
       }
       else {
 	 if (gx1 > 0) gx1--;
@@ -444,10 +514,15 @@ create_hbranch_mask(int y, int x1, int x2, u_char slack, u_char halo)
       }
       for (i = gx1; i <= gx2; i++)
          for (j = gy1; j <= gy2; j++) {
-	    m = RMASK(i, j);
-	    if (m > v) RMASK(i, j) = (u_char)v;
+	    pt->x = i;
+	    pt->y = j;
+	    if(check_point_area(net->bbox,pt,FALSE,WIRE_ROOM)) {
+		m = RMASK(i, j);
+		if (m > v) RMASK(i, j) = (u_char)v;
+	    }
 	 }
    }
+   free(pt);
 }
 
 /*--------------------------------------------------------------*/
@@ -463,24 +538,36 @@ void setBboxCurrent(NET net)
 {
     ROUTE rt;
     SEG seg;
+    POINT pnt;
+    int xmin, ymin, xmax, ymax;
 
     // If net is routed, increase the bounding box to
     // include the current route solution.
 
+    pnt = get_left_lower_trunk_point(net->bbox);
+    xmin = pnt->x;
+    ymin = pnt->y;
+    free(pnt);
+
+    pnt = get_right_upper_trunk_point(net->bbox);
+    xmax = pnt->x;
+    ymax = pnt->y;
+    free(pnt);
+
     for (rt = net->routes; rt; rt = rt->next)
 	for (seg = rt->segments; seg; seg = seg->next)
 	{
-	    if (seg->x1 < net->xmin) net->xmin = seg->x1;
-	    else if (seg->x1 > net->xmax) net->xmax = seg->x1;
+	    if (seg->x1 < xmin) xmin = seg->x1;
+	    else if (seg->x1 > xmax) xmax = seg->x1;
 
-	    if (seg->x2 < net->xmin) net->xmin = seg->x2;
-	    else if (seg->x2 > net->xmax) net->xmax = seg->x2;
+	    if (seg->x2 < xmin) xmin = seg->x2;
+	    else if (seg->x2 > xmax) xmax = seg->x2;
 
-	    if (seg->y1 < net->ymin) net->ymin = seg->y1;
-	    else if (seg->y1 > net->ymax) net->ymax = seg->y1;
+	    if (seg->y1 < ymin) ymin = seg->y1;
+	    else if (seg->y1 > ymax) ymax = seg->y1;
 
-	    if (seg->y2 < net->ymin) net->ymin = seg->y2;
-	    else if (seg->y2 > net->ymax) net->ymax = seg->y2;
+	    if (seg->y2 < ymin) ymin = seg->y2;
+	    else if (seg->y2 > ymax) ymax = seg->y2;
 	}
 }
 
@@ -499,13 +586,19 @@ void createBboxMask(NET net, u_char halo)
 {
     int xmin, ymin, xmax, ymax;
     int i, j, gx1, gy1, gx2, gy2;
+    POINT pnt;
 
-    fillMask((u_char)halo);
+    fillMask(net, (u_char)halo);
 
-    xmin = net->xmin;
-    xmax = net->xmax;
-    ymin = net->ymin;
-    ymax = net->ymax;
+    pnt = get_left_lower_trunk_point(net->bbox);
+    xmin = pnt->x;
+    ymin = pnt->y;
+    free(pnt);
+
+    pnt = get_right_upper_trunk_point(net->bbox);
+    xmax = pnt->x;
+    ymax = pnt->y;
+    free(pnt);
 
     for (gx1 = xmin; gx1 <= xmax; gx1++)
 	for (gy1 = ymin; gy1 <= ymax; gy1++)
@@ -609,19 +702,25 @@ void createMask(NET net, u_char slack, u_char halo)
 {
   NODE n1, n2;
   DPOINT dtap;
+  POINT pnt;
   int i, j, orient;
   int dx, dy, gx1, gx2, gy1, gy2;
   int xcent, ycent, xmin, ymin, xmax, ymax;
 
-  fillMask((u_char)halo);
+  fillMask(net, (u_char)halo);
 
-  xmin = net->xmin;
-  xmax = net->xmax;
-  ymin = net->ymin;
-  ymax = net->ymax;
+  pnt = get_left_lower_trunk_point(net->bbox);
+  xmin = pnt->x;
+  ymin = pnt->y;
+  free(pnt);
 
-  xcent = net->trunkx;
-  ycent = net->trunky;
+  pnt = get_right_upper_trunk_point(net->bbox);
+  xmax = pnt->x;
+  ymax = pnt->y;
+  free(pnt);
+
+  xcent = xmin;
+  ycent = ymin;
 
   orient = 0;
 
@@ -631,7 +730,7 @@ void createMask(NET net, u_char slack, u_char halo)
      // Horizontal trunk
      orient |= 1;
 
-     ycent = analyzeCongestion(net->trunky, ymin, ymax, xmin, xmax);
+     ycent = analyzeCongestion(ymin, ymin, ymax, xmin, xmax);
      ymin = ymax = ycent;
 
      for (i = xmin - slack; i <= xmax + slack; i++) {
@@ -705,9 +804,9 @@ void createMask(NET net, u_char slack, u_char halo)
      if (!dtap) continue;
 
      if (orient | 1) 	// Horizontal trunk, vertical branches
-	create_vbranch_mask(n1->branchx, n1->branchy, ycent, slack, halo);
+	create_vbranch_mask(net, n1->branchx, n1->branchy, ycent, slack, halo);
      if (orient | 2) 	// Vertical trunk, horizontal branches
-	create_hbranch_mask(n1->branchy, n1->branchx, xcent, slack, halo);
+	create_hbranch_mask(net, n1->branchy, n1->branchx, xcent, slack, halo);
   }
 
   // Look for branches that are closer to each other than to the
@@ -730,10 +829,10 @@ void createMask(NET net, u_char slack, u_char halo)
 	      gy2 = ABSDIFF(n2->branchy, ycent);
 	      if ((dx < gy1) && (dx < gy2)) {
 		 if (gy1 < gy2)
-		    create_hbranch_mask(n1->branchy, n2->branchx,
+		    create_hbranch_mask(net, n1->branchy, n2->branchx,
 				n1->branchx, slack, halo);
 		 else
-		    create_hbranch_mask(n2->branchy, n2->branchx,
+		    create_hbranch_mask(net, n2->branchy, n2->branchx,
 				n1->branchx, slack, halo);
 	      }
  	   }
@@ -755,10 +854,10 @@ void createMask(NET net, u_char slack, u_char halo)
 	      gx2 = ABSDIFF(n2->branchx, xcent);
 	      if ((dy < gx1) && (dy < gx2)) {
 		 if (gx1 < gx2)
-		    create_vbranch_mask(n1->branchx, n2->branchy,
+		    create_vbranch_mask(net, n1->branchx, n2->branchy,
 				n1->branchy, slack, halo);
 		 else
-		    create_vbranch_mask(n2->branchx, n2->branchy,
+		    create_vbranch_mask(net, n2->branchx, n2->branchy,
 				n1->branchy, slack, halo);
 	      }
  	   }
@@ -776,10 +875,10 @@ void createMask(NET net, u_char slack, u_char halo)
 
   if (Verbose > 2) {
      if (net->numnodes == 2)
-        Fprintf(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
+        FprintfT(stdout, "Two-port mask has bounding box (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
      else
-        Fprintf(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
+        FprintfT(stdout, "multi-port mask has trunk line (%d %d) to (%d %d)\n",
 			xmin, ymin, xmax, ymax);
   }
 }
@@ -790,10 +889,20 @@ void createMask(NET net, u_char slack, u_char halo)
 /* bad guess about the optimal route positions.			*/
 /*--------------------------------------------------------------*/
 
-void fillMask(u_char value) {
-   memset((void *)RMask, (int)value,
-		(size_t)(NumChannelsX[0] * NumChannelsY[0]
-		* sizeof(u_char)));
+void fillMask(NET net, u_char value) {
+	if(!net) return;
+	POINT p1, p2, vpnt;
+	p1 = get_left_lower_trunk_point(net->bbox);
+	p2 = get_right_upper_trunk_point(net->bbox);
+	vpnt = create_point(0,0,0);
+	for(vpnt->x=p1->x;vpnt->x<p2->x;vpnt->x++) {
+		for(vpnt->y=p1->y;vpnt->y<p2->y;vpnt->y++) {
+			if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) RMASK(vpnt->x, vpnt->y) = value;
+		}
+	}
+	free(vpnt);
+	free(p1);
+	free(p2);
 }
 
 /* end of mask.c */

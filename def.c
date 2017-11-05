@@ -152,8 +152,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
     LefList lefl;
     ROUTE routednet = NULL;
 
-    refp.x1 = 0;
-    refp.y1 = 0;
+    refp.x = 0;
+    refp.y = 0;
 
     /* Set pitches and allocate memory for Obs[] if we haven't yet. */
     set_num_channels();
@@ -202,7 +202,6 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	       routednet = (ROUTE)malloc(sizeof(struct route_));
 	       routednet->next = net->routes;
 	       net->routes = routednet;
-
 	       routednet->netnum = net->netnum;
 	       routednet->segments = NULL;
 	       routednet->flags = (u_char)0;
@@ -266,10 +265,10 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 
 		    newRoute = (SEG)malloc(sizeof(struct seg_));
 		    newRoute->segtype = ST_VIA;
-		    newRoute->x1 = refp.x1;
-		    newRoute->x2 = refp.x1;
-		    newRoute->y1 = refp.y1;
-		    newRoute->y2 = refp.y1;
+		    newRoute->x1 = refp.x;
+		    newRoute->x2 = refp.x;
+		    newRoute->y1 = refp.y;
+		    newRoute->y2 = refp.y;
 		    newRoute->layer = paintLayer;
 
 		    if (routednet == NULL) {
@@ -298,8 +297,8 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    paintLayer = routeLayer;
 
 	    /* Record current reference point */
-	    locarea.x1 = refp.x1;
-	    locarea.y1 = refp.y1;
+	    locarea.x1 = refp.x;
+	    locarea.y1 = refp.y;
 	    lx = x;
 	    ly = y;
 
@@ -316,7 +315,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &x) == 1)
 	    {
 		x /= oscale;		// In microns
-		refp.x1 = (int)((x - Xlowerbound + EPS) / PitchX[paintLayer]);
+		refp.x = (int)((x - Xlowerbound + EPS) / PitchX[paintLayer]);
 	    }
 	    else
 	    {
@@ -339,7 +338,7 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    else if (sscanf(token, "%lg", &y) == 1)
 	    {
 		y /= oscale;		// In microns
-		refp.y1 = (int)((y - Ylowerbound + EPS) / PitchY[paintLayer]);
+		refp.y = (int)((y - Ylowerbound + EPS) / PitchY[paintLayer]);
 	    }
 	    else
 	    {
@@ -353,21 +352,22 @@ DefAddRoutes(FILE *f, float oscale, NET net, char special)
 	    {
 		valid = TRUE;
 	    }
-	    else if ((locarea.x1 != refp.x1) && (locarea.y1 != refp.y1))
+	    else if ((locarea.x1 != refp.x) && (locarea.y1 != refp.y))
 	    {
 		/* Skip over nonmanhattan segments, reset the reference	*/
 		/* point, and output a warning.				*/
 
 		LefError("Can't deal with nonmanhattan geometry in route.\n");
-		locarea.x1 = refp.x1;
-		locarea.y1 = refp.y1;
+		locarea.x1 = refp.x;
+		locarea.y1 = refp.y;
 		lx = x;
 		ly = y;
 	    }
 	    else
 	    {
-		locarea.x2 = refp.x1;
-		locarea.y2 = refp.y1;
+
+		locarea.x2 = refp.x;
+		locarea.y2 = refp.y;
 
 		if (special == (char)1) {
 		   if (valid == TRUE) {
@@ -658,19 +658,38 @@ DefReadNets(FILE *f, char *sname, float oscale, char special, int total)
 		net->netnodes = (NODE)NULL;
 		net->noripup = (NETLIST)NULL;
 		net->routes = (ROUTE)NULL;
-		net->xmin = net->ymin = 0;
-		net->xmax = net->ymax = 0;
+		net->bbox = (BBOX)NULL;
+		net->locked = FALSE;
+		net->active = FALSE;
+		net->routed = FALSE;
+		net->bbox_color = 0;
 
 		// Net numbers start at MIN_NET_NUMBER for regular nets,
 		// use VDD_NET and GND_NET for power and ground, and 0
 		// is not a valid net number.
 
-		if (vddnet && !strcmp(token, vddnet))
-		   net->netnum = VDD_NET;
-		else if (gndnet && !strcmp(token, gndnet))
-		   net->netnum = GND_NET;
-		else
+		net->netnum = UNDEF_NET;
+		if(vddnet) {
+			if(!strcmp(token, vddnet)) {
+				net->netnum = VDD_NET;
+				vddnets=postpone_net(vddnets,net);
+			}
+		}
+		if(gndnet) {
+			if(!strcmp(token, gndnet)) {
+				net->netnum = GND_NET;
+				gndnets=postpone_net(gndnets,net);
+			}
+		}
+		if(clknet) {
+			if(!strcmp(token, clknet)) {
+				net->netnum = CLK_NET;
+				clknets=postpone_net(clknets,net);
+			}
+		}
+		if(net->netnum==UNDEF_NET) {
 		   net->netnum = netidx++;
+		}
 
 		nodeidx = 0;
 

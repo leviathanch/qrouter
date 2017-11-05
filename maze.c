@@ -13,8 +13,11 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <tcl.h>
+
 #define  MAZE
 
+#include "graphics.h"
 #include "qrouter.h"
 #include "qconfig.h"
 #include "point.h"
@@ -197,14 +200,15 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    if (Pr->flags & PR_PROCESSED) {
 	       Pr->flags &= ~PR_PROCESSED;
 	       if (~(Pr->flags & PR_ON_STACK)) {
-		  Pr->flags |= PR_ON_STACK;
-		  gpoint = allocPOINT();
-		  gpoint->x1 = x;
-		  gpoint->y1 = y;
-		  gpoint->layer = lay;
-		  gpoint->next = *pushlist;
-		  *pushlist = gpoint;
-	       }
+			gpoint = create_point(x,y,lay);
+			if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+				Pr->flags |= PR_ON_STACK;
+				gpoint->next = *pushlist;
+				*pushlist = gpoint;
+			} else {
+				free(gpoint);
+			}
+		}
 	    }
 	 }
       }
@@ -217,21 +221,22 @@ void clear_non_source_targets(NET net, POINT *pushlist)
 	    Pr = &OBS2VAL(x, y, lay);
 	    if (Pr->flags & PR_TARGET) {
 		if (Pr->flags & PR_PROCESSED) {
-		   Pr->flags &= ~PR_PROCESSED;
-		   if (~(Pr->flags & PR_ON_STACK)) {
-		      Pr->flags |= PR_ON_STACK;
-		      gpoint = allocPOINT();
-		      gpoint->x1 = x;
-		      gpoint->y1 = y;
-		      gpoint->layer = lay;
-		      gpoint->next = *pushlist;
-		      *pushlist = gpoint;
-		   }
+			Pr->flags &= ~PR_PROCESSED;
+			if (~(Pr->flags & PR_ON_STACK)) {
+				gpoint = create_point(x,y,lay);
+				if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+					Pr->flags |= PR_ON_STACK;
+					gpoint->next = *pushlist;
+					*pushlist = gpoint;
+				} else {
+					free(gpoint);
+				}
+			}
 		}
-	    }
          }
       }
    }
+}
 }
 
 /*--------------------------------------------------------------*/
@@ -250,6 +255,7 @@ void clear_target_node(NODE node)
     /* Process tap points of the node */
 
     for (ntap = node->taps; ntap; ntap = ntap->next) {
+       if(!ntap) continue;
        lay = ntap->layer;
        x = ntap->gridx;
        y = ntap->gridy;
@@ -355,7 +361,7 @@ count_targets(NET net)
 /* will be no way to route the net.				*/
 /*--------------------------------------------------------------*/
 
-int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char stage)
+int set_node_to_net(NODE node, int newflags, POINT* pushlist, BBOX bbox, u_char stage)
 {
     int x, y, lay, obsnet = 0;
     int result = 0;
@@ -382,7 +388,7 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
        Pr = &OBS2VAL(x, y, lay);
        if ((Pr->flags & (newflags | PR_COST)) == PR_COST) {
-	  Fprintf(stderr, "Error:  Tap position %d, %d layer %d not "
+	  FprintfT(stdout, "Error:  Tap position %d, %d layer %d not "
 			"marked as source!\n", x, y, lay);
 	  return -1;	// This should not happen.
        }
@@ -423,24 +429,17 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     if (~(Pr->flags & PR_ON_STACK)) {
-		Pr->flags |= PR_ON_STACK;
-	        gpoint = allocPOINT();
-	        gpoint->x1 = x;
-	        gpoint->y1 = y;
-	        gpoint->layer = lay;
-	        gpoint->next = *pushlist;
-		*pushlist = gpoint;
+	        gpoint = create_point(x,y,lay);
+		if(check_point_area(bbox,gpoint,FALSE,WIRE_ROOM)) {
+			Pr->flags |= PR_ON_STACK;
+			gpoint->next = *pushlist;
+			*pushlist = gpoint;
+		} else {
+		     free(gpoint);
+		}
 	     }
 	  }
 	  found_one = TRUE;
-
-	  // record extents
-	  if (bbox) {
-	     if (x < bbox->x1) bbox->x1 = x;
-	     if (x > bbox->x2) bbox->x2 = x;
-	     if (y < bbox->y1) bbox->y1 = y;
-	     if (y > bbox->y2) bbox->y2 = y;
-	  }
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -488,30 +487,30 @@ int set_node_to_net(NODE node, int newflags, POINT *pushlist, SEG bbox, u_char s
 
 	  if (pushlist != NULL) {
 	     if (~(Pr->flags & PR_ON_STACK)) {
-		Pr->flags |= PR_ON_STACK;
-	        gpoint = allocPOINT();
-	        gpoint->x1 = x;
-	        gpoint->y1 = y;
-	        gpoint->layer = lay;
+		
+	        gpoint = create_point(x,y,lay);
+		if(check_point_area(bbox,gpoint,FALSE,WIRE_ROOM)) {
+			Pr->flags |= PR_ON_STACK;
 		if (found_one) {
 	            gpoint->next = pushlist[1];
 		    pushlist[1] = gpoint;
-		}
-		else {
+		} else {
 	            gpoint->next = *pushlist;
 		    *pushlist = gpoint;
-		}
+		}} else {
+		     free(gpoint);
+	     }
 	     }
 	  }
 	  found_one = TRUE;
 
 	  // record extents
-	  if (bbox) {
+	  /*if (bbox) {
 	     if (x < bbox->x1) bbox->x1 = x;
 	     if (x > bbox->x2) bbox->x2 = x;
 	     if (y < bbox->y1) bbox->y1 = y;
 	     if (y > bbox->y2) bbox->y2 = y;
-	  }
+	  }*/
        }
        else if ((Pr->prdata.net < MAXNETNUM) && (Pr->prdata.net > 0)) obsnet++;
     }
@@ -590,8 +589,7 @@ int disable_node_nets(NODE node)
 /* source nodes) is routable by definition. . .			*/
 /*--------------------------------------------------------------*/
 
-int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
-		SEG bbox, u_char stage)
+int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist, u_char stage)
 {
     int x, y, lay;
     int result = 0;
@@ -617,22 +615,15 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 
 		if (pushlist != NULL) {
 		   if (~(Pr->flags & PR_ON_STACK)) {
-		      Pr->flags |= PR_ON_STACK;
-	  	      gpoint = allocPOINT();
-	  	      gpoint->x1 = x;
-	  	      gpoint->y1 = y;
-	  	      gpoint->layer = lay;
-	  	      gpoint->next = *pushlist;
-	 	      *pushlist = gpoint;
+	  	      gpoint = create_point(x,y,lay);
+		      if(check_point_area(net->bbox,gpoint,FALSE,WIRE_ROOM)) {
+			Pr->flags |= PR_ON_STACK;
+			gpoint->next = *pushlist;
+			*pushlist = gpoint;
+		      } else {
+				free(gpoint);
+			}
 		   }
-		}
-
-		// record extents
-		if (bbox) {
-		   if (x < bbox->x1) bbox->x1 = x;
-		   if (x > bbox->x2) bbox->x2 = x;
-		   if (y < bbox->y1) bbox->y1 = y;
-		   if (y > bbox->y2) bbox->y2 = y;
 		}
 
 		// If we found another node connected to the route,
@@ -642,7 +633,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 		n2 = (lnode) ? lnode->nodesav : NULL;
 		if ((n2 != (NODE)NULL) && (n2 != net->netnodes)) {
 		   if (newflags == PR_SOURCE) clear_target_node(n2);
-		   result = set_node_to_net(n2, newflags, pushlist, bbox, stage);
+		   result = set_node_to_net(n2, newflags, pushlist, net->bbox, stage);
 		   // On error, continue processing
 		}
 
@@ -673,8 +664,7 @@ int set_route_to_net(NET net, ROUTE rt, int newflags, POINT *pushlist,
 /* connect do the nodes.					*/
 /*--------------------------------------------------------------*/
 
-int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
-		POINT *pushlist, SEG bbox, u_char stage)
+int set_route_to_net_recursive(NET net, ROUTE rt, int newflags, POINT *pushlist, u_char stage)
 {
     ROUTE route;
     int result;
@@ -684,7 +674,7 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
     rt->flags |= RT_VISITED;
 
     /* First mark this route */
-    result = set_route_to_net(net, rt, newflags, pushlist, bbox, stage);
+    result = set_route_to_net(net, rt, newflags, pushlist, stage);
     if (result < 0) return result;
 
     /* Recursively mark the routes connected to the nodes of	*/
@@ -693,33 +683,33 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
     if (rt->flags & RT_START_NODE) {
 	for (route = net->routes; route; route = route->next) {
 	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	    if (!(route->flags & RT_END_NODE) && (route->end.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	}
     }
     else {
-	result = set_route_to_net(net, rt->start.route, newflags, pushlist, bbox, stage);
+	result = set_route_to_net(net, rt->start.route, newflags, pushlist, stage);
 	if (result < 0) return result;
     }
     if (rt->flags & RT_END_NODE) {
 	for (route = net->routes; route; route = route->next) {
 	    if (!(route->flags & RT_START_NODE) && (route->start.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	    if (!(route->flags & RT_END_NODE) && (route->end.route == rt)) {
-		result = set_route_to_net(net, route, newflags, pushlist, bbox, stage);
+		result = set_route_to_net(net, route, newflags, pushlist, stage);
 		if (result < 0) return result;
 	    }
 	}
     }
     else {
-	result = set_route_to_net(net, rt->end.route, newflags, pushlist, bbox, stage);
+	result = set_route_to_net(net, rt->end.route, newflags, pushlist, stage);
 	if (result < 0) return result;
     }
     return result;
@@ -731,8 +721,7 @@ int set_route_to_net_recursive(NET net, ROUTE rt, int newflags,
 /* "newflags" (PR_SOURCE or PR_DEST) in Obs2[].			*/
 /*--------------------------------------------------------------*/
 
-int set_routes_to_net(NODE node, NET net, int newflags, POINT *pushlist,
-		SEG bbox, u_char stage)
+int set_routes_to_net(NODE node, NET net, int newflags, POINT* pushlist, int stage)
 {
     ROUTE rt;
     int result = 0;
@@ -743,11 +732,9 @@ int set_routes_to_net(NODE node, NET net, int newflags, POINT *pushlist,
     /* Find any route that has node as an endpoint */
     for (rt = net->routes; rt; rt = rt->next) {
 	if ((rt->flags & RT_START_NODE) && (rt->start.node == node))
-	    result = set_route_to_net_recursive(net, rt, newflags,
-				pushlist, bbox, stage);
+	    result = set_route_to_net_recursive(net, rt, newflags, pushlist, stage);
 	else if ((rt->flags & RT_END_NODE) && (rt->end.node == node))
-	    result = set_route_to_net_recursive(net, rt, newflags,
-				pushlist, bbox, stage);
+	    result = set_route_to_net_recursive(net, rt, newflags, pushlist, stage);
 	if (result < 0) return result;
     }
     return result;
@@ -1264,7 +1251,7 @@ u_char ripup_net(NET net, u_char restore, u_char flagged)
 /*  SIDE EFFECTS: none (get this right or else)			*/
 /*--------------------------------------------------------------*/
 
-POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
+POINT eval_pt(NET net, GRIDP* ept, u_char flags, u_char stage)
 {
     int thiscost = 0;
     int netnum;
@@ -1307,9 +1294,10 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	  break;
     }
 
+    if(!check_grid_point_area(net->bbox, newpt, FALSE, WIRE_ROOM)) return NULL;
+
     Pr = &OBS2VAL(newpt.x, newpt.y, newpt.lay);
-    nodeptr = (newpt.lay < Pinlayers) ?
-		NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
+    nodeptr = (newpt.lay < Pinlayers) ? NODEIPTR(newpt.x, newpt.y, newpt.lay) : NULL;
 
     if (!(Pr->flags & (PR_COST | PR_SOURCE))) {
        // 2nd stage allows routes to cross existing routes
@@ -1320,7 +1308,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 
 	  // Is net k in the "noripup" list?  If so, don't route it */
 
-	  for (nl = CurNet->noripup; nl; nl = nl->next) {
+	  for (nl = net->noripup; nl; nl = nl->next) {
 	     if (nl->net->netnum == netnum)
 		return NULL;
 	  }
@@ -1349,9 +1337,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x + 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1361,9 +1349,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x - 1, newpt.y, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1374,9 +1362,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x, newpt.y + 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1386,9 +1374,9 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	        netnum = OBSVAL(newpt.x, newpt.y - 1, newpt.lay) & ROUTED_NET_MASK;
 	        if (!(netnum & NO_NET)) {
 		   netnum &= NETNUM_MASK;
-		   if ((netnum != 0) && (netnum != CurNet->netnum))
+		   if ((netnum != 0) && (netnum != net->netnum))
 	              // Is net k in the "noripup" list?  If so, don't route it */
-	              for (nl = CurNet->noripup; nl; nl = nl->next)
+	              for (nl = net->noripup; nl; nl = nl->next)
 	                 if (nl->net->netnum == netnum)
 		            return NULL;
 		}
@@ -1413,13 +1401,12 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
     // so that routing over it could block it entirely.
 
     if ((newpt.lay > 0) && (newpt.lay < Pinlayers)) {
-	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL)
-		&& ((node = lnode->nodeloc) != NULL)) {
+	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay - 1)) != (NODEINFO)NULL) && ((node = lnode->nodeloc) != NULL)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay - 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
-		if (node->taps && (node->taps->next == NULL))
-		   thiscost += BlockCost;	// Cost to block out a tap
-		else if (node->taps == NULL) {
+		if (node->taps) {if(node->taps->next == NULL) {
+			thiscost += BlockCost;	// Cost to block out a tap
+		}} else if (node->taps == NULL) {
 		   if (node->extend != NULL) {
 			if (node->extend->next == NULL)
 			   // Node has only one extended access point:  Try
@@ -1438,13 +1425,12 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 	}
     }
     if (((newpt.lay + 1) < Pinlayers) && (newpt.lay < Num_layers - 1)) {
-	if (((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1)) != (NODEINFO)NULL)
-		&& ((node = lnode->nodeloc) != NULL)) {
+	if((lnode = NODEIPTR(newpt.x, newpt.y, newpt.lay + 1))) if((node = lnode->nodeloc)) {
 	    Pt = &OBS2VAL(newpt.x, newpt.y, newpt.lay + 1);
 	    if (!(Pt->flags & PR_TARGET) && !(Pt->flags & PR_SOURCE)) {
-		if (node->taps && (node->taps->next == NULL))
+		if (node->taps) { if(node->taps->next == NULL)
 		   thiscost += BlockCost;	// Cost to block out a tap
-		else
+		} else
 	           thiscost += XverCost;	// Cross-over cost
 	    }
 	}
@@ -1461,10 +1447,7 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
     // Routes that reach nodes are given a cost based on the "quality"
     // of the node location:  higher cost given to stub routes and
     // offset positions.
-
-    if (nodeptr != NULL) {
-       thiscost += (int)(fabsf(nodeptr->stub) * (float)OffsetCost);
-    }
+    if (nodeptr) thiscost += (int)(fabsf(nodeptr->stub) * (float)OffsetCost);
    
     // Replace node information if cost is minimum
 
@@ -1482,15 +1465,15 @@ POINT eval_pt(GRIDP *ept, u_char flags, u_char stage)
 		newpt.x, newpt.y, newpt.lay);
        }
        if (~(Pr->flags & PR_ON_STACK)) {
-	  Pr->flags |= PR_ON_STACK;
-	  ptret = allocPOINT();
-	  ptret->x1 = newpt.x;
-	  ptret->y1 = newpt.y;
-	  ptret->layer = newpt.lay;
-	  ptret->next = NULL;
-	  return ptret;
+	 ptret = create_point(newpt.x,newpt.y,newpt.lay);
+	 if(check_point_area(net->bbox,ptret,FALSE,WIRE_ROOM))
+		Pr->flags |= PR_ON_STACK;
+		ptret->next = NULL;
+		return ptret;
+         } else {
+		 free(ptret);
+	 }
        }
-    }
     return NULL;	// New position did not get a lower cost
 
 } /* eval_pt() */
@@ -1740,7 +1723,7 @@ route_set_connections(net, route)
    }
 
    if (!found) {
-      Fprintf(stderr, "Error:  Failure to find route start node/route!\n");
+      FprintfT(stderr, "Error:  Failure to find route start node/route!\n");
    }
 
    /* Does last route segment connect to a node? */
@@ -1793,7 +1776,7 @@ route_set_connections(net, route)
    }
 
    if (!found) {
-      Fprintf(stderr, "Error:  Failure to find route end node/route!\n");
+      FprintfT(stderr, "Error:  Failure to find route end node/route!\n");
    }
 }
 
@@ -1812,7 +1795,7 @@ route_set_connections(net, route)
 /*  SIDE EFFECTS: Obs update, RT llseg added			*/
 /*--------------------------------------------------------------*/
 
-int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
+int commit_proute(NET net, ROUTE rt, GRIDP *ept, u_char stage) // TODO: fix this!
 {
    SEG  seg, lseg;
    NODEINFO lnode1, lnode2;
@@ -1826,53 +1809,47 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    POINT newlr, newlr2, lrtop, lrend, lrnext, lrcur, lrprev;
 
    if (Verbose > 1) {
-      Flush(stdout);
-      Fprintf(stdout, "\nCommit: TotalRoutes = %d\n", TotalRoutes);
+      FprintfT(stdout, "\n%s: commit: TotalRoutes = %d\n", __FUNCTION__, TotalRoutes);
    }
 
    netnum = rt->netnum;
 
+   if (!check_grid_point_area(net->bbox,*ept,FALSE,WIRE_ROOM)) {
+      FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
+      return -1;
+   }
+
    Pr = &OBS2VAL(ept->x, ept->y, ept->lay);
    if (!(Pr->flags & PR_COST)) {
-      Fprintf(stderr, "commit_proute(): impossible - terminal is not routable!\n");
+      FprintfT(stderr, "commit_proute(): impossible - terminal is not routable!\n");
       return -1;
    }
 
    // Generate an indexed route, recording the series of predecessors and their
    // positions.
 
-   lrtop = (POINT)malloc(sizeof(struct point_));
-   lrtop->x1 = ept->x;
-   lrtop->y1 = ept->y;
-   lrtop->layer = ept->lay;
-   lrtop->next = NULL;
+   lrtop = create_point(ept->x,ept->y,ept->lay);
    lrend = lrtop;
 
    while (1) {
-
-      Pr = &OBS2VAL(lrend->x1, lrend->y1, lrend->layer);
+      newlr = clone_point(lrend);
+      Pr = &OBS2VAL(newlr->x, newlr->y, newlr->layer);
       dmask = Pr->flags & PR_PRED_DMASK;
-      if (dmask == PR_PRED_NONE) break;
 
-      newlr = (POINT)malloc(sizeof(struct point_));
-      newlr->x1 = lrend->x1;
-      newlr->y1 = lrend->y1;
-      newlr->layer = lrend->layer;
-      lrend->next = newlr;
-      newlr->next = NULL;
+      if (dmask == PR_PRED_NONE) break;
 
       switch (dmask) {
          case PR_PRED_N:
-	    (newlr->y1)++;
+	    (newlr->y)++;
 	    break;
          case PR_PRED_S:
-	    (newlr->y1)--;
+	    (newlr->y)--;
 	    break;
          case PR_PRED_E:
-	    (newlr->x1)++;
+	    (newlr->x)++;
 	    break;
          case PR_PRED_W:
-	    (newlr->x1)--;
+	    (newlr->x)--;
 	    break;
          case PR_PRED_U:
 	    (newlr->layer)++;
@@ -1880,9 +1857,15 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
          case PR_PRED_D:
 	    (newlr->layer)--;
 	    break;
+	 default:
+	    break;
       }
+
+      lrend->next = newlr;
       lrend = newlr;
+
    }
+
    lrend = lrtop;
 
    // TEST:  Walk through the solution, and look for stacked vias.  When
@@ -1919,8 +1902,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	       stacks++;
 
 	       // Try to move the second contact in the path
-	       cx = lrprev->x1;
-	       cy = lrprev->y1;
+	       cx = lrprev->x;
+	       cy = lrprev->y;
 	       cl = lrprev->layer;
 	       mincost = MAXRT;
 	       dl = lrppre->layer;
@@ -2074,18 +2057,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
 	       if (mincost < MAXRT) {
 	          pri = &OBS2VAL(minx, miny, cl);
-
-		  newlr = (POINT)malloc(sizeof(struct point_));
-		  newlr->x1 = minx;
-		  newlr->y1 = miny;
-		  newlr->layer = cl;
-
+		  newlr =  create_point(minx,miny,cl);
 	          pri2 = &OBS2VAL(minx, miny, dl);
-
-		  newlr2 = (POINT)malloc(sizeof(struct point_));
-		  newlr2->x1 = minx;
-		  newlr2->y1 = miny;
-		  newlr2->layer = dl;
+		  newlr2 = create_point(minx,miny,dl);
 
 		  lrprev->next = newlr;
 		  newlr->next = newlr2;
@@ -2094,7 +2068,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		  // lrppre->next.  If so, bypass lrppre.
 
 		  if ((lrnext = lrppre->next) != NULL) {
-		     if (lrnext->x1 == minx && lrnext->y1 == miny &&
+		     if (lrnext->x == minx && lrnext->y == miny &&
 				lrnext->layer == dl) {
 			newlr->next = lrnext;
 			free(lrppre);
@@ -2114,8 +2088,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		  // If we couldn't offset lrprev position, then try
 		  // offsetting lrcur.
 
-	          cx = lrcur->x1;
-	          cy = lrcur->y1;
+	          cx = lrcur->x;
+	          cy = lrcur->y;
 	          cl = lrcur->layer;
 	          mincost = MAXRT;
 	          dl = lrprev->layer;
@@ -2213,15 +2187,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 	          }
 
 		  if (mincost < MAXRT) {
-		     newlr = (POINT)malloc(sizeof(struct point_));
-		     newlr->x1 = minx;
-		     newlr->y1 = miny;
-		     newlr->layer = cl;
-
-		     newlr2 = (POINT)malloc(sizeof(struct point_));
-		     newlr2->x1 = minx;
-		     newlr2->y1 = miny;
-		     newlr2->layer = dl;
+		     newlr = create_point(minx,miny,cl);
+		     newlr2 = create_point(minx,miny,dl);
 
 		     // If newlr is a source or target, then make it
 		     // the endpoint, because we have just moved the
@@ -2229,7 +2196,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     // original endpoint position is not needed.
 
 	             pri = &OBS2VAL(minx, miny, cl);
-	             pri2 = &OBS2VAL(lrcur->x1, lrcur->y1, lrcur->layer);
+	             pri2 = &OBS2VAL(lrcur->x, lrcur->y, lrcur->layer);
 		     if ((((pri->flags & PR_SOURCE) && (pri2->flags & PR_SOURCE)) ||
 			 ((pri->flags & PR_TARGET) && (pri2->flags & PR_TARGET)))
                          && (lrcur == lrtop)
@@ -2247,7 +2214,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     // Check if point at pri2 is equal to position of
 		     // lrprev->next.  If so, bypass lrprev.
 
-		     if (lrppre->x1 == minx && lrppre->y1 == miny &&
+		     if (lrppre->x == minx && lrppre->y == miny &&
 				lrppre->layer == dl) {
 			newlr->next = lrppre;
 			free(lrprev);
@@ -2266,19 +2233,19 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		     // via is a rare occurrance.
 
 		     if (Verbose > 0)
-			Fprintf(stderr, "Failed to remove stacked via "
+			FprintfT(stderr, "Failed to remove stacked via "
 				"at grid point %d %d.\n",
-				lrcur->x1, lrcur->y1);
+				lrcur->x, lrcur->y);
 		     stacks = 0;
 		     rval = 0;
 		     goto cleanup;
 		  }
 		  else {
 		     if (collide == TRUE) {
-		        Fprintf(stderr, "Failed to remove stacked via "
+		        FprintfT(stderr, "Failed to remove stacked via "
 				"at grid point %d %d;  position may "
 				"not be routable.\n",
-				lrcur->x1, lrcur->y1);
+				lrcur->x, lrcur->y);
 			stacks = 0;
 			rval = 0;
 			goto cleanup;
@@ -2305,18 +2272,23 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
    lseg = (SEG)NULL;
 
    while (1) {
+      // if((!lrcur)||(!lrprev))
+      // 	      break;
       seg = (SEG)malloc(sizeof(struct seg_));
+      if(!seg)
+	      exit(0);
+
       seg->next = NULL;
 
       seg->segtype = (lrcur->layer == lrprev->layer) ? ST_WIRE : ST_VIA;
 
-      seg->x1 = lrcur->x1;
-      seg->y1 = lrcur->y1;
+      seg->x1 = lrprev->x;
+      seg->y1 = lrprev->y;
 
       seg->layer = MIN(lrcur->layer, lrprev->layer);
 
-      seg->x2 = lrprev->x1;
-      seg->y2 = lrprev->y1;
+      seg->x2 = lrcur->x;
+      seg->y2 = lrcur->y;
 
       dx = seg->x2 - seg->x1;
       dy = seg->y2 - seg->y1;
@@ -2335,13 +2307,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       if (seg->segtype & ST_WIRE) {
 	 while ((lrnext = lrprev->next) != NULL) {
 	    lrnext = lrprev->next;
-	    if (((lrnext->x1 - lrprev->x1) == dx) &&
-			((lrnext->y1 - lrprev->y1) == dy) &&
+	    if (((lrnext->x - lrprev->x) == dx) &&
+			((lrnext->y - lrprev->y) == dy) &&
 			(lrnext->layer == lrprev->layer)) {
 	       lrcur = lrprev;
 	       lrprev = lrnext;
-	       seg->x2 = lrprev->x1;
-	       seg->y2 = lrprev->y1;
+	       seg->x2 = lrprev->x;
+	       seg->y2 = lrprev->y;
 	    }
 	    else
 	       break;
@@ -2349,7 +2321,7 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       }
 
       if (Verbose > 3) {
-         Fprintf(stdout, "commit: index = %d, net = %d\n",
+         FprintfT(stdout, "commit: index = %d, net = %d\n",
 		Pr->prdata.net, netnum);
 
 	 if (seg->segtype & ST_WIRE) {
@@ -2357,10 +2329,9 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 		seg->layer, seg->x1, seg->y1, seg->x2, seg->y2);
 	 }
 	 else {
-            Fprintf(stdout, "commit: via %d to %d\n", seg->layer,
+            FprintfT(stdout, "commit: via %d to %d\n", seg->layer,
 			seg->layer + 1);
 	 }
-	 Flush(stdout);
       }
 
       // now fill in the Obs structure with this route....
@@ -2448,13 +2419,13 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
       if (dir2 & OFFSET_TAP) seg->segtype |= ST_OFFSET_END;
 
       lrend = lrcur;		// Save the last route position
-      lrend->x1 = lrcur->x1;
-      lrend->y1 = lrcur->y1;
+      lrend->x = lrcur->x;
+      lrend->y = lrcur->y;
       lrend->layer = lrcur->layer;
 
       lrcur = lrprev;		// Move to the next route position
-      lrcur->x1 = seg->x2;
-      lrcur->y1 = seg->y2;
+      lrcur->x = seg->x1;
+      lrcur->y = seg->y1;
       lrprev = lrcur->next;
 
       if (lrprev == NULL) {
@@ -2469,8 +2440,8 @@ int commit_proute(ROUTE rt, GRIDP *ept, u_char stage)
 
 	 // Before returning, set *ept to the endpoint
 	 // position.  This is for diagnostic purposes only.
-	 ept->x = lrend->x1;
-	 ept->y = lrend->y1;
+	 ept->x = lrend->x;
+	 ept->y = lrend->y;
 	 ept->lay = lrend->layer;
 
 	 // Clean up allocated memory for the route. . .

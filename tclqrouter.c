@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <pthread.h>
 
 #include <tk.h>
 
@@ -23,6 +24,7 @@
 #include "lef.h"
 #include "graphics.h"
 #include "node.h"
+#include "output.h"
 #include "tkSimple.h"
 
 /* Global variables */
@@ -118,6 +120,15 @@ static int qrouter_vdd(
 static int qrouter_gnd(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_clk(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_borders(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
+static int qrouter_route(
+    ClientData clientData, Tcl_Interp *interp,
+    int objc, Tcl_Obj *CONST objv[]);
 static int qrouter_verbose(
     ClientData clientData, Tcl_Interp *interp,
     int objc, Tcl_Obj *CONST objv[]);
@@ -151,12 +162,15 @@ static cmdstruct qrouter_commands[] =
    {"passes", qrouter_passes},
    {"vdd", qrouter_vdd},
    {"gnd", qrouter_gnd},
+   {"clk", qrouter_clk},
    {"failing", qrouter_failing},
    {"remove", qrouter_remove},
    {"cost", qrouter_cost},
    {"map", qrouter_map},
    {"verbose", qrouter_verbose},
    {"redraw", redraw},
+   {"borders", qrouter_borders},
+   {"route", qrouter_route},
    {"print", qrouter_print},
    {"quit", qrouter_quit},
    {"", NULL}  /* sentinel */
@@ -210,7 +224,6 @@ char *Tcl_Strdup(const char *s)
 /* various characters like brackets, braces, dollar signs, etc., that	*/
 /* will otherwise be modified by the interpreter.			*/
 /*----------------------------------------------------------------------*/
-
 void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
 {
    va_list args;
@@ -222,12 +235,12 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
    /* to it by mapping the console window and raising it, as necessary.	*/
    /* I'd rather do this internally than by Tcl_Eval(), but I can't	*/
    /* find the right window ID to map!					*/
-
    if ((f == stderr) && (consoleinterp != qrouterinterp)) {
       Tk_Window tkwind;
       tkwind = Tk_MainWindow(consoleinterp);
-      if ((tkwind != NULL) && (!Tk_IsMapped(tkwind)))
-         Tcl_Eval(consoleinterp, "wm deiconify .\n");
+      if ((tkwind != NULL) && (!Tk_IsMapped(tkwind))) {
+	 Tcl_Eval(consoleinterp, "wm deiconify .\n");
+      }
       Tcl_Eval(consoleinterp, "raise .\n");
    }
 
@@ -288,13 +301,12 @@ void tcl_vprintf(FILE *f, const char *fmt, va_list args_in)
 /* Console output flushing which goes along with the	*/
 /* routine tcl_vprintf() above.				*/
 /*------------------------------------------------------*/
-
 void tcl_stdflush(FILE *f)
 {   
    Tcl_SavedResult state;
    static char stdstr[] = "::flush stdxxx";
    char *stdptr = stdstr + 11;
-    
+
    Tcl_SaveResult(qrouterinterp, &state);
    strcpy(stdptr, (f == stderr) ? "err" : "out");
    Tcl_Eval(qrouterinterp, stdstr);
@@ -304,11 +316,10 @@ void tcl_stdflush(FILE *f)
 /*----------------------------------------------------------------------*/
 /* Reimplement fprintf() as a call to Tcl_Eval().			*/
 /*----------------------------------------------------------------------*/
-
 void tcl_printf(FILE *f, const char *format, ...)
 {
   va_list ap;
-
+  
   va_start(ap, format);
   tcl_vprintf(f, format, ap);
   va_end(ap);
@@ -912,8 +923,10 @@ qrouter_stage1(ClientData clientData, Tcl_Interp *interp,
 	failcount = dofirststage(dodebug, stepnet);
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
-	    result = doroute(net, (u_char)0, dodebug);
-	    failcount = (result == 0) ? 0 : 1;
+	    for(int thnum=0;thnum<MAX_NUM_THREADS;thnum++) {
+			result = doroute(net, (u_char)0, dodebug);
+			failcount += (result == 0) ? 0 : 1;
+	    }
 
 	    /* Remove from FailedNets list if routing	*/
 	    /* was successful				*/
@@ -1128,6 +1141,7 @@ qrouter_stage2(ClientData clientData, Tcl_Interp *interp,
 	failcount = dosecondstage(dodebug, dostep, onlybreak, effort);
     else
 	failcount = route_net_ripup(net, dodebug, onlybreak);
+
     Tcl_SetObjResult(interp, Tcl_NewIntObj(failcount));
 
     draw_layout();
@@ -1289,8 +1303,10 @@ qrouter_stage3(ClientData clientData, Tcl_Interp *interp,
 	failcount = dothirdstage(dodebug, stepnet, effort);
     else {
 	if ((net != NULL) && (net->netnodes != NULL)) {
-	    result = doroute(net, (u_char)0, dodebug);
-	    failcount = (result == 0) ? 0 : 1;
+	    for(int thnum=0;thnum<MAX_NUM_THREADS;thnum++) {
+			result = doroute(net, (u_char)0, dodebug);
+			failcount += (result == 0) ? 0 : 1;
+	    }
 
 	    /* Remove from FailedNets list if routing	*/
 	    /* was successful				*/
@@ -2283,6 +2299,234 @@ qrouter_gnd(ClientData clientData, Tcl_Interp *interp,
 }
 
 /*------------------------------------------------------*/
+/* Command "route"					*/
+/* With no argument, nothing */
+/*							*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	route [<name>]					*/
+/*------------------------------------------------------*/
+static int
+qrouter_route(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
+{
+	char *netname;
+	NET net;
+	if (objc == 2) {
+		netname=Tcl_Strdup(Tcl_GetString(objv[1]));
+		net = getnetbyname(netname);
+		if(net) {
+			Fprintf(stdout,"Trying to route net %s\n", net->netname);
+			net->active=TRUE;
+			draw_layout();
+			if(doroute(net, (u_char)0, TRUE)==0)  {
+				Fprintf(stdout,"Finished routing net %s\n", net->netname);
+			} else {
+				Fprintf(stdout,"Failed to route net %s\n", net->netname);
+			}
+		} else {
+			Fprintf(stdout,"Net %s doesn't exist\n", netname);
+		}
+	}
+}
+
+/*------------------------------------------------------*/
+/* Command "borders"					*/
+/* With no argument, just print borders of all nets */
+/*							*/
+/* Subcommand "fit" Refit borders of a given net to surrounding */
+/*							*/
+/* Options:						*/
+/*							*/
+/*	borders [<name>]					*/
+/*------------------------------------------------------*/
+static int
+qrouter_borders(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
+{
+	char *subcmd,*subcmdpar, *par1, *par2;
+	NETLIST pp = NULL;
+	NET net;
+	NET n1, n2;
+	if (objc == 2) {
+		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
+		if(!strcmp(subcmd,"fit")) {
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					net->bbox_color="red";
+					net->active=FALSE;
+				}
+			}
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					if(check_bbox_collisions(net,NOT_FOR_THREAD)) {
+						if(resolve_bbox_collisions(net,NOT_FOR_THREAD)) {
+							net->bbox_color="green";
+							net->active=TRUE;
+						}
+						if(is_gndnet(net)||is_vddnet(net)||is_clknet(net)) {
+							net->active=FALSE;
+						}
+						draw_layout();
+					}
+				}
+			}
+		}
+		if(!strcmp(subcmd,"draw")) {
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					if(is_vddnet(net)||is_gndnet(net)||is_clknet(net)) {
+						net->active=FALSE;
+					} else {
+						net->active=TRUE;
+					}
+				}
+			}
+			draw_layout();
+		}
+		if(!strcmp(subcmd,"trunk")) {
+			drawTrunk=!drawTrunk;
+			draw_layout();
+		}
+	}
+	if (objc == 3) {
+		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
+		if(!strcmp(subcmd,"draw")) {
+			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) net->active=FALSE;
+			}
+			if(!strcmp(subcmdpar,"power_nets")) {
+				for (int i = 0; i < Numnets; i++) {
+					net=getnettoroute(i);
+					if(net) {
+						if(is_gndnet(net)||is_vddnet(net)) net->active=TRUE;
+					}
+				}
+			} else if(!strcmp(subcmdpar,"clock_nets")) {
+				for (int i = 0; i < Numnets; i++) {
+					net=getnettoroute(i);
+					if(net) {
+						if(is_clknet(net)) net->active=TRUE;
+					}
+				}
+			} else if(!strcmp(subcmdpar,"all_nets")) {
+				for (int i = 0; i < Numnets; i++) {
+					net=getnettoroute(i);
+					if(net) {
+						net->active=TRUE;
+					}
+				}
+			} else {
+				net=getnetbyname(subcmdpar);
+				if(net) net->active=TRUE;
+			}
+			draw_layout();
+		}
+		if(!strcmp(subcmd,"fit")) {
+			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
+			net=getnetbyname(subcmdpar);
+			if(net) {
+				net->bbox_color="red";
+				net->active=FALSE;
+				if(check_bbox_collisions(net,NOT_FOR_THREAD)) {
+					if(resolve_bbox_collisions(net,NOT_FOR_THREAD)) {
+						net->bbox_color="green";
+						net->active=TRUE;
+					}
+				}
+				draw_layout();
+			}
+		}
+		if(!strcmp(subcmd,"collisions")||!strcmp(subcmd,"cols")) {
+			hide_all_nets();
+			subcmdpar = Tcl_Strdup(Tcl_GetString(objv[2]));
+			Tcl_SetObjResult(interp, Tcl_NewStringObj("checking for collisions with net", -1));
+			Tcl_AppendElement(interp, subcmdpar);
+			for (int i = 0; i < Numnets; i++) {
+				net=getnettoroute(i);
+				if(net) {
+					net->active=FALSE;
+				}
+			}
+			net=getnetbyname(subcmdpar);
+			if(net) {
+				net->active=TRUE;
+				if(check_bbox_collisions(net,NOT_FOR_THREAD)) {
+					net->bbox_color="red";
+					Tcl_AppendElement(interp, "there are collisions with: ");
+					pp=get_bbox_collisions(net,NOT_FOR_THREAD);
+					for(NETLIST tmpp=pp;tmpp;tmpp=tmpp->next) {
+						Tcl_AppendElement(interp, tmpp->net->netname);
+					}
+					free_postponed(pp);
+				} else {
+					net->bbox_color="black";
+					Tcl_AppendElement(interp, "no collisions found");
+				}
+				draw_layout();
+			}
+		}
+	}
+	if (objc == 4) {
+		subcmd=Tcl_Strdup(Tcl_GetString(objv[1]));
+		if(!strcmp(subcmd,"collisions")||!strcmp(subcmd,"cols")) {
+			hide_all_nets();
+			par1 = Tcl_Strdup(Tcl_GetString(objv[2]));
+			par2 = Tcl_Strdup(Tcl_GetString(objv[3]));
+			n1=getnetbyname(par1);
+			n2=getnetbyname(par2);
+			if(n1) n1->active=TRUE;
+			if(n2) n2->active=TRUE;
+			if(check_single_bbox_collision(n1->bbox,n2->bbox))
+				Tcl_AppendElement(interp, "collisions found");
+			else
+				Tcl_AppendElement(interp, "no collisions found");
+			draw_layout();
+		}
+	}
+	return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
+/* Command "clk"					*/
+/*							*/
+/* Set the name of the net used for the clock signal/timing	*/
+/* With no argument, return the name of the ground	*/
+/* net.							*/
+/*							*/
+/* Options:						*/
+/*							*/
+/*	clk [<name>]					*/
+/*------------------------------------------------------*/
+
+static int
+qrouter_clk(ClientData clientData, Tcl_Interp *interp,
+            int objc, Tcl_Obj *CONST objv[])
+{
+    if (objc == 1) {
+	if (clknet == NULL)
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj("(none)", -1));
+	else
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj(clknet, -1));
+    }
+    else if (objc == 2) {
+	if (clknet != NULL) free(clknet);
+	clknet = strdup(Tcl_GetString(objv[1]));
+    }
+    else {
+	Tcl_WrongNumArgs(interp, 1, objv, "option ?arg?");
+	return TCL_ERROR;
+    }
+    return QrouterTagCallback(interp, objc, objv);
+}
+
+/*------------------------------------------------------*/
 /* Command "cost"					*/
 /*							*/
 /* Query or set the value of a cost function		*/
@@ -2474,22 +2718,15 @@ qrouter_congested(ClientData clientData, Tcl_Interp *interp,
 
     for (i = 0; i < Numnets; i++) {
 	net = Nlnets[i];
-	nwidth = (net->xmax - net->xmin + 1);
-	nheight = (net->ymax - net->ymin + 1);
-	area = nwidth * nheight;
-	if (nwidth > nheight) {
-	    length = nwidth + (nheight >> 1) * net->numnodes;
-	}
-	else {
-	    length = nheight + (nwidth >> 1) * net->numnodes;
-	}
+	area = get_bbox_area(net);
+	length = net_absolute_distance(net);
 	density = (float)length / (float)area;
 
-	for (x = net->xmin; x < net->xmax; x++)
+	/*for (x = net->xmin; x < net->xmax; x++)
 	    for (y = net->ymin; y < net->ymax; y++)
 		if (x >= 0 && x < NumChannelsX[0] &&
 			y >= 0 && y < NumChannelsY[0])
-		    CONGEST(x, y) += density;
+		    CONGEST(x, y) += density;*/
     }
 
     // Use instance bounding boxes to estimate average congestion

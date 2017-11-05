@@ -7,6 +7,28 @@
 
 #ifndef QROUTER_H
 
+#ifndef __USE_MISC
+#define __USE_MISC
+#endif
+
+#include <sys/types.h>
+#include <stdint.h>
+#include <X11/Xlibint.h> // needed for type BOOL
+
+#define THREADS 6
+#define TCL_THREADS THREADS
+#define MAX_NUM_THREADS THREADS
+extern int numThreadsRunningG;
+
+#define DEBUG_DELAY 100
+#define PIXEL_DRAW_DELAY 300
+
+#define MAXRT		100000		// "Infinite" route cost
+#define BOX_ROOM_X 3
+#define BOX_ROOM_Y 3
+#define TAP_ROOM 2
+#define WIRE_ROOM 1
+
 #define OGRID(x, y, layer) ((int)((x) + ((y) * NumChannelsX[(layer)])))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
@@ -146,6 +168,7 @@ struct string_ {
 typedef struct seg_ *SEG;
 
 struct seg_ {
+   SEG last;
    SEG next;
    int layer;
    int x1, y1, x2, y2;
@@ -170,9 +193,9 @@ struct dseg_ {
 typedef struct point_ *POINT;
 
 struct point_ {
-  POINT next; 
+  POINT next;
   int layer;
-  int x1, y1;
+  int x, y;
 };
 
 /* DPOINT is a point location with  coordinates given *both* as an	*/
@@ -237,6 +260,7 @@ struct nodeinfo_ {
 #define NI_OFFSET_MASK   0x0c	// Tap offset mask (N/S + E/W)
 
 struct node_ {
+  NODE    last;
   NODE    next;
   int     nodenum;		// node ordering within its net
   DPOINT  taps;			// point position for node taps
@@ -256,6 +280,7 @@ struct node_ {
 typedef struct gate_ *GATE;
 
 struct gate_ {
+    GATE last;
     GATE next;
     char *gatename;	// Name of instance
     GATE  gatetype;	// Pointer to macro record
@@ -277,6 +302,23 @@ struct gate_ {
 typedef struct net_ *NET;
 typedef struct netlist_ *NETLIST;
 
+typedef struct bbox_line_ *BBOX_LINE;
+struct bbox_line_ {
+	POINT pt1;
+	POINT pt2;
+	BBOX_LINE next;
+};
+
+typedef struct bbox_ *BBOX;
+struct bbox_ {
+	BBOX_LINE edges;
+	int num_edges;
+	BOOL x1_exception;
+	BOOL y1_exception;
+	BOOL x2_exception;
+	BOOL y2_exception;
+};
+
 struct net_ {
    int  netnum;		// a unique number for this net
    char *netname;
@@ -285,14 +327,18 @@ struct net_ {
    u_char flags;	// flags for this net (see below)
    int  netorder;	// to be assigned by route strategy (critical
 			// nets first, then order by number of nodes).
-   int  xmin, ymin;	// Bounding box lower left corner
-   int  xmax, ymax;	// Bounding box upper right corner
-   int  trunkx;		// X position of the net's trunk line (see flags)
-   int  trunky;		// Y position of the net's trunk line (see flags)
+   //int  trunkx;		// X position of the net's trunk line (see flags)
+   //int  trunky;		// Y position of the net's trunk line (see flags)
    NETLIST noripup;	// list of nets that have been ripped up to
 			// route this net.  This will not be allowed
 			// a second time, to avoid looping.
    ROUTE   routes;	// routes for this net
+   BBOX bbox;
+   BOOL locked;
+   BOOL active;
+   BOOL routed;
+   NET next;
+   char *bbox_color;
 };
 
 // Flags used by NET "flags" record
@@ -302,6 +348,9 @@ struct net_ {
 #define NET_IGNORED  		4	// net is ignored by router
 #define NET_STUB     		8	// Net has at least one stub
 #define NET_VERTICAL_TRUNK	16	// Trunk line is (preferred) vertical
+
+#define FOR_THREAD 1
+#define NOT_FOR_THREAD 2
 
 // List of nets, used to maintain a list of failed routes
 
@@ -322,10 +371,8 @@ struct routeinfo_ {
    int maxcost;
    u_char do_pwrbus;
    int pwrbus_src;
-   struct seg_ bbox;
+   BBOX bbox;
 };
-
-#define MAXRT		10000000		// "Infinite" route cost
 
 // The following values are added to the Obs[] structure for unobstructed
 // route positions close to a terminal, but not close enough to connect
@@ -399,7 +446,7 @@ struct routeinfo_ {
 
 extern STRING  DontRoute;
 extern STRING  CriticalNet;
-extern NET     CurNet;
+extern NET     CurNet[MAX_NUM_THREADS];
 extern NETLIST FailedNets;	// nets that have failed the first pass
 extern char    *DEFfilename;
 extern char    *delayfilename;
@@ -410,7 +457,6 @@ extern GATE   PinMacro;		// macro definition for a pin
 extern GATE   Nlgates;
 extern NET    *Nlnets;
 
-extern u_char *RMask;
 extern u_int  *Obs[MAX_LAYERS];		// obstructions by layer, y, x
 extern PROUTE *Obs2[MAX_LAYERS]; 	// working copy of Obs 
 extern float  *Obsinfo[MAX_LAYERS];	// temporary detailed obstruction info
@@ -440,6 +486,10 @@ extern u_char ripLimit;
 
 extern char *vddnet;
 extern char *gndnet;
+extern char *clknet;
+extern NETLIST gndnets;
+extern NETLIST vddnets;
+extern NETLIST clknets;
 
 /* Tcl output to console handling */
 
@@ -447,22 +497,27 @@ extern char *gndnet;
    #define Fprintf tcl_printf
    #define Flush   tcl_stdflush
    #define Vprintf tcl_vprintf
+   #define FprintfT fprintf
+   #define FlushT   fflush
+   #define VprintfT vfprintf
 #else
    #define Fprintf fprintf
    #define Flush   fflush
    #define Vprintf vfprintf
+   #define FprintfT fprintf
+   #define FlushT   fflush
+   #define VprintfT vfprintf
 #endif
 
 /* Function prototypes */
-
-static int next_route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_setup(struct routeinfo_ *iroute, u_char stage);
-static int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
-static ROUTE createemptyroute(void);
-static void helpmessage(void);
+int next_route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
+int route_setup(NET net, struct routeinfo_ *iroute, u_char stage);
+int route_segs(struct routeinfo_ *iroute, u_char stage, u_char graphdebug);
+ROUTE createemptyroute(void);
+void helpmessage(void);
 
 int    set_num_channels(void);
-int    allocate_obs_array(void);
+int    allocate_obs_array();
 int    countlist(NETLIST net);
 int    runqrouter(int argc, char *argv[]);
 
@@ -479,7 +534,14 @@ int    dothirdstage(u_char graphdebug, int debug_netnum, u_int effort);
 
 int    doroute(NET net, u_char stage, u_char graphdebug);
 NET    getnettoroute(int order);
+NET getnetbyname(char *name);
 int    route_net_ripup(NET net, u_char graphdebug, u_char onlybreak);
+
+NETLIST postpone_net(NETLIST postponed, NET net);
+void free_postponed(NETLIST postponed);
+void free_bbox(BBOX t);
+void hide_all_nets();
+int doroute(NET net, u_char stage, u_char graphdebug);
 
 #ifdef TCL_QROUTER
 void   tcl_printf(FILE *, const char *, ...);

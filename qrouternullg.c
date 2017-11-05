@@ -1,9 +1,12 @@
 /*----------------------------------------------------------------------*/
 /* qrouternullg.c							*/
 /*----------------------------------------------------------------------*/
+#define MAX_MEM 1024*1024*6
 
 #include <stdio.h>
+#include <sys/resource.h>
 
+#include <X11/Xlib.h>
 #include <tcl.h>
 
 /*----------------------------------------------------------------------*/
@@ -37,11 +40,26 @@ qrouter_AppInit(interp)
 /* The main procedure;  replacement for "tclsh".			*/
 /*----------------------------------------------------------------------*/
 
+void set_limits(rlim_t rlim_cur, rlim_t rlim_max)
+{
+	struct rlimit rl; 
+	// First get the time limit on CPU 
+	getrlimit (RLIMIT_CPU, &rl); 
+	// Change the time limit 
+	rl.rlim_cur = rlim_cur;
+	rl.rlim_max = rlim_max;
+	// Now call setrlimit() to set the  
+	// changed value. 
+	setrlimit(RLIMIT_DATA, &rl); 
+	getrlimit(RLIMIT_DATA, &rl); 
+}
+
 int
 main(argc, argv)
    int argc;
    char **argv;
 {
+//     set_limits(MAX_MEM,MAX_MEM);
     Tcl_Main(argc, argv, qrouter_AppInit);
     return 0;
 }

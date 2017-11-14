@@ -839,7 +839,6 @@ DefReadLocation(gate, f, oscale)
     int keyword;
     char *token;
     float x, y;
-    char mxflag, myflag;
 
     static char *orientations[] = {
 	"N", "S", "E", "W", "FN", "FS", "FE", "FW"
@@ -861,43 +860,17 @@ DefReadLocation(gate, f, oscale)
 	LefError("Unknown macro orientation \"%s\".\n", token);
 	return -1;
     }
+	if(gate) {
+		gate->placedX = x / oscale;
+		gate->placedY = y / oscale;
+		gate->orient = keyword;
+	}
 
-    mxflag = myflag = (char)0;
-
-    switch (keyword)
-    {
-	case DEF_NORTH:
-	    break;
-	case DEF_SOUTH:
-	    mxflag = 1;
-	    myflag = 1;
-	    break;
-	case DEF_FLIPPED_NORTH:
-	    mxflag = 1;
-	    break;
-	case DEF_FLIPPED_SOUTH:
-	    myflag = 1;
-	    break;
-	case DEF_EAST:
-	case DEF_WEST:
-	case DEF_FLIPPED_EAST:
-	case DEF_FLIPPED_WEST:
-	    LefError("Error:  Cannot handle 90-degree rotated components!\n");
-	    break;
-    }
-
-    if (gate) {
-	gate->placedX = x / oscale;
-	gate->placedY = y / oscale;
-	gate->orient = MNONE;
-	if (mxflag) gate->orient |= MX;
-	if (myflag) gate->orient |= MY;
-    }
-    return 0;
+	return 0;
 
 parse_error:
-    LefError("Cannot parse location: must be ( X Y ) orient\n");
-    return -1;
+	LefError("Cannot parse location: must be ( X Y ) orient\n");
+	return -1;
 }
 
 /*
@@ -1601,37 +1574,69 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			}
 
 			for (drect = gate->taps[i]; drect; drect = drect->next) {
-			    // handle offset from gate origin
-			    drect->x1 -= gateginfo->placedX;
-			    drect->x2 -= gateginfo->placedX;
-			    drect->y1 -= gateginfo->placedY;
-			    drect->y2 -= gateginfo->placedY;
+				// handle offset from gate origin
+				drect->x1 -= gateginfo->placedX;
+				drect->x2 -= gateginfo->placedX;
+				drect->y1 -= gateginfo->placedY;
+				drect->y2 -= gateginfo->placedY;
 
-			    // handle rotations and orientations here
-			    if (gate->orient & MX) {
-				tmp = drect->x1;
-				drect->x1 = -drect->x2;
-				drect->x1 += gate->placedX + gateginfo->width;
-				drect->x2 = -tmp;
-				drect->x2 += gate->placedX + gateginfo->width;
-			    }
-			    else {
-				drect->x1 += gate->placedX;
-				drect->x2 += gate->placedX;
-			    }
-			    if (gate->orient & MY) {
-				tmp = drect->y1;
-				drect->y1 = -drect->y2;
-				drect->y1 += gate->placedY + gateginfo->height;
-				drect->y2 = -tmp;
-				drect->y2 += gate->placedY + gateginfo->height;
-			    }
-			    else {
-				drect->y1 += gate->placedY;
-				drect->y2 += gate->placedY;
-			    }
+				// handle rotations and orientations here
+				if (gate->orient==DEF_SOUTH) {
+					tmp = drect->x1;
+					drect->x1 = -drect->x2;
+					drect->x1 += gate->placedX + gateginfo->width;
+					drect->x2 = -tmp;
+					drect->x2 += gate->placedX + gateginfo->width;
+					tmp = drect->y1;
+					drect->y1 = -drect->y2;
+					drect->y1 += gate->placedY + gateginfo->height;
+					drect->y2 = -tmp;
+					drect->y2 += gate->placedY + gateginfo->height;
+				} else if (gate->orient==DEF_EAST) {
+					// rotating 90 degrees left
+					tmp = drect->x1;
+					drect->x1 = -drect->y1;
+					drect->y1 = tmp;
+					tmp = drect->x2;
+					drect->x2 = -drect->y2;
+					drect->y2 = tmp;
+					// adding offsets
+					drect->x2 += gate->placedX + gateginfo->width;
+					drect->x1 += gate->placedX + gateginfo->width;
+					// rotating mirroring on y axis:
+					tmp = drect->x1;
+					drect->x1 = -drect->x2;
+					drect->x2 = -tmp;
+					// rotating mirroring on x axis:
+					tmp = drect->y1;
+					drect->y1 = -drect->y2;
+					drect->y2 = -tmp;
+					// adding offsets
+					drect->x2 += gate->placedX + gateginfo->height;
+					drect->x1 += gate->placedX + gateginfo->height;
+					drect->y1 += gate->placedY + gateginfo->width;
+					drect->y2 += gate->placedY + gateginfo->width;
+				} else if (gate->orient==DEF_WEST) {
+					// rotating 90 degrees left
+					tmp = drect->x1;
+					drect->x1 = -drect->y1;
+					drect->y1 = tmp;
+					tmp = drect->x2;
+					drect->x2 = -drect->y2;
+					drect->y2 = tmp;
+					// adding offsets
+					drect->x2 += gate->placedX + gateginfo->width;
+					drect->x1 += gate->placedX + gateginfo->width;
+					drect->y1 += gate->placedY + gateginfo->height;
+					drect->y2 += gate->placedY + gateginfo->height;
+				} else {
+					drect->x1 += gate->placedX;
+					drect->x2 += gate->placedX;
+					drect->y1 += gate->placedY;
+					drect->y2 += gate->placedY;
+				}
 			}
-		    }
+		}
 
 		    /* Make a copy of the gate obstructions and adjust	*/
 		    /* for instance position				*/
@@ -1642,38 +1647,70 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			gate->obs = newrect;
 		    }
 
-		    for (drect = gate->obs; drect; drect = drect->next) {
-			drect->x1 -= gateginfo->placedX;
-			drect->x2 -= gateginfo->placedX;
-			drect->y1 -= gateginfo->placedY;
-			drect->y2 -= gateginfo->placedY;
+			for (drect = gate->obs; drect; drect = drect->next) {
+				drect->x1 -= gateginfo->placedX;
+				drect->x2 -= gateginfo->placedX;
+				drect->y1 -= gateginfo->placedY;
+				drect->y2 -= gateginfo->placedY;
 
-			// handle rotations and orientations here
-			if (gate->orient & MX) {
-			    tmp = drect->x1;
-			    drect->x1 = -drect->x2;
-			    drect->x1 += gate->placedX + gateginfo->width;
-			    drect->x2 = -tmp;
-			    drect->x2 += gate->placedX + gateginfo->width;
+				// handle rotations and orientations here
+				if (gate->orient==DEF_SOUTH) {
+					tmp = drect->x1;
+					drect->x1 = -drect->x2;
+					drect->x1 += gate->placedX + gateginfo->width;
+					drect->x2 = -tmp;
+					drect->x2 += gate->placedX + gateginfo->width;
+					tmp = drect->y1;
+					drect->y1 = -drect->y2;
+					drect->y1 += gate->placedY + gateginfo->height;
+					drect->y2 = -tmp;
+					drect->y2 += gate->placedY + gateginfo->height;
+				} else if (gate->orient==DEF_EAST) {
+					// rotating 90 degrees left
+					tmp = drect->x1;
+					drect->x1 = -drect->y1;
+					drect->y1 = tmp;
+					tmp = drect->x2;
+					drect->x2 = -drect->y2;
+					drect->y2 = tmp;
+					// adding offsets
+					drect->x2 += gate->placedX + gateginfo->width;
+					drect->x1 += gate->placedX + gateginfo->width;
+					// rotating mirroring on y axis:
+					tmp = drect->x1;
+					drect->x1 = -drect->x2;
+					drect->x2 = -tmp;
+					// rotating mirroring on x axis:
+					tmp = drect->y1;
+					drect->y1 = -drect->y2;
+					drect->y2 = -tmp;
+					// adding offsets
+					drect->x2 += gate->placedX + gateginfo->height;
+					drect->x1 += gate->placedX + gateginfo->height;
+					drect->y1 += gate->placedY + gateginfo->width;
+					drect->y2 += gate->placedY + gateginfo->width;
+				} else if (gate->orient==DEF_WEST) {
+					// rotating 90 degrees left
+					tmp = drect->x1;
+					drect->x1 = -drect->y1;
+					drect->y1 = tmp;
+					tmp = drect->x2;
+					drect->x2 = -drect->y2;
+					drect->y2 = tmp;
+					// adding offsets
+					drect->x2 += gate->placedX + gateginfo->width;
+					drect->x1 += gate->placedX + gateginfo->width;
+					drect->y1 += gate->placedY + gateginfo->height;
+					drect->y2 += gate->placedY + gateginfo->height;
+				} else {
+					drect->x1 += gate->placedX;
+					drect->x2 += gate->placedX;
+					drect->y1 += gate->placedY;
+					drect->y2 += gate->placedY;
+				}
 			}
-			else {
-			    drect->x1 += gate->placedX;
-			    drect->x2 += gate->placedX;
-			}
-			if (gate->orient & MY) {
-			    tmp = drect->y1;
-			    drect->y1 = -drect->y2;
-			    drect->y1 += gate->placedY + gateginfo->height;
-			    drect->y2 = -tmp;
-			    drect->y2 += gate->placedY + gateginfo->height;
-			}
-			else {
-			    drect->y1 += gate->placedY;
-			    drect->y2 += gate->placedY;
-			}
-		    }
-		    gate->next = Nlgates;
-		    Nlgates = gate;
+			gate->next = Nlgates;
+			Nlgates = gate;
 
 		    // Used by Tcl version of qrouter
 		    DefHashInstance(gate);

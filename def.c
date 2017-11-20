@@ -830,6 +830,118 @@ enum def_orient {DEF_NORTH, DEF_SOUTH, DEF_EAST, DEF_WEST,
 	DEF_FLIPPED_NORTH, DEF_FLIPPED_SOUTH, DEF_FLIPPED_EAST,
 	DEF_FLIPPED_WEST};
 
+
+void rotate_object(DSEG drect, GATE gateginfo, GATE gate)
+{
+	double tmp = 0;
+	double tmpx = 0;
+	double tmpy = 0;
+	// handle offset from gate origin
+	drect->x1 -= gateginfo->placedX;
+	drect->x2 -= gateginfo->placedX;
+	drect->y1 -= gateginfo->placedY;
+	drect->y2 -= gateginfo->placedY;
+
+	// handle rotations and orientations here
+	// x' = x cos(th) - y sin(th)
+	// y' = x sin(th) + y cos(th)
+	switch(gate->orient) {
+		case DEF_SOUTH:
+			tmp = drect->x1;
+			drect->x1 = -drect->x2;
+			drect->x2 = -tmp;
+			tmp = drect->y1;
+			drect->y1 = -drect->y2;
+			drect->y2 = -tmp;
+			drect->x1 += gateginfo->width;
+			drect->x2 += gateginfo->width;
+			drect->y1 += gateginfo->height;
+			drect->y2 += gateginfo->height;
+			break;
+		 case DEF_WEST: // -90 degrees
+			// rotating 90 degrees left
+			// cos(90) =  0
+			// sin(90) =  1
+			// x' = -y
+			// y' = x
+			tmp = drect->x1;
+			drect->x1 = -drect->y1;
+			drect->y1 = tmp;
+			tmp = drect->x2;
+			drect->x2 = -drect->y2;
+			drect->y2 = tmp;
+			// adding offsets
+			drect->x1 += gateginfo->height;
+			drect->x2 += gateginfo->height;
+			break;
+		case DEF_EAST: // +90 degrees
+			// rotating 90 degrees left
+			// cos(90) =  0
+			// sin(90) =  1
+			// x' = -y
+			// y' = x
+			// rotating 180 degrees
+			// cos(180) =  -1
+			// sin(180) =  0
+			// x'' = -x' = y
+			// y'' = -y' = -x
+			tmpx = drect->x1;
+			drect->x1 = drect->y2;
+			tmpy = drect->y1;
+			drect->y1 = -drect->x2;
+			drect->x2 = tmpy;
+			drect->y2 = -tmpx;
+			// adding offsets
+			drect->y1 += gateginfo->height;
+			drect->y2 += gateginfo->height;
+			break;
+		case DEF_FLIPPED_NORTH:
+			tmp = drect->x1;
+			drect->x1 = -drect->x2;
+			drect->x1 += gateginfo->width;
+			drect->x2 = -tmp;
+			drect->x2 += gateginfo->width;
+			break;
+		case DEF_FLIPPED_SOUTH:
+			tmp = drect->y1;
+			drect->y1 = -drect->y2;
+			drect->y1 += gateginfo->height;
+			drect->y2 = -tmp;
+			drect->y2 += gateginfo->height;
+			break;
+		case DEF_FLIPPED_EAST:
+			tmp = drect->x1;
+			drect->x1 = drect->y1;
+			drect->y1 = -tmp;
+			tmp = drect->x2;
+			drect->x2 = drect->y2;
+			drect->y2 = -tmp;
+			// adding offsets
+			drect->y1 += gateginfo->height;
+			drect->y2 += gateginfo->height;
+			break;
+		case DEF_FLIPPED_WEST:
+			tmp = drect->x1;
+			drect->x1 = drect->y1;
+			drect->y1 = -tmp;
+			tmp = drect->x2;
+			drect->x2 = drect->y2;
+			drect->y2 = -tmp;
+			// adding offsets
+			drect->y1 += gateginfo->height;
+			drect->y2 += gateginfo->height;
+			break;
+		case DEF_NORTH:
+			break; // 0 degrees, doing nothing
+	}
+	// placement
+	drect->x1 += gate->placedX;
+	drect->x2 += gate->placedX;
+	drect->y1 += gate->placedY;
+	drect->y2 += gate->placedY;
+	//printf("%s drect->x1 %f drect->y1 %f drect->x2 %f drect->y2 %f\n",__FUNCTION__,drect->x1,drect->y1,drect->x2,drect->y2);
+}
+
 static int
 DefReadLocation(gate, f, oscale)
     GATE gate;
@@ -1523,7 +1635,7 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		if (gate != NULL)
 		{
 		    /* Process the gate */
-		    gate->width = gateginfo->width;   
+		    gate->width = gateginfo->width;
 		    gate->height = gateginfo->height;   
 		    gate->nodes = gateginfo->nodes;   
 		    gate->obs = (DSEG)NULL;
@@ -1574,67 +1686,8 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 			}
 
 			for (drect = gate->taps[i]; drect; drect = drect->next) {
-				// handle offset from gate origin
-				drect->x1 -= gateginfo->placedX;
-				drect->x2 -= gateginfo->placedX;
-				drect->y1 -= gateginfo->placedY;
-				drect->y2 -= gateginfo->placedY;
-
-				// handle rotations and orientations here
-				if (gate->orient==DEF_SOUTH) {
-					tmp = drect->x1;
-					drect->x1 = -drect->x2;
-					drect->x1 += gate->placedX + gateginfo->width;
-					drect->x2 = -tmp;
-					drect->x2 += gate->placedX + gateginfo->width;
-					tmp = drect->y1;
-					drect->y1 = -drect->y2;
-					drect->y1 += gate->placedY + gateginfo->height;
-					drect->y2 = -tmp;
-					drect->y2 += gate->placedY + gateginfo->height;
-				} else if (gate->orient==DEF_EAST) {
-					// rotating 90 degrees left
-					tmp = drect->x1;
-					drect->x1 = -drect->y1;
-					drect->y1 = tmp;
-					tmp = drect->x2;
-					drect->x2 = -drect->y2;
-					drect->y2 = tmp;
-					// adding offsets
-					drect->x2 += gate->placedX + gateginfo->width;
-					drect->x1 += gate->placedX + gateginfo->width;
-					// rotating mirroring on y axis:
-					tmp = drect->x1;
-					drect->x1 = -drect->x2;
-					drect->x2 = -tmp;
-					// rotating mirroring on x axis:
-					tmp = drect->y1;
-					drect->y1 = -drect->y2;
-					drect->y2 = -tmp;
-					// adding offsets
-					drect->x2 += gate->placedX + gateginfo->height;
-					drect->x1 += gate->placedX + gateginfo->height;
-					drect->y1 += gate->placedY + gateginfo->width;
-					drect->y2 += gate->placedY + gateginfo->width;
-				} else if (gate->orient==DEF_WEST) {
-					// rotating 90 degrees left
-					tmp = drect->x1;
-					drect->x1 = -drect->y1;
-					drect->y1 = tmp;
-					tmp = drect->x2;
-					drect->x2 = -drect->y2;
-					drect->y2 = tmp;
-					// adding offsets
-					drect->x2 += gate->placedX + gateginfo->width;
-					drect->x1 += gate->placedX + gateginfo->width;
-					drect->y1 += gate->placedY + gateginfo->height;
-					drect->y2 += gate->placedY + gateginfo->height;
-				} else {
-					drect->x1 += gate->placedX;
-					drect->x2 += gate->placedX;
-					drect->y1 += gate->placedY;
-					drect->y2 += gate->placedY;
-				}
+				rotate_object(drect, gateginfo, gate);
+				//printf("%s drect->x1 %f drect->y1 %f drect->x2 %f drect->y2 %f\n",__FUNCTION__,drect->x1,drect->y1,drect->x2,drect->y2);
 			}
 		}
 
@@ -1648,67 +1701,16 @@ DefReadComponents(FILE *f, char *sname, float oscale, int total)
 		    }
 
 			for (drect = gate->obs; drect; drect = drect->next) {
-				drect->x1 -= gateginfo->placedX;
-				drect->x2 -= gateginfo->placedX;
-				drect->y1 -= gateginfo->placedY;
-				drect->y2 -= gateginfo->placedY;
-
-				// handle rotations and orientations here
-				if (gate->orient==DEF_SOUTH) {
-					tmp = drect->x1;
-					drect->x1 = -drect->x2;
-					drect->x1 += gate->placedX + gateginfo->width;
-					drect->x2 = -tmp;
-					drect->x2 += gate->placedX + gateginfo->width;
-					tmp = drect->y1;
-					drect->y1 = -drect->y2;
-					drect->y1 += gate->placedY + gateginfo->height;
-					drect->y2 = -tmp;
-					drect->y2 += gate->placedY + gateginfo->height;
-				} else if (gate->orient==DEF_EAST) {
-					// rotating 90 degrees left
-					tmp = drect->x1;
-					drect->x1 = -drect->y1;
-					drect->y1 = tmp;
-					tmp = drect->x2;
-					drect->x2 = -drect->y2;
-					drect->y2 = tmp;
-					// adding offsets
-					drect->x2 += gate->placedX + gateginfo->width;
-					drect->x1 += gate->placedX + gateginfo->width;
-					// rotating mirroring on y axis:
-					tmp = drect->x1;
-					drect->x1 = -drect->x2;
-					drect->x2 = -tmp;
-					// rotating mirroring on x axis:
-					tmp = drect->y1;
-					drect->y1 = -drect->y2;
-					drect->y2 = -tmp;
-					// adding offsets
-					drect->x2 += gate->placedX + gateginfo->height;
-					drect->x1 += gate->placedX + gateginfo->height;
-					drect->y1 += gate->placedY + gateginfo->width;
-					drect->y2 += gate->placedY + gateginfo->width;
-				} else if (gate->orient==DEF_WEST) {
-					// rotating 90 degrees left
-					tmp = drect->x1;
-					drect->x1 = -drect->y1;
-					drect->y1 = tmp;
-					tmp = drect->x2;
-					drect->x2 = -drect->y2;
-					drect->y2 = tmp;
-					// adding offsets
-					drect->x2 += gate->placedX + gateginfo->width;
-					drect->x1 += gate->placedX + gateginfo->width;
-					drect->y1 += gate->placedY + gateginfo->height;
-					drect->y2 += gate->placedY + gateginfo->height;
-				} else {
-					drect->x1 += gate->placedX;
-					drect->x2 += gate->placedX;
-					drect->y1 += gate->placedY;
-					drect->y2 += gate->placedY;
-				}
+				rotate_object(drect, gateginfo, gate);
+				//printf("%s drect->x1 %f drect->y1 %f drect->x2 %f drect->y2 %f\n",__FUNCTION__,drect->x1,drect->y1,drect->x2,drect->y2);
 			}
+
+			if((gate->orient==DEF_WEST)||(gate->orient==DEF_EAST)||(gate->orient==DEF_FLIPPED_WEST)||(gate->orient==DEF_FLIPPED_EAST)) {
+				tmp = gate->width;
+				gate->width = gate->height;
+				gate->height = tmp;
+			}
+
 			gate->next = Nlgates;
 			Nlgates = gate;
 

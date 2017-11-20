@@ -640,22 +640,25 @@ void createBboxMask(NET net, u_char halo)
 /* best location for the trunk route.				*/
 /*--------------------------------------------------------------*/
 
-int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
+int analyzeCongestion(NET net, int ycent, int ymin, int ymax, int xmin, int xmax)
 {
-    int x, y, i, minidx = -1, sidx, n;
+    int i, minidx = -1, sidx, n;
     int *score, minscore;
+    POINT vpnt = create_point(0,0,0);
 
     score = (int *)malloc((ymax - ymin + 1) * sizeof(int));
 
-    for (y = ymin; y <= ymax; y++) {
-	sidx = y - ymin;
-	score[sidx] = ABSDIFF(ycent, y) * Num_layers;
-	for (x = xmin; x <= xmax; x++) {
-	    for (i = 0; i < Num_layers; i++) {
-		n = OBSVAL(x, y, i);
-		if (n & ROUTED_NET) score[sidx]++;
-		if (n & NO_NET) score[sidx]++;
-		if (n & PINOBSTRUCTMASK) score[sidx]++;
+    for (vpnt->y = ymin; vpnt->y <= ymax; vpnt->y++) {
+	sidx = vpnt->y - ymin;
+	score[sidx] = ABSDIFF(ycent, vpnt->y) * Num_layers;
+	for (vpnt->x = xmin; vpnt->x <= xmax; vpnt->x++) {
+	    for (vpnt->layer = 0; vpnt->layer < Num_layers; vpnt->layer++) {
+		if(check_point_area(net->bbox,vpnt,FALSE,WIRE_ROOM)) {
+			n = OBSVAL(vpnt->x, vpnt->y, vpnt->layer);
+			if (n & ROUTED_NET) score[sidx]++;
+			if (n & NO_NET) score[sidx]++;
+			if (n & PINOBSTRUCTMASK) score[sidx]++;
+		}
 	    }
 	}
     }
@@ -667,6 +670,7 @@ int analyzeCongestion(int ycent, int ymin, int ymax, int xmin, int xmax)
 	}
     }
 
+    free(vpnt);
     free(score);
     return minidx;
 }
@@ -730,7 +734,7 @@ void createMask(NET net, u_char slack, u_char halo)
      // Horizontal trunk
      orient |= 1;
 
-     ycent = analyzeCongestion(ymin, ymin, ymax, xmin, xmax);
+     ycent = analyzeCongestion(net, ymin, ymin, ymax, xmin, xmax);
      ymin = ymax = ycent;
 
      for (i = xmin - slack; i <= xmax + slack; i++) {
